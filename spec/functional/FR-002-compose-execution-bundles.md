@@ -54,11 +54,19 @@ per-domain results, and bundle disposition, or a typed pre-dispatch refusal.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| FR-002-AC-1 | State workflow, timed-refund, and compensated choreography requests each retain every requested domain result exactly once under one lock. | Test (TC-002) |
-| FR-002-AC-2 | Independent unsupported, incomplete, refused, failed, and completed siblings remain present with unchanged identities and dispositions. | Property Test (TC-002) |
-| FR-002-AC-3 | Completion-order permutation produces byte-identical canonical bundles. | Property Test (TC-002) |
-| FR-002-AC-4 | A shared-prerequisite contradiction refuses the bundle and names every affected item without erasing unaffected producer evidence. | Test (TC-002) |
-| FR-002-AC-5 | Unknown producer versions or unsupported capabilities emit no substitute invocation or result. | Test (TC-002) |
+| FR-002-AC-1 | State workflow, timed-refund, and compensated choreography requests each retain every requested domain result exactly once under one lock. | integration-testing (TC-002) |
+| FR-002-AC-2 | Independent unsupported, incomplete, refused, failed, and completed siblings remain present with unchanged identities and dispositions. | property-based-testing (TC-002) |
+| FR-002-AC-3 | Completion-order permutation produces byte-identical canonical bundles. | metamorphic-testing (TC-002) |
+| FR-002-AC-4 | A shared-prerequisite contradiction refuses the bundle and names every affected item without erasing unaffected producer evidence. | integration-testing (TC-002) |
+| FR-002-AC-5 | Unknown producer versions or unsupported capabilities emit no substitute invocation or result. | contract-testing (TC-002) |
+
+## Error Conditions
+
+An invalid producer artifact, unselected implementation, contract/feature/option
+mismatch, duplicate or missing requested item, contradictory shared prerequisite,
+producer refusal/failure, timeout, or exceeded bound returns a typed item-local
+outcome or pre-dispatch composition refusal. No error path relabels a completed
+sibling or synthesizes a substitute result.
 
 ## Dependencies
 

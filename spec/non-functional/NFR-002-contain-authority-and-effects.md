@@ -36,10 +36,10 @@ external effect or allow a non-authoritative consumer to change semantics.
 
 | Metric | Target | Threshold | Method |
 |--------|--------|-----------|--------|
-| Non-effect components with adapter-dispatch capability | 0 components | 0 | Static Analysis (TC-008) |
-| Ambient/default provider lookups | 0 lookups | 0 | Static Analysis (TC-008) |
-| Unsafe Rust blocks | 0 blocks | 0 | Static Analysis (TC-008) |
-| Unauthorized dispatches across adverse fixtures | 0 dispatches | 0 | Test (TC-008) |
+| Non-effect components with adapter-dispatch capability | 0 components | 0 | architecture-conformance (TC-008) |
+| Ambient/default provider lookups | 0 lookups | 0 | architecture-conformance (TC-008) |
+| Unsafe Rust blocks | 0 blocks | 0 | compile-time-check (TC-008) |
+| Unauthorized dispatches across adverse fixtures | 0 dispatches | 0 | negative-abuse-testing (TC-008) |
 
 ## Verification
 
@@ -51,5 +51,5 @@ cross-scope, expired, and key-conflicting dispatch.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| NFR-002-AC-1 | Every adapter dispatch is reachable only through the FR-003 authority and persisted-request checks. | Static Analysis (TC-011) |
-| NFR-002-AC-2 | Renderer, analyzer, codegen, evidence, and human-decision inputs cannot be consumed as source or evaluator authority. | Property Test (TC-008) |
+| NFR-002-AC-1 | Every adapter dispatch is reachable only through the FR-003 authority and persisted-request checks. | architecture-conformance (TC-011) |
+| NFR-002-AC-2 | Renderer, analyzer, codegen, evidence, and human-decision inputs cannot be consumed as source or evaluator authority. | property-based-testing (TC-008) |

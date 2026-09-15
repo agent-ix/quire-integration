@@ -48,11 +48,18 @@ incompatible, or over-bound selection.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| FR-001-AC-1 | Equivalent complete locks serialize identically and derive the same identity independent of discovery order. | Property Test (TC-001) |
-| FR-001-AC-2 | Mutating any meaning-affecting pin changes the lock and run identity. | Property Test (TC-001) |
-| FR-001-AC-3 | Missing, duplicate, stale, dirty, unknown, cross-domain, or one-over selections refuse before any producer runs. | Test (TC-001) |
-| FR-001-AC-4 | Multiple roles per component and multiple components per repository remain distinct and explicitly mapped. | Test (TC-001) |
-| FR-001-AC-5 | Reachable, affected, stale, compatible, incompatible, and unknown remain distinct classifications. | Property Test (TC-001) |
+| FR-001-AC-1 | Equivalent complete locks serialize identically and derive the same identity independent of discovery order. | property-based-testing (TC-001) |
+| FR-001-AC-2 | Mutating any meaning-affecting pin changes the lock and run identity. | property-based-testing (TC-001) |
+| FR-001-AC-3 | Missing, duplicate, stale, dirty, unknown, cross-domain, or one-over selections refuse before any producer runs. | unit-testing (TC-001) |
+| FR-001-AC-4 | Multiple roles per component and multiple components per repository remain distinct and explicitly mapped. | unit-testing (TC-001) |
+| FR-001-AC-5 | Reachable, affected, stale, compatible, incompatible, and unknown remain distinct classifications. | property-based-testing (TC-001) |
+
+## Error Conditions
+
+A missing, duplicate, stale, dirty, moving, unknown, cross-domain,
+contract-incompatible, malformed, or one-over selection returns a typed lock
+refusal before any producer or consumer invocation. The refusal identifies the
+exact selection and identity domain without substituting a current default.
 
 ## Dependencies
 

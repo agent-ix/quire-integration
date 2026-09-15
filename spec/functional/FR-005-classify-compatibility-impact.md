@@ -49,11 +49,18 @@ required regression vectors, and per-subject compatibility/evidence state.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| FR-005-AC-1 | Additive compatible change, payload break, behavioral regression with unchanged schema, and absent result yield four distinct impact records. | Test (TC-005) |
-| FR-005-AC-2 | Every affected or stale item includes an auditable path from the changed identity through typed dependency edges. | Property Test (TC-005) |
-| FR-005-AC-3 | Circular, unresolved, foreign, or over-bound graphs remain unknown/refused and cannot become compatible or incompatible by default. | Test (TC-005) |
-| FR-005-AC-4 | Stale evidence loses current support status without becoming counterevidence or a false semantic result. | Property Test (TC-005) |
-| FR-005-AC-5 | Regression selection includes every policy-required vector exactly once and exposes each unavailable vector. | Property Test (TC-005) |
+| FR-005-AC-1 | Additive compatible change, payload break, behavioral regression with unchanged schema, and absent result yield four distinct impact records. | unit-testing (TC-005) |
+| FR-005-AC-2 | Every affected or stale item includes an auditable path from the changed identity through typed dependency edges. | property-based-testing (TC-005) |
+| FR-005-AC-3 | Circular, unresolved, foreign, or over-bound graphs remain unknown/refused and cannot become compatible or incompatible by default. | property-based-testing (TC-005) |
+| FR-005-AC-4 | Stale evidence loses current support status without becoming counterevidence or a false semantic result. | property-based-testing (TC-005) |
+| FR-005-AC-5 | Regression selection includes every policy-required vector exactly once and exposes each unavailable vector. | property-based-testing (TC-005) |
+
+## Error Conditions
+
+An invalid baseline/candidate lock, foreign identity, unknown compatibility rule,
+cycle, unresolved edge, malformed dependency path, missing policy vector, or
+exceeded traversal bound returns an explicit unknown, unavailable, unsupported,
+or refused state. None defaults to compatible, incompatible, current, or passed.
 
 ## Dependencies
 

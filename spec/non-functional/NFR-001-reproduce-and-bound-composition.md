@@ -8,6 +8,8 @@ relationships:
     type: constrains
   - target: ix://agent-ix/quire-integration/FR-002
     type: constrains
+  - target: ix://agent-ix/quire-integration/FR-003
+    type: constrains
   - target: ix://agent-ix/quire-integration/FR-004
     type: constrains
   - target: ix://agent-ix/quire-integration/FR-005
@@ -20,13 +22,14 @@ relationships:
 ## Statement
 
 The library SHALL produce byte-identical outputs for identical validated inputs
-while bounding every input byte, retained item, dependency edge, traversal step,
-producer invocation, output byte, and execution duration before work begins.
+under a finite preselected budget for every input byte, retained item, dependency
+edge, traversal step, producer invocation, output byte, and execution duration.
 
 ## Scope
 
-Applies to lock validation, execution composition, semantic views, compatibility
-impact, qualification orchestration, strict readers, and canonical writers.
+Applies to lock validation, execution composition, effect reconciliation,
+semantic views, compatibility impact, qualification orchestration, strict
+readers, and canonical writers.
 
 ## Rationale
 
@@ -37,10 +40,10 @@ Reproducible outputs and fail-closed budgets are required for replay and evidenc
 
 | Metric | Target | Threshold | Method |
 |--------|--------|-----------|--------|
-| Equal-input canonical output equality | 100% of generated fixtures | 100% | Property Test (TC-007) |
-| Retained work after one-over bound | 0 excess items | 0 | Property Test (TC-007) |
-| Producer invocations after preflight refusal | 0 invocations | 0 | Test (TC-007) |
-| Partial validated outputs after refusal | 0 outputs | 0 | Test (TC-007) |
+| Equal-input canonical output equality | 100% of generated fixtures | 100% | property-based-testing (TC-007) |
+| Retained work after one-over bound | 0 excess items | 0 | property-based-testing (TC-007) |
+| Producer invocations after preflight refusal | 0 invocations | 0 | unit-testing (TC-007) |
+| Partial validated outputs after refusal | 0 outputs | 0 | unit-testing (TC-007) |
 
 ## Verification
 
@@ -52,5 +55,5 @@ stable codes, usage, and producer invocation counters.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| NFR-001-AC-1 | Every externally supplied size, count, bound, duration, and integer conversion is checked before allocation, traversal, dispatch, or arithmetic. | Static Analysis (TC-010) |
-| NFR-001-AC-2 | Timeout or resource exhaustion leaves each completed independent sibling intact and marks every unexecuted sibling explicitly. | Property Test (TC-007) |
+| NFR-001-AC-1 | Every externally supplied size, count, bound, duration, and integer conversion is checked before allocation, traversal, dispatch, or arithmetic. | static-quality (TC-010) |
+| NFR-001-AC-2 | Timeout or resource exhaustion leaves each completed independent sibling intact and marks every unexecuted sibling explicitly. | fault-injection (TC-007) |

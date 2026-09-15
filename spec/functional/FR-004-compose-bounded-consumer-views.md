@@ -52,11 +52,19 @@ accounting with per-item disposition, provenance, loss, and omitted frontier.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| FR-004-AC-1 | Equal package/query/profile/lock inputs produce byte-identical ordered views, artifacts, mappings, and loss records. | Property Test (TC-004) |
-| FR-004-AC-2 | Every displayed, omitted, generated, unsupported, or failed item maps to its exact source and semantic identity. | Test (TC-004) |
-| FR-004-AC-3 | Exact traversal bounds complete, while one-over traversal returns incomplete with an exact frontier and no completeness claim. | Property Test (TC-004) |
-| FR-004-AC-4 | Unknown subjects, foreign relations, profile mismatch, and over-bound output refuse or remain incomplete without an inferred replacement. | Test (TC-004) |
-| FR-004-AC-5 | Rendering, heuristic analysis, generated text, or downstream parser acceptance cannot change source semantics or satisfy a proof/qualification claim. | Property Test (TC-004) |
+| FR-004-AC-1 | Equal package/query/profile/lock inputs produce byte-identical ordered views, artifacts, mappings, and loss records. | property-based-testing (TC-004) |
+| FR-004-AC-2 | Every displayed, omitted, generated, unsupported, or failed item maps to its exact source and semantic identity. | integration-testing (TC-004) |
+| FR-004-AC-3 | Exact traversal bounds complete, while one-over traversal returns incomplete with an exact frontier and no completeness claim. | property-based-testing (TC-004) |
+| FR-004-AC-4 | Unknown subjects, foreign relations, profile mismatch, and over-bound output refuse or remain incomplete without an inferred replacement. | negative-abuse-testing (TC-004) |
+| FR-004-AC-5 | Rendering, heuristic analysis, generated text, or downstream parser acceptance cannot change source semantics or satisfy a proof/qualification claim. | property-based-testing (TC-004) |
+
+## Error Conditions
+
+An unknown or foreign subject, invalid relation, profile/lock mismatch,
+unsupported obligation, consumer failure, malformed output mapping, or exceeded
+traversal/work/output bound returns a typed refused, unsupported, failed, or
+incomplete accounting record. No substitute artifact or completeness claim is
+emitted.
 
 ## Dependencies
 

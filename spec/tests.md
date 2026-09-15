@@ -26,7 +26,7 @@ relationships:
 
 ## Stakeholder Requirement Coverage
 
-| Stakeholder Req | Trace to US/FR | Test/Validation | Coverage Status |
+| Stakeholder Req | Trace to US/FR | Test/Validation | Status |
 |---|---|---|---|
 | StR-001 | US-001, FR-001, FR-002 | StR-001-VC-1 via TC-002 | 🚧 planned |
 | StR-001 | US-002, FR-003 | StR-001-VC-2 via TC-003 | 🚧 planned |
@@ -35,7 +35,7 @@ relationships:
 
 ## User Story Coverage
 
-| User Story | Acceptance Criteria | Test Cases | Coverage Status |
+| User Story | Acceptance Criteria | Test Cases | Status |
 |---|---|---|---|
 | US-001 | US-001-EX-1..2 | TC-001, TC-002 | 🚧 planned |
 | US-002 | US-002-EX-1..2 | TC-003, TC-009, TC-011 | 🚧 planned |
@@ -43,15 +43,15 @@ relationships:
 
 ## Functional Requirement Coverage
 
-| Functional Req | Acceptance Criteria | Test Cases | Coverage Status |
+| Functional Req | Acceptance Criteria | Test Cases | Status |
 |---|---|---|---|
-| FR-001 | FR-001-AC-1..5 | TC-001 | 🚧 planned |
-| FR-002 | FR-002-AC-1..5 | TC-002 | 🚧 planned |
-| FR-003 | FR-003-AC-1..5 | TC-003 | 🚧 planned |
+| FR-001 | FR-001-AC-1..FR-001-AC-5 | TC-001 | 🚧 planned |
+| FR-002 | FR-002-AC-1..FR-002-AC-5 | TC-002 | 🚧 planned |
+| FR-003 | FR-003-AC-1..FR-003-AC-5 | TC-003 | 🚧 planned |
 | FR-003 | FR-003-AC-6 | TC-009 | 🚧 planned |
-| FR-004 | FR-004-AC-1..5 | TC-004 | 🚧 planned |
-| FR-005 | FR-005-AC-1..5 | TC-005 | 🚧 planned |
-| FR-006 | FR-006-AC-1..6 | TC-006 | 🚧 planned |
+| FR-004 | FR-004-AC-1..FR-004-AC-5 | TC-004 | 🚧 planned |
+| FR-005 | FR-005-AC-1..FR-005-AC-5 | TC-005 | 🚧 planned |
+| FR-006 | FR-006-AC-1..FR-006-AC-6 | TC-006 | 🚧 planned |
 
 ## Non-Functional Requirement Coverage
 
@@ -105,12 +105,24 @@ relationships:
 | qualification inventory | exact | all 176 rows accounted | TC-006 | scoped rollup may complete |
 | qualification inventory | below exact | one required row/vector absent | TC-006 | containing scope incomplete |
 
+## Error Path Tests
+
+| Test Case | Error Path | Expected |
+|---|---|---|
+| TC-001 | Missing/moving/dirty/unknown/cross-domain lock selection | Pre-invocation typed refusal naming the exact domain |
+| TC-002 | Producer mismatch/failure, duplicate item, or contradictory shared prerequisite | Item-local outcome or scoped composition refusal; completed siblings retained |
+| TC-003 | Persistence failure, conflicting key, uncertain delivery, unsupported adapter guarantee, or foreign observation | No unauthorized effect; `delivery-unknown` remains distinct from receipt and effect |
+| TC-004 | Foreign subject, unsupported obligation, consumer failure, or truncated traversal | Exact refused/unsupported/failed/incomplete accounting without substitute artifact |
+| TC-005 | Unknown rule, cyclic/unresolved graph, missing vector, or bound exhaustion | Explicit unknown/unavailable/unsupported/refused state, never default compatibility |
+| TC-006 | Missing cell, unavailable surface, intake refusal, stale evidence, or over-broad decision | Exact typed state; no passed or complete promotion |
+
 ## State Transition Tests
 
 | Test Case | Initial State | Event | Expected State |
 |---|---|---|---|
 | TC-003 | no request | valid authorized submission | pending persisted before dispatch |
-| TC-003 | pending without receipt | restart and exact retry | same request reconciled |
+| TC-003 | pending without receipt | restart with reconciliation-capable adapter | same request reconciled before any repeated call |
+| TC-003 | delivery outcome unknown | adapter lacks reconciliation and idempotency guarantee | `delivery-unknown`; no repeated call and no established effect |
 | TC-003 | receipt recorded | matching QObs effect observation | effect established separately |
 | TC-003 | receipt recorded | foreign or incomplete observation | effect remains unestablished |
 | TC-005 | current evidence | meaning-affecting dependency change | evidence stale, not false |

@@ -9,6 +9,10 @@ relationships:
     type: depends_on
   - target: ix://agent-ix/quire-integration/FR-002
     type: depends_on
+  - target: ix://agent-ix/quire-integration/FR-003
+    type: depends_on
+  - target: ix://agent-ix/quire-integration/FR-004
+    type: depends_on
   - target: ix://agent-ix/quire-integration/FR-005
     type: depends_on
   - target: ix://agent-ix/quire-specification/FR-311
@@ -65,16 +69,28 @@ attributed human decision.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| FR-006-AC-1 | Every required integration cell in the 176-row inventory has exactly one attributable current state and every vector retains its exact subject/run inputs. | Test (TC-006) |
-| FR-006-AC-2 | Missing, unexecuted, failed, unsupported, incomplete, refused, and waived vectors cannot produce complete qualification. | Property Test (TC-006) |
-| FR-006-AC-3 | Equal corpus and lock inputs reproduce canonical per-vector and rollup bytes; changing any pin changes the run identity. | Property Test (TC-006) |
-| FR-006-AC-4 | API/CLI/WASM parity, reference workflows, provider containment, backend replay, and evidence intake remain independently attributable. | Test (TC-006) |
-| FR-006-AC-5 | Evidence intake validates but does not rerun or reinterpret a producer; limitations and rights metadata constrain the resulting claim. | Test (TC-006) |
-| FR-006-AC-6 | Only a matching authenticated human decision can accept, reject, or explicitly limit the qualification scope without changing prior records. | Test (TC-006) |
+| FR-006-AC-1 | Every required integration cell in the 176-row inventory has exactly one attributable current state and every vector retains its exact subject/run inputs. | integration-testing (TC-006) |
+| FR-006-AC-2 | Missing, unexecuted, failed, unsupported, incomplete, refused, and waived vectors cannot produce complete qualification. | property-based-testing (TC-006) |
+| FR-006-AC-3 | Equal corpus and lock inputs reproduce canonical per-vector and rollup bytes; changing any pin changes the run identity. | metamorphic-testing (TC-006) |
+| FR-006-AC-4 | API/CLI/WASM parity, reference workflows, provider containment, backend replay, and evidence intake remain independently attributable. | integration-testing (TC-006) |
+| FR-006-AC-5 | Evidence intake validates but does not rerun or reinterpret a producer; limitations and rights metadata constrain the resulting claim. | contract-testing (TC-006) |
+| FR-006-AC-6 | Only a matching authenticated human decision can accept, reject, or explicitly limit the qualification scope without changing prior records. | negative-abuse-testing (TC-006) |
+
+## Error Conditions
+
+A corpus/inventory/profile/lock mismatch, duplicate or absent required cell,
+producer refusal/failure, unavailable execution surface, rights limitation,
+evidence-intake refusal, unauthenticated or over-broad decision, stale evidence,
+or exceeded execution bound retains its exact typed state. No such state becomes
+passed or complete, and no partial run mutates a prior record.
 
 ## Dependencies
 
 - [FR-002](./FR-002-compose-execution-bundles.md) supplies composed execution.
+- [FR-003](./FR-003-reconcile-authorized-effects.md) supplies authorized effect
+  and observation reconciliation evidence.
+- [FR-004](./FR-004-compose-bounded-consumer-views.md) supplies deterministic
+  view and tool-consumer accounting.
 - [FR-005](./FR-005-classify-compatibility-impact.md) supplies compatibility and
   stale-evidence accounting.
 - QSpec FR-311 and FR-336 through FR-338 own qualification, corpus, evidence, and
