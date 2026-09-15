@@ -1,0 +1,22 @@
+[package]
+name = "quire-integration"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Version-locked composition and integration runtime for native Quire V1."
+authors = ["Agent IX <agent@agent-ix.dev>"]
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/agent-ix/quire-integration"
+publish = false
+
+[lib]
+name = "quire_integration"
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
