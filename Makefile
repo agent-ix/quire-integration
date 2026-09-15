@@ -13,8 +13,8 @@ help:
 	@echo "  make test             - cargo test"
 	@echo "  make build            - Release build"
 	@echo "  make clean            - cargo clean"
-	@echo "  make deny             - cargo deny check licenses"
-	@echo "  make audit-unsafe     - Enforce // SAFETY: comments on unsafe blocks"
+	@echo "  make deny             - Run all cargo-deny supply-chain checks"
+	@echo "  make audit-unsafe     - Enforce zero unsafe Rust blocks"
 	@echo "  make ci               - All CI gates locally (fmt-check + lint + test + deny + audit-unsafe)"
 
 # =============================================================================
@@ -51,7 +51,7 @@ clean:
 
 .PHONY: deny
 deny:
-	$(CARGO) deny check licenses
+	$(CARGO) deny check
 
 .PHONY: cargo-audit
 cargo-audit:

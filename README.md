@@ -24,10 +24,12 @@ artifacts from QSL, TL, QObs, Protocol, Verification, Contract IR, and codegen.
 
 ## Current status
 
-Repository scaffold only. Research #34/#74 owns creation and the required major
-`/specify` plus self `/spec-review` cycle for C10 through C14. No composed runtime
-or qualification capability is implemented yet, and the placeholder crate API
-makes no semantic claim.
+The reviewed C10–C14 specification and implementation plan are complete. The
+shared runtime foundation now provides domain-separated identities, closed
+dispositions, checked resource budgets, deterministic canonical collections,
+and separately typed producer, consumer, persistence, adapter, evidence, and
+decision capabilities. Exact ecosystem-lock and composed-runtime behavior remain
+under active implementation.
 
 ## Local checks
 

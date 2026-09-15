@@ -187,7 +187,7 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 
 | Task | Track | Owns (references) | Verified by (verifies) | Status |
 | --- | --- | --- | --- | --- |
-| Task-001 | S | NFR-001, NFR-002 | TC-007..TC-011 | not_started |
+| Task-001 | S | NFR-001, NFR-002 | TC-007..TC-011 | done |
 | Task-002 | S | FR-001 | TC-001 | not_started |
 | Task-003 | A | FR-002 | TC-002 | not_started |
 | Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | not_started |

@@ -2,7 +2,7 @@
 id: Task-001
 title: "NFR-001/NFR-002 — common contracts and safety envelope"
 type: Task
-status: not_started
+status: done
 track: S
 priority: P0
 relationships:
@@ -28,11 +28,11 @@ resource budgets, canonical encoding and typed capability foundations.
 
 ## Subtasks
 
-- [ ] Write failing domain-separation, bound and authority-confusion tests first.
-- [ ] Define identity newtypes for every repository/component/role/artifact/run domain.
-- [ ] Define closed non-success states without Boolean conversions or default promotion.
-- [ ] Implement checked integer/budget helpers and deterministic canonical collections.
-- [ ] Define separate producer, consumer, persistence, adapter, evidence and decision traits.
+- [x] Write failing domain-separation, bound and authority-confusion tests first.
+- [x] Define identity newtypes for every repository/component/role/artifact/run domain.
+- [x] Define closed non-success states without Boolean conversions or default promotion.
+- [x] Implement checked integer/budget helpers and deterministic canonical collections.
+- [x] Define separate producer, consumer, persistence, adapter, evidence and decision traits.
 
 ## Deliverables
 

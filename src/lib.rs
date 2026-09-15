@@ -1,16 +1,20 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Agent-IX
+
 //! Version-locked composition and integration runtime for native Quire V1.
 
-/// Placeholder entry point.
-pub fn hello() -> &'static str {
-    "hello from quire_integration"
-}
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod capability;
+mod common;
 
-    #[test]
-    fn hello_returns_greeting() {
-        assert!(hello().contains("quire_integration"));
-    }
-}
+pub use capability::{
+    ConsumerCapability, DecisionCapability, EffectAdapterCapability, EvidenceIntakeCapability,
+    PersistenceCapability, ProducerCapability,
+};
+pub use common::{
+    ArtifactId, Budget, BuildId, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId,
+    DefinitionId, DeploymentId, Disposition, Error, ErrorCode, Meter, PackageId, ProviderId,
+    RepositoryId, ResourceDimension, Result, RoleId, RunId, ToolchainId, Usage,
+};
