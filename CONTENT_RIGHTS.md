@@ -48,6 +48,7 @@ unmodified upstream works; their own license notices and attribution terms apply
 | `semver` | `1.0.28` from crates.io | MIT OR Apache-2.0 | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private source, local build, test and qualification |
 | `jsonschema` | `0.17.1` from crates.io, test-only with default features disabled | MIT | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private local schema conformance tests |
 | `proptest` | `1.11.0` from crates.io, test-only with only the `std` feature | MIT OR Apache-2.0 | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private local generated property tests |
+| `fs2` | `0.4.3` from crates.io, test-only | MIT OR Apache-2.0 | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-16 | private local crash/restart and durable-store integration tests |
 | `ix-trace-rs` | git revision `2ce4ebf47f726b9d76388220545cd0abda8a5cfb`, version `0.1.0` | AGPL-3.0-or-later | Agent IX project identity retained in source and lock | Agent IX repository dependency policy / 2026-09-15 | private local trace-tagged tests |
 
 Transitive packages are limited to the exact `Cargo.lock` closure of these

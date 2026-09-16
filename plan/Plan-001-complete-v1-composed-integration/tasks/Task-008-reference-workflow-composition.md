@@ -2,7 +2,7 @@
 id: Task-008
 title: "IT-001 — reference workflow composition"
 type: Task
-status: not_started
+status: in_progress
 track: I1
 priority: P0
 relationships:
@@ -38,4 +38,8 @@ through real owner strict readers and producers under one exact lock.
 ## Notes
 
 - Missing compatible external revisions are explicit blockers, never substitute shims.
+- The QSL timed-refund strict-consumer handoff is being authored in the separate
+  `task/timed-refund-handoff` worktree (Task-045). It is not yet available at an
+  immutable remote revision, so this task remains in progress without copying its
+  uncommitted producer semantics.
 - Unblocks Task-012.

@@ -164,7 +164,7 @@ relationships:
 | Integration ID | Purpose | Target Project | Type | Test Cases | Status |
 |---|---|---|---|---|---|
 | IT-001 | Compose three reference workflows through real strict readers and domain producers | QSL, State, TL, QObs, Protocol, Verification, backend providers | service | TC-001, TC-002 | 🚧 planned |
-| IT-002 | Persist, dispatch, crash, retry, and observe one authorized effect | durable request store, local contract-faithful adapter, QObs | service | TC-003, TC-009, TC-011 | 🚧 planned |
+| IT-002 | Persist, dispatch, crash, retry, and observe one authorized effect | durable request store, local contract-faithful adapter, QObs | service | TC-003, TC-009, TC-011 | 🚧 SC-01..05, SC-07/08 pass; SC-06 owner-blocked |
 | IT-003 | Render, analyze, generate, and classify bounded semantic consumers | QSL checked/IR, renderer, analyzer, codegen | service | TC-004, TC-005, TC-007, TC-008, TC-010 | 🚧 planned |
 | IT-004 | Execute and account for complete-V1 qualification | IT-070..IT-078 producers, artifact store, Quoin intake | service | TC-006, TC-007, TC-008 | 🚧 planned |
 
@@ -182,7 +182,7 @@ relationships:
 
 | Gap ID | Description | Risk Level | Mitigation |
 |---|---|---|---|
-| GAP-001 | Real effect store/HTTP integration plus consumer, impact and qualification modules remain unimplemented | High | continue Tasks 005 through 013 in dependency order; Task 009 closes effect integration |
+| GAP-001 | Real consumer, impact and qualification integrations remain unimplemented; effect store/HTTP scenarios pass except the QObs-owned observation handoff | High | complete the QObs handoff for Task 009, then continue Tasks 010 through 013 in dependency order |
 | GAP-002 | Exact compatible producer revisions and fixtures for IT-001 remain to be selected | High | record real upstream pins and rights in Task-008 |
 | GAP-003 | A production external effect endpoint is intentionally unauthorized | Medium | use a local contract-faithful HTTP service and preserve the limitation in evidence |
 | GAP-004 | Quoin evidence intake may be unavailable at qualification time | Medium | record the vector unsupported or incomplete; never mock it to passed |

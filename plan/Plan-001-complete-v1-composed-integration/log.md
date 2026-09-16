@@ -7,6 +7,26 @@ description: "Chronological log of changes to the Plan-001 bundle."
 
 ## History
 
+* **2026-09-16** — Hardened Task-009 review findings with an OS-released cross-process
+  transaction lock, reload-before-CAS writes, bounded strict journal reconstruction, parent
+  directory fsync, permit-bound HTTP reads, child deadlines, exact foreign-scope refusal and
+  deterministically overlapped equal/unequal races. Eight IT-002 tests pass without claiming
+  StR-001-VC-2. SC-06 remains owner-blocked because QObs main publishes no immutable downstream
+  business-effect handoff; the local observation seam is deliberately untagged as QObs evidence.
+  Independent Rust review SR-047 passes the implemented subset; gap analysis SR-048 confirms
+  seven of eight scenarios with no trace/status lie and preserves the expected SC-06 blocker.
+
+* **2026-09-16** — Audited Task-008 owner surfaces. Mainline QSL publishes the strict
+  choreography handoffs and ConfigVersion producer APIs, while the required timed-refund
+  strict-consumer handoff remains uncommitted work under QSL Task-045. Preserved that owner
+  boundary and advanced the independent Task-009 track rather than copying semantics or
+  colliding with the active owner worktree.
+
+* **2026-09-16** — Started Task-008 reference workflow composition. Auditing the exact
+  locally available QSL, state, TL, QObs, Protocol, Verification, Contract IR and backend
+  revisions and their rights/versioned strict-reader handoffs before adding IT-001 dependencies
+  or fixture bytes; missing owner-qualified handoffs remain explicit blockers.
+
 * **2026-09-16** — Completed Task-007 and the NFR-001/NFR-002 cross-cutting gate. TC-007
   through TC-011 now bind generated exact/one-over, permutation, deadline and sibling-retention
   evidence to a digest-pinned inventory of every production resource and authority boundary.

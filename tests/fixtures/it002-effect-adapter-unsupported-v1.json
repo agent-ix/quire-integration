@@ -1,0 +1,1 @@
+{"contractVersion":"quire.effect-adapter/v1","dispatchPath":"/effects","duplicateGuarantee":"none","idempotencyField":"Idempotency-Key","reconciliationPath":null,"requestContentType":"application/json","responseContentType":"application/json"}

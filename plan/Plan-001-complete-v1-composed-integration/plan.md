@@ -194,8 +194,8 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 | Task-005 | C | FR-004 | TC-004 | done |
 | Task-006 | D | FR-005 | TC-005 | done |
 | Task-007 | G | NFR-001, NFR-002 | TC-007..TC-011 | done |
-| Task-008 | I1 | FR-001, FR-002 | IT-001 | not_started |
-| Task-009 | I2 | FR-003 | IT-002 | not_started |
+| Task-008 | I1 | FR-001, FR-002 | IT-001 | in_progress (owner handoff blocked) |
+| Task-009 | I2 | FR-003 | IT-002 | in_progress (SC-06 owner handoff blocked) |
 | Task-010 | I3 | FR-004, FR-005 | IT-003 | not_started |
 | Task-011 | Q | FR-006 | TC-006 | not_started |
 | Task-012 | Q | StR-001, FR-006 | IT-004 | not_started |
