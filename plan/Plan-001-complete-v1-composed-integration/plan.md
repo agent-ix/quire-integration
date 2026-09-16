@@ -99,23 +99,23 @@ hold either adapter capability.
   receipt/effect separation for FR-003-AC-1 through FR-003-AC-5.
 - [x] **TC-004**: deterministic bounded views, identity maps, exact frontiers, distinct
   state axes and consumer accounting for FR-004-AC-1 through FR-004-AC-6.
-- [ ] **TC-005**: four impact classes, explicit paths, cycles/unknowns, stale evidence and
-  regression-vector selection for FR-005-AC-1 through FR-005-AC-5.
+- [ ] **TC-005**: independent impact axes, explicit paths, cycles/unknowns, stale evidence,
+  canonical identity and regression-vector selection for FR-005-AC-1 through FR-005-AC-6.
 - [ ] **TC-006**: 176-cell inventory accounting, no-promotion rollups, reproducible run
   identity, evidence intake and scoped decisions for FR-006-AC-1 through FR-006-AC-6.
 
 ### Cross-cutting verification
 
-- [ ] **TC-007**: generated exact/one-over budgets, timeouts, sibling retention and canonical
-  equality for NFR-001-AC-2.
+- [ ] **TC-007**: generated exact/one-over deterministic budgets, sibling retention,
+  operational deadline failures and canonical equality for NFR-001-AC-2/3.
 - [ ] **TC-008**: generated authority-confusion attempts and source/decision separation for
   NFR-002-AC-2.
 - [ ] **TC-009**: static proof that adapter invocation exists only in the effect boundary for
   FR-003-AC-6.
 - [ ] **TC-010**: static inventory of checked untrusted conversions and allocations for
   NFR-001-AC-1.
-- [ ] **TC-011**: static call-graph proof that every dispatch path crosses authority and
-  persisted-request checks for NFR-002-AC-1.
+- [ ] **TC-011**: static call-graph proof that effect dispatch crosses authority/persistence
+  and pure owner readers cross exact lock admission for NFR-002-AC-1 and NFR-002-AC-3.
 
 ### Integration tests
 
@@ -192,7 +192,7 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 | Task-003 | A | FR-002 | TC-002 | done |
 | Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | done |
 | Task-005 | C | FR-004 | TC-004 | done |
-| Task-006 | D | FR-005 | TC-005 | not_started |
+| Task-006 | D | FR-005 | TC-005 | in_progress |
 | Task-007 | G | NFR-001, NFR-002 | TC-007..TC-011 | not_started |
 | Task-008 | I1 | FR-001, FR-002 | IT-001 | not_started |
 | Task-009 | I2 | FR-003 | IT-002 | not_started |

@@ -2,7 +2,7 @@
 id: Task-006
 title: "FR-005 — compatibility impact and stale evidence"
 type: Task
-status: not_started
+status: in_progress
 track: D
 priority: P0
 relationships:
@@ -22,16 +22,28 @@ regression-vector availability without inferring compatibility from reachability
 
 ## Subtasks
 
-- [ ] Write TC-005 four-class, path, cycle, unknown and stale-evidence properties first.
-- [ ] Traverse only explicit typed dependency edges under finite bounds.
-- [ ] Retain auditable changed-to-affected paths and circular/unresolved unknowns.
-- [ ] Keep stale support distinct from counterevidence and semantic falsehood.
-- [ ] Select every required regression vector once and expose unavailable/unsupported ones.
+- [ ] Write TC-005 identity, axis-cross-product, topology, bound, freshness,
+      policy/vector and canonicalization properties first.
+- [ ] Strict-read the feature-local comparison, graph, policy and vector-manifest
+      contracts plus FR-336 corpus and FR-337 evidence-intake contracts through exact
+      lock-admitted readers with caller-lowered bounds.
+- [ ] Traverse only policy-oriented owner edges under finite local bounds.
+- [ ] Propagate affectedness and staleness by independent monotone effect transfer,
+      exact-only scope matching and per-root/effect canonical witnesses.
+- [ ] Preflight the complete effect-oriented topology atomically before SCC analysis.
+- [ ] Retain canonical shortest changed-to-affected witnesses, cycle witnesses,
+      exact incomplete frontiers and independent siblings.
+- [ ] Keep owner support/contradiction bytes distinct from the freshness overlay and truth.
+- [ ] Strict-read and preserve referenced FR-337 intake bytes, rights and limitations.
+- [ ] Select every policy vector once with independent requirement and availability axes.
+- [ ] Bind every owner input, limit and state axis into canonical directional run identity.
 
 ## Deliverables
 
-- Compatibility/impact record types, traversal and trace-tagged tests.
-- Canonical regression-vector inventory and explicit unknown/refused states.
+- Feature-local compatibility/impact overlays, bounded traversal and trace-tagged tests.
+- Canonical policy/vector inventory with independent requirement/availability states.
+- Bounded strict-reader seams for Task-006 comparison/graph/policy/manifest contracts
+  that retain exact FR-307/310 fields and FR-336/337 owner bytes without substitution.
 
 ## Notes
 

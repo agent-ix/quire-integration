@@ -20,9 +20,19 @@ relationships:
     type: references
   - target: ix://agent-ix/quire-specification/FR-299
     type: references
+  - target: ix://agent-ix/quire-specification/FR-307
+    type: references
+  - target: ix://agent-ix/quire-specification/FR-310
+    type: references
+  - target: ix://agent-ix/quire-specification/FR-311
+    type: references
+  - target: ix://agent-ix/quire-specification/FR-336
+    type: references
   - target: ix://agent-ix/quire-specification/FR-333
     type: references
   - target: ix://agent-ix/quire-specification/FR-334
+    type: references
+  - target: ix://agent-ix/quire-specification/FR-337
     type: references
   - target: ix://agent-ix/quire-integration/IT-003
     type: verifies
@@ -44,12 +54,17 @@ classify baseline/candidate compatibility and stale evidence through explicit gr
 - [ ] Validate every generated output against its real reader without semantic promotion.
 - [ ] Revalidate and retain the full canonical owner bytes and identities for the
       FR-297/FR-298/FR-299/FR-333/FR-334 values; do not reconstruct them from the facade.
+- [ ] Strict-validate and retain exact FR-307 correspondence and FR-310 graph field
+      values, plus unchanged canonical FR-336 corpus/vector and FR-337 evidence-intake
+      bytes/identities, including every typed relation, scope, provenance, rights and
+      limitation field, before adapting them to Task-006 projections/overlays.
 - [ ] Preserve change classes, impact paths, cycles and unavailable vectors independently.
 
 ## Deliverables
 
 - Trace-tagged IT-003 harness and immutable consumer artifacts/accounting.
 - Exact owner-contract pass-through plus repeated-call determinism/effect evidence.
+- Real compatibility-rule, FR-310 graph and regression-vector provider contract evidence.
 - Evidence for StR-001-VC-3.
 
 ## Notes

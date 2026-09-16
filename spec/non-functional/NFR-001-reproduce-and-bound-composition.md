@@ -21,9 +21,11 @@ relationships:
 
 ## Statement
 
-The library SHALL produce byte-identical outputs for identical validated inputs
-under a finite preselected budget for every input byte, retained item, dependency
-edge, traversal step, producer invocation, output byte, and execution duration.
+The library SHALL produce byte-identical canonical outputs for identical validated
+inputs under finite preselected deterministic budgets for every input byte, retained
+item, dependency edge, traversal step, producer invocation and output byte. Operational
+wall-clock deadlines SHALL bound execution; deadline-derived outcomes are excluded from
+the equal-input canonical-output comparison because elapsed time is not a semantic input.
 
 ## Scope
 
@@ -56,4 +58,5 @@ stable codes, usage, and producer invocation counters.
 | ID | Criteria | Verification |
 |----|----------|--------------|
 | NFR-001-AC-1 | Every externally supplied size, count, bound, duration, and integer conversion is checked before allocation, traversal, dispatch, or arithmetic. | static-quality (TC-010) |
-| NFR-001-AC-2 | Timeout or resource exhaustion leaves each completed independent sibling intact and marks every unexecuted sibling explicitly. | fault-injection (TC-007) |
+| NFR-001-AC-2 | Deterministic work or retention exhaustion leaves each completed independent sibling intact and marks every unexecuted sibling explicitly. | fault-injection (TC-007) |
+| NFR-001-AC-3 | Operational deadline expiry returns the operation's documented typed outcome: an atomic no-output failure, an item-local timeout, or a structurally admitted incomplete accounting envelope. No deadline-derived outcome is compared under the equal-input canonical-output metric. | fault-injection (TC-007) |

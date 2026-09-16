@@ -10,6 +10,8 @@ relationships:
     type: constrains
   - target: ix://agent-ix/quire-integration/FR-004
     type: constrains
+  - target: ix://agent-ix/quire-integration/FR-005
+    type: constrains
   - target: ix://agent-ix/quire-integration/FR-006
     type: constrains
 ---
@@ -51,5 +53,6 @@ cross-scope, expired, and key-conflicting dispatch.
 
 | ID | Criteria | Verification |
 |----|----------|--------------|
-| NFR-002-AC-1 | Every adapter dispatch is reachable only through the FR-003 authority and persisted-request checks. | architecture-conformance (TC-011) |
+| NFR-002-AC-1 | Every external-effect adapter dispatch is reachable only through the FR-003 authority and persisted-request checks. | architecture-conformance (TC-011) |
 | NFR-002-AC-2 | Renderer, analyzer, codegen, evidence, and human-decision inputs cannot be consumed as source or evaluator authority. | property-based-testing (TC-008) |
+| NFR-002-AC-3 | Every pure owner reader/provider invocation requires exact lock/capability admission, receives caller-lowered bounds, and holds no persistence or external-effect adapter capability. | architecture-conformance (TC-011) |

@@ -35,9 +35,10 @@ additive, payload-breaking, behavioral-only, and absent-result variants.
 ## Inputs
 
 Bounded model-view queries, exact and one-over traversal/output limits, supported
-and unsupported obligations, completion-order permutations, full canonical
-FR-297/FR-298/FR-299/FR-333/FR-334 owner values, and explicit typed evidence
-dependency graphs including cycles and unresolved edges.
+and unsupported obligations, completion-order permutations, exact
+FR-297/FR-298/FR-299/FR-307/FR-310/FR-311/FR-333/FR-334/FR-336/FR-337 owner
+fields/values plus canonical owner bytes only where those owners define them, and
+explicit typed evidence dependency graphs including cycles and unresolved edges.
 
 ## Test Procedure
 
@@ -53,9 +54,13 @@ dependency graphs including cycles and unresolved edges.
    - IT-003-SC-03: every requested obligation has one source-bound disposition and
      every FR-297/FR-298/FR-299/FR-333/FR-334 owner byte string and identity survives
      adapter pass-through exactly.
-4. Compare baseline/candidate locks and traverse the evidence dependency graph.
-   - IT-003-SC-04: four change classes, affected paths, stale evidence, cycles,
-     and unavailable regression vectors remain distinct.
+4. Strict-validate the real comparison/correspondence and FR-310 graph fields, strict-read
+   canonical FR-336 vector and FR-337 intake bytes, compare baseline/candidate locks and
+   traverse only policy-oriented edges through bounded Task-006 projections.
+   - IT-003-SC-04: independent structural/behavioral/presence tuples, affected paths,
+     stale evidence, cycles,
+     and unavailable regression vectors remain distinct; all owner bytes/fields, typed
+     identities, relations, scope, provenance, rights and limitations survive unchanged.
 
 ## Expected Results
 
