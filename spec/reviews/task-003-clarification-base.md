@@ -19,8 +19,8 @@ does not add acceptance criteria or expand the planned evidence scope.
 
 | ID | Severity | Summary | Refs |
 |---|---|---|---|
-| FND-012-001 | medium | Resolved: FR-001 listed provider, build, contract, option, role, component, package and feature identities but did not normatively join them into one exact capability binding. | FR-001-AC-4, TC-001 |
-| FND-012-002 | medium | Resolved: FR-002 required a bundle disposition but did not define deterministic precedence for mixed sibling outcomes. | FR-002-AC-2, TC-002 |
+| FND-001 | medium | Resolved: FR-001 listed provider, build, contract, option, role, component, package and feature identities but did not normatively join them into one exact capability binding. | FR-001-AC-4, TC-001 |
+| FND-002 | medium | Resolved: FR-002 required a bundle disposition but did not define deterministic precedence for mixed sibling outcomes. | FR-002-AC-2, TC-002 |
 
 ## Checklist Results
 

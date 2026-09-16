@@ -1129,6 +1129,33 @@ impl ValidatedLock {
         self.limits
     }
 
+    /// Returns whether this lock contains the exact package identity.
+    #[must_use]
+    pub fn contains_package(&self, package: &PackageId) -> bool {
+        self.wire
+            .packages
+            .iter()
+            .any(|candidate| candidate.identity == package.as_str())
+    }
+
+    /// Returns whether this lock contains the exact workflow-instance identity.
+    #[must_use]
+    pub fn contains_workflow(&self, workflow: &WorkflowInstanceId) -> bool {
+        self.wire
+            .workflow_instances
+            .iter()
+            .any(|candidate| candidate.identity == workflow.as_str())
+    }
+
+    /// Returns whether this lock contains the exact semantic-definition identity.
+    #[must_use]
+    pub fn contains_definition(&self, definition: &DefinitionId) -> bool {
+        self.wire
+            .definitions
+            .iter()
+            .any(|candidate| candidate.identity == definition.as_str())
+    }
+
     /// Derives one run identity from this exact lock and a domain-separated run request.
     pub fn derive_run_identity(&self, run: &RunId) -> Result<RunIdentity> {
         let length = u64::try_from(run.as_str().len()).map_err(|_| {

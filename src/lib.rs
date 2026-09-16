@@ -9,6 +9,7 @@
 mod capability;
 mod common;
 pub mod ecosystem_lock;
+pub mod execution_bundle;
 
 pub use capability::{
     ConsumerCapability, DecisionCapability, EffectAdapterCapability, EvidenceIntakeCapability,

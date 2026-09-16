@@ -7,6 +7,13 @@ description: "Chronological log of changes to the Plan-001 bundle."
 
 ## History
 
+* **2026-09-15** — Completed Task-003 and FR-002 with exact typed strict-reader and producer
+  dispatch, canonical six-domain execution bundles, opaque owner bytes and independent axes,
+  total sibling rollup, derived shared-prerequisite refusal, field-aware resource preflight
+  and closed schema-backed strict reading. TC-002 covers three distinct workflow inventories,
+  all nine dispositions, completion-order metamorphisms, exact/one-over bounds and
+  no-substitute adverse paths. Independent Rust review SR-013 and gap analysis SR-014 pass.
+
 * **2026-09-15** — Completed Task-002 and FR-001 with content-addressed ecosystem pins,
   exact package SemVer, canonical bounded feature sets, explicit identity mappings,
   independent reachability/compatibility states, strict canonical JSON and lock/run

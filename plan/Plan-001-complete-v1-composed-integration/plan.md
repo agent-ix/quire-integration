@@ -39,7 +39,7 @@ make a release decision.
 ### Functional Requirements
 
 - [x] **FR-001**: validate one exact canonical ecosystem lock before invocation.
-- [ ] **FR-002**: compose every requested independent domain result exactly once.
+- [x] **FR-002**: compose every requested independent domain result exactly once.
 - [ ] **FR-003**: persist, dispatch and reconcile authorized idempotent effect requests.
 - [ ] **FR-004**: compose bounded deterministic views and consumer accounting.
 - [ ] **FR-005**: classify compatibility impact and stale evidence independently.
@@ -93,7 +93,7 @@ hold either adapter capability.
 
 - [x] **TC-001**: canonical lock identity, pin mutation, domain separation, classifications
   and pre-invocation refusals for FR-001-AC-1 through FR-001-AC-5.
-- [ ] **TC-002**: exact result multiplicity, sibling dispositions, completion-order
+- [x] **TC-002**: exact result multiplicity, sibling dispositions, completion-order
   metamorphisms, shared contradictions and unsupported producers for FR-002-AC-1..5.
 - [ ] **TC-003**: persist-before-dispatch, crash/reconcile, authority abuse, key conflict and
   receipt/effect separation for FR-003-AC-1 through FR-003-AC-5.
@@ -189,7 +189,7 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 | --- | --- | --- | --- | --- |
 | Task-001 | S | NFR-001, NFR-002 | TC-007..TC-011 | done |
 | Task-002 | S | FR-001 | TC-001 | done |
-| Task-003 | A | FR-002 | TC-002 | not_started |
+| Task-003 | A | FR-002 | TC-002 | done |
 | Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | not_started |
 | Task-005 | C | FR-004 | TC-004 | not_started |
 | Task-006 | D | FR-005 | TC-005 | not_started |

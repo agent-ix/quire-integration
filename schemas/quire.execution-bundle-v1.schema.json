@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-ix.dev/schemas/quire.execution-bundle-v1.schema.json",
+  "title": "Quire execution bundle V1",
+  "description": "Items and request items use canonical domain/semantic-identity order. Owner bytes and semantic axes remain opaque to the composition facade.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "lockIdentity", "request", "sharedPrerequisites", "stateResults", "temporalResults", "observationResults", "protocolResults", "analysisResults", "backendResults", "bundleDisposition"],
+  "properties": {
+    "contract": { "const": "quire.execution-bundle/v1" },
+    "lockIdentity": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "request": { "$ref": "#/$defs/request" },
+    "sharedPrerequisites": { "$ref": "#/$defs/prerequisites" },
+    "stateResults": { "$ref": "#/$defs/stateResults" },
+    "temporalResults": { "$ref": "#/$defs/temporalResults" },
+    "observationResults": { "$ref": "#/$defs/observationResults" },
+    "protocolResults": { "$ref": "#/$defs/protocolResults" },
+    "analysisResults": { "$ref": "#/$defs/analysisResults" },
+    "backendResults": { "$ref": "#/$defs/backendResults" },
+    "bundleDisposition": { "enum": ["completed", "incomplete", "refused", "failed"] }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1 },
+    "domain": { "enum": ["state", "temporal", "observation", "protocol", "analysis", "backend"] },
+    "disposition": { "enum": ["completed", "missing", "incompatible", "unsupported", "stale", "incomplete", "refused", "failed", "unexecuted"] },
+    "cause": { "enum": ["missing-input", "incompatible-selection", "unsupported-capability", "stale-evidence", "incomplete-evidence", "artifact-mismatch", "reader-refused", "prerequisite-contradiction", "producer-failed", "producer-resource-exhausted", "resource-exhausted", "not-invoked"] },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxItems", "maxArtifactBytes", "maxResultBytes", "maxOutputBytes"],
+      "properties": {
+        "maxItems": { "type": "integer", "minimum": 1 },
+        "maxArtifactBytes": { "type": "integer", "minimum": 0 },
+        "maxResultBytes": { "type": "integer", "minimum": 0 },
+        "maxOutputBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "identity"],
+      "properties": {
+        "domain": { "$ref": "#/$defs/domain" },
+        "identity": { "$ref": "#/$defs/text" }
+      }
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "provider", "build", "contract", "options"],
+      "properties": {
+        "role": { "$ref": "#/$defs/text" },
+        "provider": { "$ref": "#/$defs/text" },
+        "build": { "$ref": "#/$defs/text" },
+        "contract": { "$ref": "#/$defs/text" },
+        "options": { "$ref": "#/$defs/text" }
+      }
+    },
+    "itemRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "capability", "artifact", "prerequisites"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "capability": { "$ref": "#/$defs/capability" },
+        "artifact": { "$ref": "#/$defs/text" },
+        "prerequisites": { "$ref": "#/$defs/prerequisites" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "workflow", "items", "limits"],
+      "properties": {
+        "package": { "$ref": "#/$defs/text" },
+        "workflow": { "$ref": "#/$defs/text" },
+        "items": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/itemRequest" } },
+        "limits": { "$ref": "#/$defs/limits" }
+      }
+    },
+    "prerequisites": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "package", "clock", "population"],
+      "properties": {
+        "model": { "$ref": "#/$defs/text" },
+        "package": { "$ref": "#/$defs/text" },
+        "clock": { "$ref": "#/$defs/text" },
+        "population": { "$ref": "#/$defs/text" }
+      }
+    },
+    "axes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["truth", "execution", "adequacy", "completeness", "provenance"],
+      "properties": {
+        "truth": { "$ref": "#/$defs/text" },
+        "execution": { "$ref": "#/$defs/text" },
+        "adequacy": { "$ref": "#/$defs/text" },
+        "completeness": { "$ref": "#/$defs/text" },
+        "provenance": { "$ref": "#/$defs/text" }
+      }
+    },
+    "stateResults": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/stateResult" } },
+    "temporalResults": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/temporalResult" } },
+    "observationResults": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/observationResult" } },
+    "protocolResults": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/protocolResult" } },
+    "analysisResults": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/analysisResult" } },
+    "backendResults": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/backendResult" } },
+    "stateResult": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "request": { "properties": { "key": { "properties": { "domain": { "const": "state" } } } } } } }] },
+    "temporalResult": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "request": { "properties": { "key": { "properties": { "domain": { "const": "temporal" } } } } } } }] },
+    "observationResult": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "request": { "properties": { "key": { "properties": { "domain": { "const": "observation" } } } } } } }] },
+    "protocolResult": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "request": { "properties": { "key": { "properties": { "domain": { "const": "protocol" } } } } } } }] },
+    "analysisResult": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "request": { "properties": { "key": { "properties": { "domain": { "const": "analysis" } } } } } } }] },
+    "backendResult": { "allOf": [{ "$ref": "#/$defs/result" }, { "properties": { "request": { "properties": { "key": { "properties": { "domain": { "const": "backend" } } } } } } }] },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request", "disposition", "ownerBytes", "axes", "noResultCause"],
+      "oneOf": [
+        {
+          "properties": {
+            "ownerBytes": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+            "axes": { "$ref": "#/$defs/axes" },
+            "noResultCause": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "ownerBytes": { "type": "null" },
+            "axes": { "type": "null" },
+            "noResultCause": { "$ref": "#/$defs/cause" }
+          }
+        }
+      ],
+      "properties": {
+        "request": { "$ref": "#/$defs/itemRequest" },
+        "disposition": { "$ref": "#/$defs/disposition" },
+        "ownerBytes": {
+          "oneOf": [
+            { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+            { "type": "null" }
+          ]
+        },
+        "axes": { "oneOf": [{ "$ref": "#/$defs/axes" }, { "type": "null" }] },
+        "noResultCause": { "oneOf": [{ "$ref": "#/$defs/cause" }, { "type": "null" }] }
+      }
+    }
+  }
+}

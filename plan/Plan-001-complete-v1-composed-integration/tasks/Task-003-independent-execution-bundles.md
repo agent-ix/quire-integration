@@ -2,7 +2,7 @@
 id: Task-003
 title: "FR-002 — independent execution bundles"
 type: Task
-status: not_started
+status: done
 track: A
 priority: P0
 relationships:
@@ -22,11 +22,11 @@ results into canonical `quire.execution-bundle/v1` without parsing or relabeling
 
 ## Subtasks
 
-- [ ] Write TC-002 multiplicity, sibling-state and completion-order tests first.
-- [ ] Validate owner artifacts through selected strict-reader capabilities before dispatch.
-- [ ] Preserve every result byte, identity, disposition and independent semantic axis.
-- [ ] Derive canonical item order independent of completion order.
-- [ ] Scope shared-prerequisite contradictions without erasing unaffected producer evidence.
+- [x] Write TC-002 multiplicity, sibling-state and completion-order tests first.
+- [x] Validate owner artifacts through selected strict-reader capabilities before dispatch.
+- [x] Preserve every result byte, identity, disposition and independent semantic axis.
+- [x] Derive canonical item order independent of completion order.
+- [x] Scope shared-prerequisite contradictions without erasing unaffected producer evidence.
 
 ## Deliverables
 

@@ -385,7 +385,9 @@ impl Disposition {
         matches!(self, Self::Completed)
     }
 
-    const fn label(self) -> &'static str {
+    /// Returns the stable wire label.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Completed => "completed",
             Self::Missing => "missing",
@@ -404,11 +406,11 @@ impl sealed::Sealed for Disposition {}
 
 impl CanonicalEncode for Disposition {
     fn canonical_len(&self) -> Result<u64> {
-        slice_length(self.label().as_bytes())
+        slice_length(self.as_str().as_bytes())
     }
 
     fn encode_into(&self, output: &mut Vec<u8>, max_output_bytes: u64) -> Result<()> {
-        append_bytes(output, self.label().as_bytes(), max_output_bytes)
+        append_bytes(output, self.as_str().as_bytes(), max_output_bytes)
     }
 }
 
