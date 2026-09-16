@@ -166,7 +166,7 @@ relationships:
 
 | Gap ID | Description | Risk Level | Mitigation |
 |---|---|---|---|
-| GAP-001 | Effect, consumer, impact and qualification modules remain unimplemented | High | continue Tasks 004 through 013 in dependency order |
+| GAP-001 | Real effect store/HTTP integration plus consumer, impact and qualification modules remain unimplemented | High | continue Tasks 005 through 013 in dependency order; Task 009 closes effect integration |
 | GAP-002 | Exact compatible producer revisions and fixtures for IT-001 remain to be selected | High | record real upstream pins and rights in Task-008 |
 | GAP-003 | A production external effect endpoint is intentionally unauthorized | Medium | use a local contract-faithful HTTP service and preserve the limitation in evidence |
 | GAP-004 | Quoin evidence intake may be unavailable at qualification time | Medium | record the vector unsupported or incomplete; never mock it to passed |

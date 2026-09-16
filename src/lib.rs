@@ -9,11 +9,12 @@
 mod capability;
 mod common;
 pub mod ecosystem_lock;
+pub mod effect_reconciliation;
 pub mod execution_bundle;
 
 pub use capability::{
-    ConsumerCapability, DecisionCapability, EffectAdapterCapability, EvidenceIntakeCapability,
-    PersistenceCapability, ProducerCapability,
+    ConsumerCapability, DecisionCapability, EvidenceIntakeCapability, PersistenceCapability,
+    ProducerCapability,
 };
 pub use common::{
     ArtifactId, Budget, BuildId, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId,

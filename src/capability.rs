@@ -46,17 +46,6 @@ pub trait PersistenceCapability {
     fn persist(&mut self, record: &Self::Record, meter: &mut Meter) -> Result<()>;
 }
 
-/// External-effect adapter capability; pure evaluators cannot invoke this trait implicitly.
-pub trait EffectAdapterCapability {
-    /// Persisted and independently authorized request.
-    type Request;
-    /// Adapter receipt, distinct from observed business effect.
-    type Receipt;
-
-    /// Dispatches one persisted authorized request.
-    fn dispatch(&mut self, request: &Self::Request, meter: &mut Meter) -> Result<Self::Receipt>;
-}
-
 /// Evidence intake capability, which cannot act as producer or decision authority.
 pub trait EvidenceIntakeCapability {
     /// External evidence presented for validation.

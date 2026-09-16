@@ -40,7 +40,7 @@ make a release decision.
 
 - [x] **FR-001**: validate one exact canonical ecosystem lock before invocation.
 - [x] **FR-002**: compose every requested independent domain result exactly once.
-- [ ] **FR-003**: persist, dispatch and reconcile authorized idempotent effect requests.
+- [x] **FR-003**: persist, dispatch and reconcile authorized idempotent effect requests.
 - [ ] **FR-004**: compose bounded deterministic views and consumer accounting.
 - [ ] **FR-005**: classify compatibility impact and stale evidence independently.
 - [ ] **FR-006**: record every required complete-V1 qualification cell and vector.
@@ -190,7 +190,7 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 | Task-001 | S | NFR-001, NFR-002 | TC-007..TC-011 | done |
 | Task-002 | S | FR-001 | TC-001 | done |
 | Task-003 | A | FR-002 | TC-002 | done |
-| Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | not_started |
+| Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | done |
 | Task-005 | C | FR-004 | TC-004 | not_started |
 | Task-006 | D | FR-005 | TC-005 | not_started |
 | Task-007 | G | NFR-001, NFR-002 | TC-007..TC-011 | not_started |

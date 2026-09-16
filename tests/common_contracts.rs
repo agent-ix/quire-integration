@@ -6,8 +6,9 @@
 //! TC-007/TC-008: bounded common contracts and typed authority separation.
 
 use quire_integration::{
-    ArtifactId, Budget, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId, ContractId,
-    Disposition, ErrorCode, Meter, RepositoryId, ResourceDimension, RoleId, RunId, Usage,
+    ArtifactId, Budget, BuildId, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId,
+    ContractId, Disposition, ErrorCode, Meter, ProviderId, RepositoryId, ResourceDimension, RoleId,
+    RunId, Usage,
 };
 
 #[test]
@@ -215,14 +216,14 @@ fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
     fn assert_producer<T: quire_integration::ProducerCapability>() {}
     fn assert_consumer<T: quire_integration::ConsumerCapability>() {}
     fn assert_persistence<T: quire_integration::PersistenceCapability>() {}
-    fn assert_adapter<T: quire_integration::EffectAdapterCapability>() {}
+    fn assert_adapter<T: quire_integration::effect_reconciliation::AuthorizedEffectAdapter>() {}
     fn assert_evidence<T: quire_integration::EvidenceIntakeCapability>() {}
     fn assert_decision<T: quire_integration::DecisionCapability>() {}
 
     struct Producer;
     struct Consumer;
     struct Persistence;
-    struct Adapter;
+    struct Adapter(quire_integration::effect_reconciliation::AdapterManifest);
     struct Evidence;
     struct Decision;
 
@@ -259,12 +260,31 @@ fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
             Ok(())
         }
     }
-    impl quire_integration::EffectAdapterCapability for Adapter {
-        type Request = ();
-        type Receipt = ();
+    impl quire_integration::effect_reconciliation::AuthorizedEffectAdapter for Adapter {
+        fn manifest(&self) -> &quire_integration::effect_reconciliation::AdapterManifest {
+            &self.0
+        }
 
-        fn dispatch(&mut self, _: &(), _: &mut Meter) -> quire_integration::Result<()> {
-            Ok(())
+        fn dispatch(
+            &mut self,
+            _: &quire_integration::effect_reconciliation::DispatchPermit,
+            _: &quire_integration::effect_reconciliation::EffectRequest,
+        ) -> std::result::Result<
+            quire_integration::effect_reconciliation::DispatchResult,
+            quire_integration::effect_reconciliation::AdapterError,
+        > {
+            Err(quire_integration::effect_reconciliation::AdapterError::Unavailable)
+        }
+
+        fn reconcile(
+            &mut self,
+            _: &quire_integration::effect_reconciliation::ReconciliationPermit,
+            _: &quire_integration::effect_reconciliation::EffectRequest,
+        ) -> std::result::Result<
+            quire_integration::effect_reconciliation::ReconciliationResult,
+            quire_integration::effect_reconciliation::AdapterError,
+        > {
+            Err(quire_integration::effect_reconciliation::AdapterError::Unavailable)
         }
     }
     impl quire_integration::EvidenceIntakeCapability for Evidence {
@@ -289,4 +309,18 @@ fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
     assert_adapter::<Adapter>();
     assert_evidence::<Evidence>();
     assert_decision::<Decision>();
+
+    let selection = quire_integration::ecosystem_lock::CapabilitySelection::new(
+        RoleId::new("effect-adapter", 64).unwrap(),
+        ProviderId::new("provider", 64).unwrap(),
+        BuildId::new("build", 64).unwrap(),
+        ContractId::new("effect/v1", 64).unwrap(),
+        ArtifactId::new("options", 64).unwrap(),
+    );
+    let _adapter = Adapter(quire_integration::effect_reconciliation::AdapterManifest {
+        selection,
+        idempotency_field: "Idempotency-Key".to_owned(),
+        duplicate_guarantee: quire_integration::effect_reconciliation::DuplicateGuarantee::None,
+        reconciliation: quire_integration::effect_reconciliation::ReconciliationSupport::None,
+    });
 }
