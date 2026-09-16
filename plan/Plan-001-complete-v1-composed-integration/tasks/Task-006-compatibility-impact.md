@@ -2,7 +2,7 @@
 id: Task-006
 title: "FR-005 — compatibility impact and stale evidence"
 type: Task
-status: in_progress
+status: done
 track: D
 priority: P0
 relationships:
@@ -22,21 +22,21 @@ regression-vector availability without inferring compatibility from reachability
 
 ## Subtasks
 
-- [ ] Write TC-005 identity, axis-cross-product, topology, bound, freshness,
+- [x] Write TC-005 identity, axis-cross-product, topology, bound, freshness,
       policy/vector and canonicalization properties first.
-- [ ] Strict-read the feature-local comparison, graph, policy and vector-manifest
+- [x] Strict-read the feature-local comparison, graph, policy and vector-manifest
       contracts plus FR-336 corpus and FR-337 evidence-intake contracts through exact
       lock-admitted readers with caller-lowered bounds.
-- [ ] Traverse only policy-oriented owner edges under finite local bounds.
-- [ ] Propagate affectedness and staleness by independent monotone effect transfer,
+- [x] Traverse only policy-oriented owner edges under finite local bounds.
+- [x] Propagate affectedness and staleness by independent monotone effect transfer,
       exact-only scope matching and per-root/effect canonical witnesses.
-- [ ] Preflight the complete effect-oriented topology atomically before SCC analysis.
-- [ ] Retain canonical shortest changed-to-affected witnesses, cycle witnesses,
+- [x] Preflight the complete effect-oriented topology atomically before SCC analysis.
+- [x] Retain canonical shortest changed-to-affected witnesses, cycle witnesses,
       exact incomplete frontiers and independent siblings.
-- [ ] Keep owner support/contradiction bytes distinct from the freshness overlay and truth.
-- [ ] Strict-read and preserve referenced FR-337 intake bytes, rights and limitations.
-- [ ] Select every policy vector once with independent requirement and availability axes.
-- [ ] Bind every owner input, limit and state axis into canonical directional run identity.
+- [x] Keep owner support/contradiction bytes distinct from the freshness overlay and truth.
+- [x] Strict-read and preserve referenced FR-337 intake bytes, rights and limitations.
+- [x] Select every policy vector once with independent requirement and availability axes.
+- [x] Bind every owner input, limit and state axis into canonical directional run identity.
 
 ## Deliverables
 

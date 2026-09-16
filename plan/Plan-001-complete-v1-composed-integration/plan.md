@@ -42,7 +42,7 @@ make a release decision.
 - [x] **FR-002**: compose every requested independent domain result exactly once.
 - [x] **FR-003**: persist, dispatch and reconcile authorized idempotent effect requests.
 - [x] **FR-004**: compose bounded deterministic views and consumer accounting.
-- [ ] **FR-005**: classify compatibility impact and stale evidence independently.
+- [x] **FR-005**: classify compatibility impact and stale evidence independently.
 - [ ] **FR-006**: record every required complete-V1 qualification cell and vector.
 
 ### Non-Functional Requirements
@@ -99,7 +99,7 @@ hold either adapter capability.
   receipt/effect separation for FR-003-AC-1 through FR-003-AC-5.
 - [x] **TC-004**: deterministic bounded views, identity maps, exact frontiers, distinct
   state axes and consumer accounting for FR-004-AC-1 through FR-004-AC-6.
-- [ ] **TC-005**: independent impact axes, explicit paths, cycles/unknowns, stale evidence,
+- [x] **TC-005**: independent impact axes, explicit paths, cycles/unknowns, stale evidence,
   canonical identity and regression-vector selection for FR-005-AC-1 through FR-005-AC-6.
 - [ ] **TC-006**: 176-cell inventory accounting, no-promotion rollups, reproducible run
   identity, evidence intake and scoped decisions for FR-006-AC-1 through FR-006-AC-6.
@@ -192,7 +192,7 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 | Task-003 | A | FR-002 | TC-002 | done |
 | Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | done |
 | Task-005 | C | FR-004 | TC-004 | done |
-| Task-006 | D | FR-005 | TC-005 | in_progress |
+| Task-006 | D | FR-005 | TC-005 | done |
 | Task-007 | G | NFR-001, NFR-002 | TC-007..TC-011 | not_started |
 | Task-008 | I1 | FR-001, FR-002 | IT-001 | not_started |
 | Task-009 | I2 | FR-003 | IT-002 | not_started |

@@ -7,6 +7,15 @@ description: "Chronological log of changes to the Plan-001 bundle."
 
 ## History
 
+* **2026-09-16** — Completed Task-006 and FR-005 with exact lock-admitted bounded
+  comparison, graph, policy, corpus, evidence and manifest readers; independent structural,
+  behavioral, presence, reachability, freshness, vector-requirement and availability axes;
+  canonical per-root/effect traversal, SCC/cycle and unresolved witnesses; complete golden
+  limit/phase accounting; and directional canonical identity. TC-005 supplies exhaustive
+  tuple, generated diamond, cycle-prefix, freshness/vector cross-product, exact/one-over,
+  deadline and mutation evidence. Independent Rust review SR-043 and gap analysis SR-044
+  pass; real owner-contract adapters remain assigned to Task-010/IT-003.
+
 * **2026-09-16** — Completed Task-005 and FR-004 with a canonical bounded semantic-view
   traversal, exact immediate frontier and usage accounting, coordinator-owned bounded
   consumer output sink, independent aggregate/facade/mapping-loss axes, strict source and

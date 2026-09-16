@@ -98,6 +98,13 @@ witnesses, exact usage and frontier, and one record for every catalog vector.
   wire that FR-310 does not define. Any
   feature-local propagation orientation is a separate policy overlay and SHALL NOT
   broaden, rename or reconstruct the FR-310 contract.
+- The graph projection SHALL also carry closed authority, relation, scope and provenance
+  vocabularies emitted one item at a time through the bounded sink in any order. Each vocabulary is
+  exactly the distinct set used by the retained nodes, owner edges and unresolved
+  entries: missing, duplicate, foreign or unused members refuse. Vocabulary cardinality
+  is therefore bounded by the graph-node, graph-edge and unresolved-entry ceilings plus
+  document bytes without changing any limit's accounted unit; an all-empty graph uses
+  four empty vocabularies.
 - Each evidence node references an exact FR-337 evidence identity. The separately
   strict-read `quire.evidence-intake/v1` inventory supplies its immutable canonical
   owner bytes, rights and limitations; the graph neither embeds a rewritten intake
@@ -170,8 +177,8 @@ witnesses, exact usage and frontier, and one record for every catalog vector.
   | `max_graph_nodes`, `max_graph_edges` | retained graph nodes; retained owner edges |
   | `max_evidence_records`, `max_evidence_rights`, `max_evidence_limitations` | retained FR-337 records, rights and limitations |
   | `max_reader_invocations` | total selected strict-reader calls |
-  | `max_policy_seed_rules`, `max_policy_propagation_rules` | retained policy rules of each kind |
-  | `max_vector_definitions`, `max_manifest_entries` | retained FR-336 definitions; retained provider-manifest entries |
+  | `max_policy_seed_rules`, `max_policy_propagation_rules`, `max_policy_vector_rules` | retained policy seed, propagation and vector-selection rules |
+  | `max_vector_definitions`, `max_manifest_providers`, `max_manifest_entries` | retained FR-336 definitions; retained complete provider selections; retained provider-manifest entries |
   | `max_unresolved_entries`, `max_total_reason_bytes` | unresolved overlay entries; bytes across every reason |
   | `max_topology_items` | graph nodes plus distinct oriented edge/effect pairs |
   | `max_traversal_steps`, `max_traversed_edges` | dequeued root/effect/node entries; examined effect-carrying edges |
@@ -183,7 +190,9 @@ witnesses, exact usage and frontier, and one record for every catalog vector.
 
   Collection and byte limits are checked with checked arithmetic before retaining the
   next value. Exceeding any input/reader/policy/vector/topology field refuses before
-  traversal; exceeding traversal/path/witness/subject fields is incomplete with the exact
+  traversal. The complete canonical subject-overlay inventory is checked before graph work;
+  exceeding it is incomplete with every actual seeded root/effect unit in the frontier.
+  Exceeding traversal/path/witness fields is incomplete with the exact
   traversal frontier when that frontier fits; frontier or encoding overflow refuses.
 - Topology demand is computed atomically before SCC analysis as the number of qualified
   graph nodes plus distinct policy-oriented edge/effect pairs after exact-scope matching.
@@ -211,8 +220,9 @@ witnesses, exact usage and frontier, and one record for every catalog vector.
 - Checks use one precedence. Preflight checks input bytes, identity lengths, collection
   counts, duplicates/rebindings/digests, lock/capability admission, reader-invocation
   ceilings and cross-field rules, in that order. At each canonical work boundary,
-  deterministic traversal ceilings are checked in this order: traversal steps,
-  traversed edges, subject records, path edges, witness count, witness bytes and frontier.
+  the deterministic subject inventory is checked first; traversal ceilings are then checked
+  in this order: traversal steps, traversed edges, path edges, witness count, witness bytes
+  and frontier.
   Duration is checked at public entry, before/after each reader, before each topology or
   traversal expansion after same-boundary deterministic checks, and before encoding.
   Output/accounting overflow refuses during encoding with no envelope.
@@ -245,7 +255,7 @@ witnesses, exact usage and frontier, and one record for every catalog vector.
   callbacks or ambient defaults. Its vector catalog becomes immutable after structural
   validation. The `quire.impact-policy/v1` strict reader SHALL receive caller-lowered
   `max_document_bytes`, `max_identity_bytes`, `max_policy_seed_rules`,
-  `max_policy_propagation_rules` and `max_vector_definitions` before decoding and SHALL
+  `max_policy_propagation_rules` and `max_policy_vector_rules` before decoding and SHALL
   build only through a bounded coordinator-owned sink. The FR-336 corpus reader receives
   `max_document_bytes`, `max_identity_bytes` and `max_vector_definitions` and likewise
   builds through a bounded sink.
@@ -263,7 +273,7 @@ witnesses, exact usage and frontier, and one record for every catalog vector.
   Execution/pass/waiver dispositions are
   owned by Tasks 010/011 and SHALL NOT be invented here.
 - The `quire.regression-vector-manifest/v1` strict reader SHALL receive lowered
-  `max_document_bytes`, `max_manifest_entries`, `max_reason_bytes` and
+  `max_document_bytes`, `max_manifest_providers`, `max_manifest_entries`, `max_reason_bytes` and
   `max_total_reason_bytes` before decoding and SHALL build through a bounded sink.
   A vector key contains vector definition, subject/scope, method, environment,
   requested provider-role and policy-profile identities; selected provider identity is

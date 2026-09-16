@@ -8,6 +8,7 @@
 
 mod capability;
 mod common;
+pub mod compatibility_impact;
 pub mod consumer_views;
 pub mod ecosystem_lock;
 pub mod effect_reconciliation;

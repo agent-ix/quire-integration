@@ -1198,6 +1198,16 @@ impl ValidatedLock {
             .map(|binding| (binding.identity.as_str(), binding.revision.as_str()))
     }
 
+    /// Counts complete admitted capabilities for one exact role identity.
+    #[must_use]
+    pub fn capability_role_count(&self, role: &str) -> usize {
+        self.wire
+            .capabilities
+            .iter()
+            .filter(|binding| binding.role == role)
+            .count()
+    }
+
     /// Admits only an exact role/provider/build/contract/options selection present in this lock.
     pub fn admit_capability(
         &self,

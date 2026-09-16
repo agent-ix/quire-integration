@@ -50,7 +50,7 @@ relationships:
 | FR-003 | FR-003-AC-1..FR-003-AC-5 | TC-003 | 🚧 planned |
 | FR-003 | FR-003-AC-6 | TC-009 | 🚧 planned |
 | FR-004 | FR-004-AC-1..FR-004-AC-6 | TC-004 | ✅ passed |
-| FR-005 | FR-005-AC-1..FR-005-AC-6 | TC-005 | 🚧 planned |
+| FR-005 | FR-005-AC-1..FR-005-AC-6 | TC-005 | ✅ passed |
 | FR-006 | FR-006-AC-1..FR-006-AC-6 | TC-006 | 🚧 planned |
 
 ## Non-Functional Requirement Coverage
@@ -70,7 +70,7 @@ relationships:
 | TC-002 | Compose independent domain results | Property | P0 | StR-001-VC-1, FR-002-AC-1..FR-002-AC-5 | ✅ passed |
 | TC-003 | Reconcile authorized persistent effects | Integration | P0 | StR-001-VC-2, FR-003-AC-1..FR-003-AC-5 | 🚧 planned |
 | TC-004 | Compose bounded deterministic consumers | Property | P0 | StR-001-VC-3, FR-004-AC-1..FR-004-AC-6 | ✅ passed |
-| TC-005 | Classify compatibility and stale evidence | Property | P0 | StR-001-VC-3, FR-005-AC-1..FR-005-AC-6 | 🚧 planned |
+| TC-005 | Classify compatibility and stale evidence | Property | P0 | StR-001-VC-3, FR-005-AC-1..FR-005-AC-6 | ✅ passed |
 | TC-006 | Qualify every required integration vector | Integration | P0 | StR-001-VC-4, FR-006-AC-1..FR-006-AC-6 | 🚧 planned |
 | TC-007 | Bound and reproduce composed execution | Property | P0 | NFR-001-AC-2, NFR-001-AC-3 | 🚧 planned |
 | TC-008 | Preserve source and decision authority | Property | P0 | NFR-002-AC-2 | 🚧 planned |
