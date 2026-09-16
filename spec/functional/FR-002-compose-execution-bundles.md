@@ -21,9 +21,10 @@ canonical `quire.execution-bundle/v1` containing every requested item exactly on
 
 ## Inputs
 
-A validated FR-001 lock; exact checked package, workflow, observation authority,
-requested state/temporal/protocol/analysis items, producer capabilities, and
-caller-lowered limits.
+A validated FR-001 lock and its exact capability bindings; exact checked
+package, workflow, observation authority, requested
+state/temporal/protocol/analysis items, producer capabilities, and caller-lowered
+limits.
 
 ## Outputs
 
@@ -44,7 +45,11 @@ per-domain results, and bundle disposition, or a typed pre-dispatch refusal.
   unexecuted requested items in the ordered bundle.
 - The facade SHALL order items by selected domain and semantic identity rather
   than completion time.
-- The facade SHALL compute the bundle disposition without relabeling any sibling.
+- The facade SHALL compute the bundle disposition without relabeling any sibling:
+  `Failed` when any sibling failed; otherwise `Refused` when any sibling refused;
+  otherwise `Incomplete` when any sibling is not completed, including
+  unsupported, incomplete, or unexecuted siblings; and `Completed` only when
+  every sibling completed.
 - If a shared prerequisite contradicts a result selection, then the facade SHALL
   refuse composition and identify every affected item.
 - The facade SHALL NOT parse source, reinterpret a result, or select a substitute

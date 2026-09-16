@@ -16,6 +16,7 @@ pub use capability::{
 };
 pub use common::{
     ArtifactId, Budget, BuildId, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId,
-    DefinitionId, DeploymentId, Disposition, Error, ErrorCode, Meter, PackageId, ProviderId,
-    RepositoryId, ResourceDimension, Result, RoleId, RunId, ToolchainId, Usage, WorkflowInstanceId,
+    ContractId, DefinitionId, DeploymentId, Disposition, Error, ErrorCode, Meter, PackageId,
+    ProviderId, RepositoryId, ResourceDimension, Result, RoleId, RunId, ToolchainId, Usage,
+    WorkflowInstanceId,
 };

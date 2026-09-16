@@ -342,6 +342,11 @@ identity_type!(ToolchainId, "toolchain", "Exact toolchain identity.");
 identity_type!(BuildId, "build", "Exact build identity.");
 identity_type!(DeploymentId, "deployment", "Exact deployment identity.");
 identity_type!(RoleId, "role", "Exact runtime-role identity.");
+identity_type!(
+    ContractId,
+    "contract",
+    "Exact capability-contract identity."
+);
 identity_type!(ArtifactId, "artifact", "Exact immutable-artifact identity.");
 identity_type!(RunId, "run", "Exact composed-run identity.");
 identity_type!(

@@ -83,7 +83,7 @@ relationships:
 | Test Case | Dimension A | Dimension B | Dimension C | Expected Behavior |
 |---|---|---|---|---|
 | TC-001 | identity domain: repository/package/definition/provider/toolchain/build/deployment/role | pin state: exact/missing/duplicate/stale/dirty/moving | graph state: compatible/incompatible/unknown/cyclic | accept only one complete exact lock and preserve every classification |
-| TC-002 | workflow: ConfigVersion/timed-refund/compensated choreography | result: completed/unsupported/incomplete/refused/failed/unexecuted | completion order: canonical/permuted | preserve each requested owner result exactly once in canonical bytes |
+| TC-002 | workflow: ConfigVersion/timed-refund/compensated choreography | result: completed/unsupported/incomplete/refused/failed/unexecuted | completion order: canonical/permuted | preserve each requested owner result exactly once in canonical bytes and roll up `Failed > Refused > Incomplete > Completed` without relabeling siblings |
 | TC-003 | authority: valid/missing/expired/mismatched/over-broad | request: fresh/exact replay/conflicting replay | failure point: before persistence/after persistence/after adapter acceptance | dispatch only persisted authorized requests and reconcile one effect identity |
 | TC-004 | consumer: view/renderer/analyzer/codegen | obligation: supported/unsupported/requires-bound/failed | limit: exact/one-over | account for every item without promoting output to semantic authority |
 | TC-005 | change: additive/payload break/behavioral-only/absent | graph: resolved/cyclic/unresolved/foreign | vector: available/unavailable/unsupported | retain exact impact paths and explicit evidence states |

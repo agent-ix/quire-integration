@@ -10,13 +10,15 @@ use std::cell::Cell;
 use ix_trace_rs::trace;
 use proptest::prelude::*;
 use quire_integration::ecosystem_lock::{
-    validate, Compatibility, ComponentBinding, DependencyEdge, Limits, LockSelection,
-    PackageBinding, Pin, PinState, Reachability, RefusalCode, RepositoryBinding, RoleBinding,
-    SelectionDomain, WorkflowBinding, CONTRACT, SCHEMA_SHA256,
+    validate, CapabilityBinding, CapabilitySelection, Compatibility, ComponentBinding,
+    DependencyEdge, Limits, LockSelection, PackageBinding, Pin, PinState, Reachability,
+    RefusalCode, RepositoryBinding, RoleBinding, SelectionDomain, WorkflowBinding, CONTRACT,
+    SCHEMA_SHA256,
 };
 use quire_integration::{
-    Budget, BuildId, ComponentId, DefinitionId, DeploymentId, Meter, PackageId, ProducerCapability,
-    ProviderId, RepositoryId, RoleId, RunId, ToolchainId, WorkflowInstanceId,
+    ArtifactId, Budget, BuildId, ComponentId, ContractId, DefinitionId, DeploymentId, Meter,
+    PackageId, ProducerCapability, ProviderId, RepositoryId, RoleId, RunId, ToolchainId,
+    WorkflowInstanceId,
 };
 use sha2::{Digest as _, Sha256};
 
@@ -91,9 +93,15 @@ fn fixture() -> LockSelection {
             id("timed-refund", DefinitionId::new),
             "sha256:definition",
         )],
-        vec![exact(id("local", ProviderId::new), "provider-v1")],
+        vec![
+            exact(id("local", ProviderId::new), "provider-v1"),
+            exact(id("local-alt", ProviderId::new), "provider-alt-v1"),
+        ],
         vec![exact(id("rust-1.98.1", ToolchainId::new), "rustc-1.98.1")],
-        vec![exact(id("qobs-build", BuildId::new), "sha256:build")],
+        vec![
+            exact(id("qobs-build", BuildId::new), "sha256:build"),
+            exact(id("qobs-build-alt", BuildId::new), "sha256:build-alt"),
+        ],
         vec![exact(
             id("local-test", DeploymentId::new),
             "sha256:deployment",
@@ -123,6 +131,29 @@ fn fixture() -> LockSelection {
                 exact(role_query, "quire.observation.query/v1"),
                 query_component,
             ),
+        ],
+        vec![
+            CapabilityBinding::new(CapabilitySelection::new(
+                id("observation-owner", RoleId::new),
+                id("local", ProviderId::new),
+                id("qobs-build", BuildId::new),
+                id("quire.observation-authority/v1", ContractId::new),
+                id("qobs-options:default", ArtifactId::new),
+            )),
+            CapabilityBinding::new(CapabilitySelection::new(
+                id("observation-query", RoleId::new),
+                id("local", ProviderId::new),
+                id("qobs-build", BuildId::new),
+                id("quire.observation.query/v1", ContractId::new),
+                id("query-options:bounded", ArtifactId::new),
+            )),
+            CapabilityBinding::new(CapabilitySelection::new(
+                id("observation-lineage", RoleId::new),
+                id("local", ProviderId::new),
+                id("qobs-build", BuildId::new),
+                id("quire.observation-authority-lineage/v1", ContractId::new),
+                id("lineage-options:default", ArtifactId::new),
+            )),
         ],
         vec![WorkflowBinding::new(
             exact(
@@ -209,6 +240,7 @@ proptest! {
         package_seeds in any::<[u64; 2]>(),
         component_seeds in any::<[u64; 2]>(),
         role_seeds in any::<[u64; 3]>(),
+        capability_seeds in any::<[u64; 3]>(),
     ) {
         // FR-001-AC-1
         let baseline_selection = fixture();
@@ -217,6 +249,7 @@ proptest! {
         permute(candidate.packages_mut(), &package_seeds);
         permute(candidate.components_mut(), &component_seeds);
         permute(candidate.roles_mut(), &role_seeds);
+        permute(candidate.capabilities_mut(), &capability_seeds);
         let permuted = validate(&candidate, limits(&candidate)).unwrap();
         prop_assert_eq!(permuted.identity(), baseline.identity());
         prop_assert_eq!(permuted.bytes(), baseline.bytes());
@@ -224,7 +257,7 @@ proptest! {
 
     #[test]
     fn tc001_generated_meaning_mutations_change_lock_and_run_identity(
-        domain in 0_u8..12,
+        domain in 0_u8..14,
         nonce in any::<u64>(),
     ) {
         // FR-001-AC-2
@@ -254,6 +287,28 @@ proptest! {
             8 => candidate.components_mut()[0].pin_mut().set_revision(&revision, ID_LIMIT).unwrap(),
             9 => candidate.roles_mut()[0].pin_mut().set_revision(&revision, ID_LIMIT).unwrap(),
             10 => candidate.workflows_mut()[0].pin_mut().set_revision(&revision, ID_LIMIT).unwrap(),
+            11 => {
+                let selection = candidate.capabilities()[0].selection();
+                let changed = CapabilitySelection::new(
+                    selection.role().clone(),
+                    selection.provider().clone(),
+                    selection.build().clone(),
+                    ContractId::new(&label, ID_LIMIT).unwrap(),
+                    selection.options().clone(),
+                );
+                *candidate.capabilities_mut()[0].selection_mut() = changed;
+            }
+            12 => {
+                let selection = candidate.capabilities()[0].selection();
+                let changed = CapabilitySelection::new(
+                    selection.role().clone(),
+                    selection.provider().clone(),
+                    selection.build().clone(),
+                    selection.contract().clone(),
+                    ArtifactId::new(&label, ID_LIMIT).unwrap(),
+                );
+                *candidate.capabilities_mut()[0].selection_mut() = changed;
+            }
             _ => candidate.dependencies_mut()[0].set_contract(&label, ID_LIMIT).unwrap(),
         }
         let changed = validate(&candidate, limits(&candidate)).unwrap();
@@ -282,7 +337,7 @@ proptest! {
 fn tc001_discovery_order_does_not_change_canonical_lock_or_identity() {
     let left_selection = fixture();
     let left = validate(&left_selection, limits(&left_selection)).expect("valid left lock");
-    for permutation in 0_u8..8 {
+    for permutation in 0_u8..16 {
         let mut candidate = fixture();
         if permutation & 1 != 0 {
             candidate.packages_mut().reverse();
@@ -292,6 +347,9 @@ fn tc001_discovery_order_does_not_change_canonical_lock_or_identity() {
         }
         if permutation & 4 != 0 {
             candidate.roles_mut().reverse();
+        }
+        if permutation & 8 != 0 {
+            candidate.capabilities_mut().reverse();
         }
         let permuted = validate(&candidate, limits(&candidate)).expect("generated permutation");
         assert_eq!(left.identity(), permuted.identity());
@@ -343,7 +401,7 @@ fn tc001_every_collection_and_byte_limit_admits_exact_and_refuses_one_over() {
     let exact_output = exact.max_output_bytes;
     assert!(validate(&selection, exact).is_ok());
 
-    let cases: [(Lower, SelectionDomain); 12] = [
+    let cases: [(Lower, SelectionDomain); 13] = [
         (
             |limits| limits.max_repositories = 0,
             SelectionDomain::Repository,
@@ -368,6 +426,10 @@ fn tc001_every_collection_and_byte_limit_admits_exact_and_refuses_one_over() {
             SelectionDomain::Component,
         ),
         (|limits| limits.max_roles = 2, SelectionDomain::Role),
+        (
+            |limits| limits.max_capabilities = 2,
+            SelectionDomain::Capability,
+        ),
         (
             |limits| limits.max_workflows = 0,
             SelectionDomain::WorkflowInstance,
@@ -526,6 +588,74 @@ fn tc001_every_meaning_affecting_pin_changes_lock_identity() {
         .set_revision(&exact_revision("quire.observation-authority/v2"), ID_LIMIT)
         .unwrap();
     assert_selection_changes(&baseline, &role);
+
+    let mut capability_role = fixture();
+    let first = capability_role.capabilities()[0].selection().clone();
+    let second = capability_role.capabilities()[1].selection().clone();
+    *capability_role.capabilities_mut()[0].selection_mut() = CapabilitySelection::new(
+        second.role().clone(),
+        first.provider().clone(),
+        first.build().clone(),
+        first.contract().clone(),
+        first.options().clone(),
+    );
+    *capability_role.capabilities_mut()[1].selection_mut() = CapabilitySelection::new(
+        first.role().clone(),
+        second.provider().clone(),
+        second.build().clone(),
+        second.contract().clone(),
+        second.options().clone(),
+    );
+    assert_selection_changes(&baseline, &capability_role);
+
+    let mut capability_provider = fixture();
+    let selection = capability_provider.capabilities()[0].selection();
+    let changed = CapabilitySelection::new(
+        selection.role().clone(),
+        id("local-alt", ProviderId::new),
+        selection.build().clone(),
+        selection.contract().clone(),
+        selection.options().clone(),
+    );
+    *capability_provider.capabilities_mut()[0].selection_mut() = changed;
+    assert_selection_changes(&baseline, &capability_provider);
+
+    let mut capability_build = fixture();
+    let selection = capability_build.capabilities()[0].selection();
+    let changed = CapabilitySelection::new(
+        selection.role().clone(),
+        selection.provider().clone(),
+        id("qobs-build-alt", BuildId::new),
+        selection.contract().clone(),
+        selection.options().clone(),
+    );
+    *capability_build.capabilities_mut()[0].selection_mut() = changed;
+    assert_selection_changes(&baseline, &capability_build);
+
+    let mut capability_contract = fixture();
+    let selection = capability_contract.capabilities()[0].selection();
+    let changed = CapabilitySelection::new(
+        selection.role().clone(),
+        selection.provider().clone(),
+        selection.build().clone(),
+        id("quire.observation-authority/v2", ContractId::new),
+        selection.options().clone(),
+    );
+    *capability_contract.capabilities_mut()[0].selection_mut() = changed;
+    assert_selection_changes(&baseline, &capability_contract);
+
+    let mut capability_options = fixture();
+    let selection = capability_options.capabilities()[0].selection();
+    let changed = CapabilitySelection::new(
+        selection.role().clone(),
+        selection.provider().clone(),
+        selection.build().clone(),
+        selection.contract().clone(),
+        id("qobs-options:strict", ArtifactId::new),
+    );
+    *capability_options.capabilities_mut()[0].selection_mut() = changed;
+    assert_selection_changes(&baseline, &capability_options);
+
     let mut workflow = fixture();
     workflow.workflows_mut()[0]
         .pin_mut()
@@ -688,6 +818,145 @@ fn tc001_duplicate_and_cross_domain_mappings_refuse_without_collapsing_roles() {
         .expect_err("package cannot repoint its selected repository revision");
     assert_eq!(refusal.code(), RefusalCode::CrossDomainReference);
     assert_eq!(refusal.domain(), Some(SelectionDomain::Repository));
+}
+
+#[test]
+#[trace("TC-001", "FR-001-AC-1", "FR-001-AC-4")]
+fn tc001_capabilities_cover_roles_once_and_admit_only_the_exact_bound_tuple() {
+    let selection = fixture();
+    let lock = validate(&selection, limits(&selection)).expect("complete capability closure");
+    let requested = selection.capabilities()[0].selection();
+    let admitted = lock
+        .admit_capability(requested)
+        .expect("exact capability tuple is admitted");
+    assert_eq!(admitted.lock_identity(), lock.identity());
+    assert_eq!(admitted.role(), requested.role().as_str());
+    assert_eq!(admitted.provider(), requested.provider().as_str());
+    assert_eq!(admitted.build(), requested.build().as_str());
+    assert_eq!(admitted.contract(), requested.contract().as_str());
+    assert_eq!(admitted.options(), requested.options().as_str());
+    assert_eq!(admitted.component(), "quire-observation-core");
+    assert_eq!(admitted.package(), "quire-observation-core");
+    assert_eq!(admitted.features(), &["default"]);
+
+    let mismatches = [
+        CapabilitySelection::new(
+            id("observation-query", RoleId::new),
+            requested.provider().clone(),
+            requested.build().clone(),
+            requested.contract().clone(),
+            requested.options().clone(),
+        ),
+        CapabilitySelection::new(
+            requested.role().clone(),
+            id("local-alt", ProviderId::new),
+            requested.build().clone(),
+            requested.contract().clone(),
+            requested.options().clone(),
+        ),
+        CapabilitySelection::new(
+            requested.role().clone(),
+            requested.provider().clone(),
+            id("qobs-build-alt", BuildId::new),
+            requested.contract().clone(),
+            requested.options().clone(),
+        ),
+        CapabilitySelection::new(
+            requested.role().clone(),
+            requested.provider().clone(),
+            requested.build().clone(),
+            id("quire.observation-authority/v2", ContractId::new),
+            requested.options().clone(),
+        ),
+        CapabilitySelection::new(
+            requested.role().clone(),
+            requested.provider().clone(),
+            requested.build().clone(),
+            requested.contract().clone(),
+            id("qobs-options:strict", ArtifactId::new),
+        ),
+    ];
+    for mismatch in mismatches {
+        let refusal = lock
+            .admit_capability(&mismatch)
+            .expect_err("one changed capability axis is not admitted");
+        assert_eq!(refusal.code(), RefusalCode::UnknownSelection);
+        assert_eq!(refusal.domain(), Some(SelectionDomain::Capability));
+        assert!(refusal.selection_identity().is_some());
+    }
+
+    let mut missing = fixture();
+    let removed = missing.capabilities_mut().pop().unwrap();
+    let refusal = validate(&missing, limits(&missing)).expect_err("every role needs one binding");
+    assert_eq!(refusal.code(), RefusalCode::MissingSelection);
+    assert_eq!(refusal.domain(), Some(SelectionDomain::Capability));
+    assert_eq!(
+        refusal.selection_identity(),
+        Some(removed.selection().role().as_str())
+    );
+
+    let mut duplicate = fixture();
+    let selected = duplicate.capabilities()[0].selection().clone();
+    duplicate
+        .capabilities_mut()
+        .push(CapabilityBinding::new(CapabilitySelection::new(
+            selected.role().clone(),
+            selected.provider().clone(),
+            selected.build().clone(),
+            id("duplicate-contract", ContractId::new),
+            selected.options().clone(),
+        )));
+    let refusal = validate(&duplicate, limits(&duplicate)).expect_err("role is bound twice");
+    assert_eq!(refusal.code(), RefusalCode::DuplicateSelection);
+    assert_eq!(refusal.domain(), Some(SelectionDomain::Capability));
+    assert_eq!(refusal.selection_identity(), Some("observation-owner"));
+
+    type Foreign = fn(&mut CapabilitySelection);
+    let foreign_cases: [(Foreign, SelectionDomain); 3] = [
+        (
+            |selection| {
+                *selection = CapabilitySelection::new(
+                    id("foreign-role", RoleId::new),
+                    selection.provider().clone(),
+                    selection.build().clone(),
+                    selection.contract().clone(),
+                    selection.options().clone(),
+                );
+            },
+            SelectionDomain::Role,
+        ),
+        (
+            |selection| {
+                *selection = CapabilitySelection::new(
+                    selection.role().clone(),
+                    id("foreign-provider", ProviderId::new),
+                    selection.build().clone(),
+                    selection.contract().clone(),
+                    selection.options().clone(),
+                );
+            },
+            SelectionDomain::Provider,
+        ),
+        (
+            |selection| {
+                *selection = CapabilitySelection::new(
+                    selection.role().clone(),
+                    selection.provider().clone(),
+                    id("foreign-build", BuildId::new),
+                    selection.contract().clone(),
+                    selection.options().clone(),
+                );
+            },
+            SelectionDomain::Build,
+        ),
+    ];
+    for (mutate, domain) in foreign_cases {
+        let mut foreign = fixture();
+        mutate(foreign.capabilities_mut()[0].selection_mut());
+        let refusal = validate(&foreign, limits(&foreign)).expect_err("foreign capability axis");
+        assert_eq!(refusal.code(), RefusalCode::CrossDomainReference);
+        assert_eq!(refusal.domain(), Some(domain));
+    }
 }
 
 #[test]

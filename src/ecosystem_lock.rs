@@ -15,8 +15,8 @@ use serde::{ser::SerializeSeq as _, Serialize};
 use sha2::{Digest as _, Sha256};
 
 use crate::{
-    BuildId, ComponentId, DefinitionId, DeploymentId, PackageId, ProviderId, RepositoryId, RoleId,
-    RunId, ToolchainId, WorkflowInstanceId,
+    ArtifactId, BuildId, ComponentId, ContractId, DefinitionId, DeploymentId, PackageId,
+    ProviderId, RepositoryId, RoleId, RunId, ToolchainId, WorkflowInstanceId,
 };
 
 /// Canonical wire contract.
@@ -24,7 +24,7 @@ pub const CONTRACT: &str = "quire.ecosystem-lock/v1";
 /// Pinned JSON Schema bytes for [`CONTRACT`].
 pub const SCHEMA_BYTES: &[u8] = include_bytes!("../schemas/quire.ecosystem-lock-v1.schema.json");
 /// Lowercase SHA-256 digest of [`SCHEMA_BYTES`].
-pub const SCHEMA_SHA256: &str = "54566d737c8635a6e3edc25ecab1479868380370de09527efae35fe9029a8702";
+pub const SCHEMA_SHA256: &str = "f71de2810dba86c245eb2b892d3eaeb45d39ffee93da39b0826ab6cce99e0288";
 
 /// Stable lock-validation refusal cause.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -112,6 +112,8 @@ pub enum SelectionDomain {
     Component,
     /// Runtime role.
     Role,
+    /// Exact producer-capability binding.
+    Capability,
     /// Workflow instance.
     WorkflowInstance,
     /// Explicit dependency edge.
@@ -518,6 +520,91 @@ impl RoleBinding {
     }
 }
 
+/// Exact capability selection used to request admission under a validated lock.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct CapabilitySelection {
+    role: RoleId,
+    provider: ProviderId,
+    build: BuildId,
+    contract: ContractId,
+    options: ArtifactId,
+}
+
+impl CapabilitySelection {
+    /// Constructs an exact selection from already bounded, domain-safe identities.
+    #[must_use]
+    pub fn new(
+        role: RoleId,
+        provider: ProviderId,
+        build: BuildId,
+        contract: ContractId,
+        options: ArtifactId,
+    ) -> Self {
+        Self {
+            role,
+            provider,
+            build,
+            contract,
+            options,
+        }
+    }
+
+    /// Selected role.
+    #[must_use]
+    pub const fn role(&self) -> &RoleId {
+        &self.role
+    }
+
+    /// Selected provider.
+    #[must_use]
+    pub const fn provider(&self) -> &ProviderId {
+        &self.provider
+    }
+
+    /// Selected immutable build.
+    #[must_use]
+    pub const fn build(&self) -> &BuildId {
+        &self.build
+    }
+
+    /// Selected capability contract.
+    #[must_use]
+    pub const fn contract(&self) -> &ContractId {
+        &self.contract
+    }
+
+    /// Selected exact options artifact.
+    #[must_use]
+    pub const fn options(&self) -> &ArtifactId {
+        &self.options
+    }
+}
+
+/// One lock-owned role/provider/build/contract/options binding.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CapabilityBinding {
+    selection: CapabilitySelection,
+}
+
+impl CapabilityBinding {
+    /// Constructs a candidate binding from already bounded, domain-safe identities.
+    #[must_use]
+    pub fn new(selection: CapabilitySelection) -> Self {
+        Self { selection }
+    }
+
+    /// Exact candidate selection.
+    #[must_use]
+    pub const fn selection(&self) -> &CapabilitySelection {
+        &self.selection
+    }
+
+    /// Mutable candidate selection, available only before lock validation.
+    pub fn selection_mut(&mut self) -> &mut CapabilitySelection {
+        &mut self.selection
+    }
+}
+
 /// Workflow-instance-to-definition mapping.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkflowBinding {
@@ -711,6 +798,7 @@ pub struct LockSelection {
     deployments: Vec<Pin<DeploymentId>>,
     components: Vec<ComponentBinding>,
     roles: Vec<RoleBinding>,
+    capabilities: Vec<CapabilityBinding>,
     workflows: Vec<WorkflowBinding>,
     dependencies: Vec<DependencyEdge>,
 }
@@ -732,6 +820,7 @@ impl LockSelection {
         deployments: Vec<Pin<DeploymentId>>,
         components: Vec<ComponentBinding>,
         roles: Vec<RoleBinding>,
+        capabilities: Vec<CapabilityBinding>,
         workflows: Vec<WorkflowBinding>,
         dependencies: Vec<DependencyEdge>,
     ) -> Self {
@@ -745,6 +834,7 @@ impl LockSelection {
             deployments,
             components,
             roles,
+            capabilities,
             workflows,
             dependencies,
         }
@@ -806,6 +896,17 @@ impl LockSelection {
         &mut self.roles
     }
 
+    /// Capability-binding candidates.
+    #[must_use]
+    pub fn capabilities(&self) -> &[CapabilityBinding] {
+        &self.capabilities
+    }
+
+    /// Mutable capability-binding candidates.
+    pub fn capabilities_mut(&mut self) -> &mut Vec<CapabilityBinding> {
+        &mut self.capabilities
+    }
+
     /// Mutable dependency candidates.
     pub fn dependencies_mut(&mut self) -> &mut Vec<DependencyEdge> {
         &mut self.dependencies
@@ -833,6 +934,8 @@ pub struct Limits {
     pub max_components: u64,
     /// Role mappings.
     pub max_roles: u64,
+    /// Exact producer-capability bindings.
+    pub max_capabilities: u64,
     /// Workflow-instance mappings.
     pub max_workflows: u64,
     /// Dependency edges.
@@ -866,6 +969,7 @@ impl Limits {
             max_deployments: count(selection.deployments.len())?,
             max_components: count(selection.components.len())?,
             max_roles: count(selection.roles.len())?,
+            max_capabilities: count(selection.capabilities.len())?,
             max_workflows: count(selection.workflows.len())?,
             max_dependencies: count(selection.dependencies.len())?,
             max_traversal_steps: dependency_steps(selection)?,
@@ -926,6 +1030,72 @@ pub struct ValidatedLock {
     bytes: Vec<u8>,
     wire: LockWire,
     limits: Limits,
+}
+
+/// Constructor-private proof that one exact capability selection is admitted by a lock.
+#[derive(Clone, Copy, Debug)]
+pub struct AdmittedCapability<'a> {
+    lock_identity: LockIdentity,
+    binding: &'a CapabilityWire,
+    component: &'a str,
+    package: &'a str,
+    features: &'a [String],
+}
+
+impl AdmittedCapability<'_> {
+    /// Lock identity under which this capability is admitted.
+    #[must_use]
+    pub const fn lock_identity(&self) -> LockIdentity {
+        self.lock_identity
+    }
+
+    /// Admitted role identity.
+    #[must_use]
+    pub fn role(&self) -> &str {
+        &self.binding.role
+    }
+
+    /// Admitted provider identity.
+    #[must_use]
+    pub fn provider(&self) -> &str {
+        &self.binding.provider
+    }
+
+    /// Admitted immutable build identity.
+    #[must_use]
+    pub fn build(&self) -> &str {
+        &self.binding.build
+    }
+
+    /// Admitted contract identity.
+    #[must_use]
+    pub fn contract(&self) -> &str {
+        &self.binding.contract
+    }
+
+    /// Admitted options-artifact identity.
+    #[must_use]
+    pub fn options(&self) -> &str {
+        &self.binding.options
+    }
+
+    /// Component resolved through the admitted role binding.
+    #[must_use]
+    pub const fn component(&self) -> &str {
+        self.component
+    }
+
+    /// Owning package resolved through the admitted component binding.
+    #[must_use]
+    pub const fn package(&self) -> &str {
+        self.package
+    }
+
+    /// Exact canonical package features admitted by the lock.
+    #[must_use]
+    pub const fn features(&self) -> &[String] {
+        self.features
+    }
 }
 
 impl ValidatedLock {
@@ -1000,6 +1170,66 @@ impl ValidatedLock {
             .iter()
             .map(|binding| (binding.identity.as_str(), binding.revision.as_str()))
     }
+
+    /// Admits only an exact role/provider/build/contract/options selection present in this lock.
+    pub fn admit_capability(
+        &self,
+        selection: &CapabilitySelection,
+    ) -> Result<AdmittedCapability<'_>> {
+        let binding = self
+            .wire
+            .capabilities
+            .iter()
+            .find(|binding| {
+                binding.role == selection.role.as_str()
+                    && binding.provider == selection.provider.as_str()
+                    && binding.build == selection.build.as_str()
+                    && binding.contract == selection.contract.as_str()
+                    && binding.options == selection.options.as_str()
+            })
+            .ok_or_else(|| {
+                Refusal::selection(
+                    RefusalCode::UnknownSelection,
+                    SelectionDomain::Capability,
+                    capability_label(selection),
+                    "exact capability selection is not admitted by this lock",
+                )
+            })?;
+        let role = self
+            .wire
+            .roles
+            .iter()
+            .find(|role| role.identity == binding.role)
+            .ok_or_else(|| internal_mapping_refusal(&binding.role))?;
+        let component = self
+            .wire
+            .components
+            .iter()
+            .find(|component| component.identity == role.component)
+            .ok_or_else(|| internal_mapping_refusal(&role.component))?;
+        let package = self
+            .wire
+            .packages
+            .iter()
+            .find(|package| package.identity == component.package)
+            .ok_or_else(|| internal_mapping_refusal(&component.package))?;
+        Ok(AdmittedCapability {
+            lock_identity: self.identity,
+            binding,
+            component: &role.component,
+            package: &component.package,
+            features: &package.features,
+        })
+    }
+}
+
+fn internal_mapping_refusal(selection: &str) -> Refusal {
+    Refusal::selection(
+        RefusalCode::CanonicalMismatch,
+        SelectionDomain::Lock,
+        selection,
+        "validated capability mapping is internally inconsistent",
+    )
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -1016,6 +1246,7 @@ struct LockWire {
     deployments: Vec<PinWire>,
     components: Vec<ComponentWire>,
     roles: Vec<RoleWire>,
+    capabilities: Vec<CapabilityWire>,
     workflow_instances: Vec<WorkflowWire>,
     dependencies: Vec<DependencyWire>,
 }
@@ -1032,6 +1263,7 @@ struct LimitsWire {
     max_deployments: u64,
     max_components: u64,
     max_roles: u64,
+    max_capabilities: u64,
     max_workflows: u64,
     max_dependencies: u64,
     max_traversal_steps: u64,
@@ -1053,6 +1285,7 @@ impl From<Limits> for LimitsWire {
             max_deployments: limits.max_deployments,
             max_components: limits.max_components,
             max_roles: limits.max_roles,
+            max_capabilities: limits.max_capabilities,
             max_workflows: limits.max_workflows,
             max_dependencies: limits.max_dependencies,
             max_traversal_steps: limits.max_traversal_steps,
@@ -1108,6 +1341,16 @@ struct RoleWire {
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CapabilityWire {
+    role: String,
+    provider: String,
+    build: String,
+    contract: String,
+    options: String,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
 struct WorkflowWire {
     identity: String,
@@ -1139,6 +1382,7 @@ struct LockWireRef<'a> {
     deployments: PinRefs<'a, DeploymentId>,
     components: ComponentRefs<'a>,
     roles: RoleRefs<'a>,
+    capabilities: CapabilityRefs<'a>,
     workflow_instances: WorkflowRefs<'a>,
     dependencies: DependencyRefs<'a>,
 }
@@ -1148,6 +1392,7 @@ struct RepositoryRefs<'a>(&'a [RepositoryBinding]);
 struct PackageRefs<'a>(&'a [PackageBinding]);
 struct ComponentRefs<'a>(&'a [ComponentBinding]);
 struct RoleRefs<'a>(&'a [RoleBinding]);
+struct CapabilityRefs<'a>(&'a [CapabilityBinding]);
 struct WorkflowRefs<'a>(&'a [WorkflowBinding]);
 struct DependencyRefs<'a>(&'a [DependencyEdge]);
 
@@ -1188,6 +1433,16 @@ struct RoleWireRef<'a> {
     identity: &'a str,
     revision: &'a str,
     component: &'a str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CapabilityWireRef<'a> {
+    role: &'a str,
+    provider: &'a str,
+    build: &'a str,
+    contract: &'a str,
+    options: &'a str,
 }
 
 #[derive(Serialize)]
@@ -1271,6 +1526,15 @@ serialize_refs!(RoleRefs<'_>, binding, {
         component: binding.component.as_str(),
     }
 });
+serialize_refs!(CapabilityRefs<'_>, binding, {
+    CapabilityWireRef {
+        role: binding.selection.role.as_str(),
+        provider: binding.selection.provider.as_str(),
+        build: binding.selection.build.as_str(),
+        contract: binding.selection.contract.as_str(),
+        options: binding.selection.options.as_str(),
+    }
+});
 serialize_refs!(WorkflowRefs<'_>, binding, {
     WorkflowWireRef {
         identity: binding.pin.identity.as_str(),
@@ -1298,13 +1562,20 @@ pub fn validate(selection: &LockSelection, limits: Limits) -> Result<ValidatedLo
     let package_ids = validate_packages(&selection.packages, &repositories, limits)?;
     let definition_ids =
         validate_pins(&selection.definitions, SelectionDomain::Definition, limits)?;
-    validate_pins(&selection.providers, SelectionDomain::Provider, limits)?;
+    let provider_ids = validate_pins(&selection.providers, SelectionDomain::Provider, limits)?;
     validate_pins(&selection.toolchains, SelectionDomain::Toolchain, limits)?;
-    validate_pins(&selection.builds, SelectionDomain::Build, limits)?;
+    let build_ids = validate_pins(&selection.builds, SelectionDomain::Build, limits)?;
     validate_pins(&selection.deployments, SelectionDomain::Deployment, limits)?;
     let component_ids =
         validate_components(&selection.components, &repository_ids, &package_ids, limits)?;
-    validate_roles(&selection.roles, &component_ids, limits)?;
+    let role_ids = validate_roles(&selection.roles, &component_ids, limits)?;
+    validate_capabilities(
+        &selection.capabilities,
+        &role_ids,
+        &provider_ids,
+        &build_ids,
+        limits,
+    )?;
     validate_workflows(&selection.workflows, &definition_ids, limits)?;
     validate_dependencies(&selection.dependencies, &package_ids, limits)?;
 
@@ -1414,6 +1685,13 @@ fn preflight(selection: &LockSelection, limits: Limits) -> Result<()> {
         SelectionDomain::Role,
         true,
         |binding| binding.pin.identity.as_str(),
+    )?;
+    check_collection(
+        &selection.capabilities,
+        limits.max_capabilities,
+        SelectionDomain::Capability,
+        true,
+        |binding| binding.selection.role.as_str(),
     )?;
     check_collection(
         &selection.workflows,
@@ -1705,7 +1983,7 @@ fn validate_roles(
     roles: &[RoleBinding],
     components: &BTreeSet<String>,
     limits: Limits,
-) -> Result<()> {
+) -> Result<BTreeSet<String>> {
     let mut identities = BTreeSet::new();
     for binding in roles {
         validate_state(&binding.pin, SelectionDomain::Role, limits)?;
@@ -1722,7 +2000,94 @@ fn validate_roles(
             ));
         }
     }
+    Ok(identities.into_iter().map(str::to_owned).collect())
+}
+
+fn validate_capabilities(
+    capabilities: &[CapabilityBinding],
+    roles: &BTreeSet<String>,
+    providers: &BTreeSet<String>,
+    builds: &BTreeSet<String>,
+    limits: Limits,
+) -> Result<()> {
+    let mut bound_roles = BTreeSet::new();
+    for binding in capabilities {
+        let selection = &binding.selection;
+        validate_text(
+            selection.role.as_str(),
+            SelectionDomain::Capability,
+            selection.role.as_str(),
+            limits,
+        )?;
+        validate_text(
+            selection.provider.as_str(),
+            SelectionDomain::Capability,
+            selection.role.as_str(),
+            limits,
+        )?;
+        validate_text(
+            selection.build.as_str(),
+            SelectionDomain::Capability,
+            selection.role.as_str(),
+            limits,
+        )?;
+        validate_text(
+            selection.contract.as_str(),
+            SelectionDomain::Capability,
+            selection.role.as_str(),
+            limits,
+        )?;
+        validate_text(
+            selection.options.as_str(),
+            SelectionDomain::Capability,
+            selection.role.as_str(),
+            limits,
+        )?;
+        if !roles.contains(selection.role.as_str()) {
+            return Err(cross_domain(SelectionDomain::Role, selection.role.as_str()));
+        }
+        if !providers.contains(selection.provider.as_str()) {
+            return Err(cross_domain(
+                SelectionDomain::Provider,
+                selection.provider.as_str(),
+            ));
+        }
+        if !builds.contains(selection.build.as_str()) {
+            return Err(cross_domain(
+                SelectionDomain::Build,
+                selection.build.as_str(),
+            ));
+        }
+        if !bound_roles.insert(selection.role.as_str()) {
+            return Err(duplicate(
+                SelectionDomain::Capability,
+                selection.role.as_str(),
+            ));
+        }
+    }
+    if let Some(missing_role) = roles
+        .iter()
+        .find(|role| !bound_roles.contains(role.as_str()))
+    {
+        return Err(Refusal::selection(
+            RefusalCode::MissingSelection,
+            SelectionDomain::Capability,
+            missing_role,
+            "required role has no exact capability binding",
+        ));
+    }
     Ok(())
+}
+
+fn capability_label(selection: &CapabilitySelection) -> String {
+    format!(
+        "{} / {} / {} / {} / {}",
+        selection.role.as_str(),
+        selection.provider.as_str(),
+        selection.build.as_str(),
+        selection.contract.as_str(),
+        selection.options.as_str()
+    )
 }
 
 fn validate_workflows(
@@ -1959,6 +2324,7 @@ fn borrowed_wire(selection: &LockSelection, limits: Limits) -> LockWireRef<'_> {
         deployments: PinRefs(&selection.deployments),
         components: ComponentRefs(&selection.components),
         roles: RoleRefs(&selection.roles),
+        capabilities: CapabilityRefs(&selection.capabilities),
         workflow_instances: WorkflowRefs(&selection.workflows),
         dependencies: DependencyRefs(&selection.dependencies),
     }
@@ -2009,6 +2375,18 @@ fn canonical_wire(selection: &LockSelection, limits: Limits) -> LockWire {
         })
         .collect::<Vec<_>>();
     roles.sort();
+    let mut capabilities = selection
+        .capabilities
+        .iter()
+        .map(|binding| CapabilityWire {
+            role: binding.selection.role.as_str().to_owned(),
+            provider: binding.selection.provider.as_str().to_owned(),
+            build: binding.selection.build.as_str().to_owned(),
+            contract: binding.selection.contract.as_str().to_owned(),
+            options: binding.selection.options.as_str().to_owned(),
+        })
+        .collect::<Vec<_>>();
+    capabilities.sort();
     let mut workflow_instances = selection
         .workflows
         .iter()
@@ -2043,6 +2421,7 @@ fn canonical_wire(selection: &LockSelection, limits: Limits) -> LockWire {
         deployments: canonical_pins(&selection.deployments),
         components,
         roles,
+        capabilities,
         workflow_instances,
         dependencies,
     }
@@ -2234,6 +2613,13 @@ fn selection_input_bytes(selection: &LockSelection) -> Result<u64> {
         add!(binding.pin.identity.as_str());
         add!(binding.pin.revision);
         add!(binding.component.as_str());
+    }
+    for binding in &selection.capabilities {
+        add!(binding.selection.role.as_str());
+        add!(binding.selection.provider.as_str());
+        add!(binding.selection.build.as_str());
+        add!(binding.selection.contract.as_str());
+        add!(binding.selection.options.as_str());
     }
     for binding in &selection.workflows {
         add!(binding.pin.identity.as_str());

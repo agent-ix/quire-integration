@@ -6,8 +6,8 @@
 //! TC-007/TC-008: bounded common contracts and typed authority separation.
 
 use quire_integration::{
-    ArtifactId, Budget, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId, Disposition,
-    ErrorCode, Meter, RepositoryId, ResourceDimension, RoleId, RunId, Usage,
+    ArtifactId, Budget, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId, ContractId,
+    Disposition, ErrorCode, Meter, RepositoryId, ResourceDimension, RoleId, RunId, Usage,
 };
 
 #[test]
@@ -15,6 +15,7 @@ fn tc008_equal_text_in_different_identity_domains_has_distinct_canonical_authori
     let repository = RepositoryId::new("shared", 64).expect("repository identity");
     let component = ComponentId::new("shared", 64).expect("component identity");
     let role = RoleId::new("shared", 64).expect("role identity");
+    let contract = ContractId::new("shared", 64).expect("contract identity");
     let artifact = ArtifactId::new("shared", 64).expect("artifact identity");
     let run = RunId::new("shared", 64).expect("run identity");
 
@@ -22,6 +23,7 @@ fn tc008_equal_text_in_different_identity_domains_has_distinct_canonical_authori
         repository.canonical_bytes(64).expect("repository bytes"),
         component.canonical_bytes(64).expect("component bytes"),
         role.canonical_bytes(64).expect("role bytes"),
+        contract.canonical_bytes(64).expect("contract bytes"),
         artifact.canonical_bytes(64).expect("artifact bytes"),
         run.canonical_bytes(64).expect("run bytes"),
     ];
