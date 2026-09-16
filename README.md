@@ -28,8 +28,10 @@ The reviewed C10–C14 specification and implementation plan are complete. The
 shared runtime foundation now provides domain-separated identities, closed
 dispositions, checked resource budgets, deterministic canonical collections,
 and separately typed producer, consumer, persistence, adapter, evidence, and
-decision capabilities. Exact ecosystem-lock and composed-runtime behavior remain
-under active implementation.
+decision capabilities. The canonical exact ecosystem lock is implemented with
+content-addressed pins, exact package versions, bounded canonical feature sets,
+strict bytes and pre-invocation producer/consumer gating. Composed-runtime behavior
+remains under active implementation.
 
 ## Local checks
 

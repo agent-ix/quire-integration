@@ -2,7 +2,7 @@
 id: Task-002
 title: "FR-001 — exact ecosystem lock"
 type: Task
-status: not_started
+status: done
 track: S
 priority: P0
 relationships:
@@ -22,12 +22,12 @@ must exist before any producer or consumer invocation.
 
 ## Subtasks
 
-- [ ] Write TC-001 generated lock permutations, mutations and refusal cases first.
-- [ ] Model exact repository, package, definition, provider, toolchain, build, deployment,
+- [x] Write TC-001 generated lock permutations, mutations and refusal cases first.
+- [x] Model exact repository, package, definition, provider, toolchain, build, deployment,
   component, role and workflow-instance selections.
-- [ ] Validate explicit dependency edges and keep reachability distinct from compatibility.
-- [ ] Derive canonical bytes/identity independent of discovery order.
-- [ ] Prove every invalid or one-over lock returns before invocation counters change.
+- [x] Validate explicit dependency edges and keep reachability distinct from compatibility.
+- [x] Derive canonical bytes/identity independent of discovery order.
+- [x] Prove every invalid or one-over lock returns before invocation counters change.
 
 ## Deliverables
 

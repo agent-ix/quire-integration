@@ -8,6 +8,7 @@
 
 mod capability;
 mod common;
+pub mod ecosystem_lock;
 
 pub use capability::{
     ConsumerCapability, DecisionCapability, EffectAdapterCapability, EvidenceIntakeCapability,
@@ -16,5 +17,5 @@ pub use capability::{
 pub use common::{
     ArtifactId, Budget, BuildId, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId,
     DefinitionId, DeploymentId, Disposition, Error, ErrorCode, Meter, PackageId, ProviderId,
-    RepositoryId, ResourceDimension, Result, RoleId, RunId, ToolchainId, Usage,
+    RepositoryId, ResourceDimension, Result, RoleId, RunId, ToolchainId, Usage, WorkflowInstanceId,
 };

@@ -228,7 +228,12 @@ fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
         type Input = ();
         type Output = ();
 
-        fn evaluate(&self, _: &(), _: &mut Meter) -> quire_integration::Result<()> {
+        fn evaluate(
+            &self,
+            _: &quire_integration::ecosystem_lock::ValidatedLock,
+            _: &(),
+            _: &mut Meter,
+        ) -> quire_integration::Result<()> {
             Ok(())
         }
     }
@@ -236,7 +241,12 @@ fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
         type Input = ();
         type Output = ();
 
-        fn consume(&self, _: &(), _: &mut Meter) -> quire_integration::Result<()> {
+        fn consume(
+            &self,
+            _: &quire_integration::ecosystem_lock::ValidatedLock,
+            _: &(),
+            _: &mut Meter,
+        ) -> quire_integration::Result<()> {
             Ok(())
         }
     }

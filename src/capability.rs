@@ -3,7 +3,7 @@
 
 //! Separate, deny-by-default capability boundaries for composed operations.
 
-use crate::{Meter, Result};
+use crate::{ecosystem_lock::ValidatedLock, Meter, Result};
 
 /// Pure semantic producer capability; it has no persistence or adapter method.
 pub trait ProducerCapability {
@@ -12,8 +12,13 @@ pub trait ProducerCapability {
     /// Owner-produced result.
     type Output;
 
-    /// Evaluates one already-authorized owner input under checked work limits.
-    fn evaluate(&self, input: &Self::Input, meter: &mut Meter) -> Result<Self::Output>;
+    /// Evaluates one owner input under an already-validated exact ecosystem lock.
+    fn evaluate(
+        &self,
+        lock: &ValidatedLock,
+        input: &Self::Input,
+        meter: &mut Meter,
+    ) -> Result<Self::Output>;
 }
 
 /// Non-authoritative renderer, analyzer, or code-generator capability.
@@ -23,8 +28,13 @@ pub trait ConsumerCapability {
     /// Attributable non-authoritative output.
     type Output;
 
-    /// Consumes validated semantics without acquiring producer authority.
-    fn consume(&self, input: &Self::Input, meter: &mut Meter) -> Result<Self::Output>;
+    /// Consumes validated semantics under an exact lock without acquiring producer authority.
+    fn consume(
+        &self,
+        lock: &ValidatedLock,
+        input: &Self::Input,
+        meter: &mut Meter,
+    ) -> Result<Self::Output>;
 }
 
 /// Durable request-state capability, distinct from external dispatch.

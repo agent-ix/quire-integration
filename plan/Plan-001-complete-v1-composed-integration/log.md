@@ -7,6 +7,13 @@ description: "Chronological log of changes to the Plan-001 bundle."
 
 ## History
 
+* **2026-09-15** — Completed Task-002 and FR-001 with content-addressed ecosystem pins,
+  exact package SemVer, canonical bounded feature sets, explicit identity mappings,
+  independent reachability/compatibility states, strict canonical JSON and lock/run
+  identities. TC-001 now supplies generated permutations and mutations, all twenty graph
+  classification combinations, exact/one-over bounds, dependency-free closure and a real
+  validated-lock producer seam. Independent Rust review SR-010 and gap analysis SR-011 pass.
+
 * **2026-09-15** — Completed Task-001 with domain-separated identity newtypes,
   closed dispositions, checked all-or-nothing work meters, bounded canonical collections,
   and separately typed producer, consumer, persistence, effect-adapter, evidence-intake and

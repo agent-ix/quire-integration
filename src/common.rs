@@ -344,6 +344,11 @@ identity_type!(DeploymentId, "deployment", "Exact deployment identity.");
 identity_type!(RoleId, "role", "Exact runtime-role identity.");
 identity_type!(ArtifactId, "artifact", "Exact immutable-artifact identity.");
 identity_type!(RunId, "run", "Exact composed-run identity.");
+identity_type!(
+    WorkflowInstanceId,
+    "workflow-instance",
+    "Exact workflow-instance identity."
+);
 
 /// Closed item-local outcome vocabulary; only `Completed` denotes success.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]

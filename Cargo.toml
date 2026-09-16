@@ -14,8 +14,15 @@ name = "quire_integration"
 path = "src/lib.rs"
 
 [dependencies]
+semver = "=1.0.28"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
 
 [dev-dependencies]
+ix-trace-rs = { version = "=0.1.0", git = "https://github.com/agent-ix/ix-trace-rs", rev = "2ce4ebf47f726b9d76388220545cd0abda8a5cfb" }
+jsonschema = { version = "=0.17.1", default-features = false, features = ["draft202012"] }
+proptest = { version = "=1.11.0", default-features = false, features = ["std"] }
 
 [profile.release]
 lto = "thin"

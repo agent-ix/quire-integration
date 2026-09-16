@@ -34,3 +34,22 @@ Project owner: Agent IX
 Record each approved external item with its source, license or permission basis,
 attribution requirement, approver, approval date, and allowed distribution scope. Keep
 unapproved source material outside the Git working tree.
+
+## Approved dependency record
+
+The project owner-approved dependency policy in `deny.toml` applies to the exact
+versions and source revisions retained by `Cargo.lock`. Dependencies remain
+unmodified upstream works; their own license notices and attribution terms apply.
+
+| Direct dependency | Exact selection | License basis | Attribution | Approver / date | Allowed scope |
+| --- | --- | --- | --- | --- | --- |
+| `serde` / `serde_json` | `1.0.228` / `1.0.151` from crates.io | MIT OR Apache-2.0 | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private source, local build, test and qualification |
+| `sha2` | `0.10.9` from crates.io | MIT OR Apache-2.0 | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private source, local build, test and qualification |
+| `semver` | `1.0.28` from crates.io | MIT OR Apache-2.0 | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private source, local build, test and qualification |
+| `jsonschema` | `0.17.1` from crates.io, test-only with default features disabled | MIT | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private local schema conformance tests |
+| `proptest` | `1.11.0` from crates.io, test-only with only the `std` feature | MIT OR Apache-2.0 | upstream package metadata and license files | Agent IX repository dependency policy / 2026-09-15 | private local generated property tests |
+| `ix-trace-rs` | git revision `2ce4ebf47f726b9d76388220545cd0abda8a5cfb`, version `0.1.0` | AGPL-3.0-or-later | Agent IX project identity retained in source and lock | Agent IX repository dependency policy / 2026-09-15 | private local trace-tagged tests |
+
+Transitive packages are limited to the exact `Cargo.lock` closure of these
+selections. `cargo deny check` enforces the recorded license/source policy before
+review; changing the lock requires a fresh rights and dependency-policy review.

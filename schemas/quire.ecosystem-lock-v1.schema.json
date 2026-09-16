@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-ix.github.io/quire-integration/schemas/quire.ecosystem-lock-v1.schema.json",
+  "title": "Quire exact ecosystem lock v1",
+  "description": "Arrays are emitted in lexicographic semantic-identity order; the strict reader accepts only the canonical compact serialization selected independently by the caller.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract", "limits", "repositories", "packages", "definitions", "providers", "toolchains", "builds", "deployments", "components", "roles", "workflowInstances", "dependencies"],
+  "properties": {
+    "contract": { "const": "quire.ecosystem-lock/v1" },
+    "limits": { "$ref": "#/$defs/limits" },
+    "repositories": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/repository" } },
+    "packages": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/package" } },
+    "definitions": { "$ref": "#/$defs/pins" },
+    "providers": { "$ref": "#/$defs/pins" },
+    "toolchains": { "$ref": "#/$defs/pins" },
+    "builds": { "$ref": "#/$defs/pins" },
+    "deployments": { "$ref": "#/$defs/pins" },
+    "components": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/component" } },
+    "roles": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/role" } },
+    "workflowInstances": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/workflow" } },
+    "dependencies": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/dependency" } }
+  },
+  "$defs": {
+    "text": { "type": "string", "minLength": 1, "pattern": ".*\\S.*" },
+    "revision": { "type": "string", "pattern": "^(git:[0-9a-f]{40}|sha256:[0-9a-f]{64})$" },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$" },
+    "pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "revision"],
+      "properties": { "identity": { "$ref": "#/$defs/text" }, "revision": { "$ref": "#/$defs/revision" } }
+    },
+    "pins": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/pin" } },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maxRepositories", "maxPackages", "maxDefinitions", "maxProviders", "maxToolchains", "maxBuilds", "maxDeployments", "maxComponents", "maxRoles", "maxWorkflows", "maxDependencies", "maxTraversalSteps", "maxInputBytes", "maxDocumentBytes", "maxIdentityBytes", "maxOutputBytes"],
+      "properties": {
+        "maxRepositories": { "type": "integer", "minimum": 0 }, "maxPackages": { "type": "integer", "minimum": 0 },
+        "maxDefinitions": { "type": "integer", "minimum": 0 }, "maxProviders": { "type": "integer", "minimum": 0 },
+        "maxToolchains": { "type": "integer", "minimum": 0 }, "maxBuilds": { "type": "integer", "minimum": 0 },
+        "maxDeployments": { "type": "integer", "minimum": 0 }, "maxComponents": { "type": "integer", "minimum": 0 },
+        "maxRoles": { "type": "integer", "minimum": 0 }, "maxWorkflows": { "type": "integer", "minimum": 0 },
+        "maxDependencies": { "type": "integer", "minimum": 0 }, "maxTraversalSteps": { "type": "integer", "minimum": 0 },
+        "maxInputBytes": { "type": "integer", "minimum": 0 },
+        "maxDocumentBytes": { "type": "integer", "minimum": 0 }, "maxIdentityBytes": { "type": "integer", "minimum": 0 },
+        "maxOutputBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "repository": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "revision", "remote"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/text" }, "revision": { "$ref": "#/$defs/revision" },
+        "remote": { "$ref": "#/$defs/text" }
+      }
+    },
+    "package": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "revision", "version", "repository", "repositoryRevision", "features"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/text" }, "revision": { "$ref": "#/$defs/revision" }, "version": { "$ref": "#/$defs/version" },
+        "repository": { "$ref": "#/$defs/text" }, "repositoryRevision": { "$ref": "#/$defs/revision" },
+        "features": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/text" } }
+      }
+    },
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "revision", "repository", "package"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/text" }, "revision": { "$ref": "#/$defs/revision" },
+        "repository": { "$ref": "#/$defs/text" }, "package": { "$ref": "#/$defs/text" }
+      }
+    },
+    "role": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "revision", "component"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/text" }, "revision": { "$ref": "#/$defs/revision" },
+        "component": { "$ref": "#/$defs/text" }
+      }
+    },
+    "workflow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["identity", "revision", "definition"],
+      "properties": {
+        "identity": { "$ref": "#/$defs/text" }, "revision": { "$ref": "#/$defs/revision" },
+        "definition": { "$ref": "#/$defs/text" }
+      }
+    },
+    "dependency": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "target", "contract", "reachability", "compatibility"],
+      "properties": {
+        "source": { "$ref": "#/$defs/text" }, "target": { "$ref": "#/$defs/text" },
+        "contract": { "$ref": "#/$defs/text" },
+        "reachability": { "enum": ["reachable", "unreachable", "unresolved", "cyclic"] },
+        "compatibility": { "enum": ["compatible", "incompatible", "unknown", "affected", "stale"] }
+      }
+    }
+  }
+}

@@ -45,7 +45,7 @@ relationships:
 
 | Functional Req | Acceptance Criteria | Test Cases | Status |
 |---|---|---|---|
-| FR-001 | FR-001-AC-1..FR-001-AC-5 | TC-001 | 🚧 planned |
+| FR-001 | FR-001-AC-1..FR-001-AC-5 | TC-001 | ✅ passed |
 | FR-002 | FR-002-AC-1..FR-002-AC-5 | TC-002 | 🚧 planned |
 | FR-003 | FR-003-AC-1..FR-003-AC-5 | TC-003 | 🚧 planned |
 | FR-003 | FR-003-AC-6 | TC-009 | 🚧 planned |
@@ -66,7 +66,7 @@ relationships:
 
 | Test ID | Title | Type | Priority | Traces To | Status |
 |---|---|---|---|---|---|
-| TC-001 | Validate exact ecosystem locks | Property | P0 | FR-001-AC-1..FR-001-AC-5 | 🚧 planned |
+| TC-001 | Validate exact ecosystem locks | Property | P0 | FR-001-AC-1..FR-001-AC-5 | ✅ passed |
 | TC-002 | Compose independent domain results | Property | P0 | StR-001-VC-1, FR-002-AC-1..FR-002-AC-5 | 🚧 planned |
 | TC-003 | Reconcile authorized persistent effects | Integration | P0 | StR-001-VC-2, FR-003-AC-1..FR-003-AC-5 | 🚧 planned |
 | TC-004 | Compose bounded deterministic consumers | Property | P0 | StR-001-VC-3, FR-004-AC-1..FR-004-AC-5 | 🚧 planned |
@@ -166,8 +166,8 @@ relationships:
 
 | Gap ID | Description | Risk Level | Mitigation |
 |---|---|---|---|
-| GAP-001 | No production implementation or executable test harness exists yet | High | retain every test as planned and implement in C10 through C14 order after review approval |
-| GAP-002 | Exact compatible producer revisions remain to be selected and locked | High | C10 lock validation must precede every other implementation test |
+| GAP-001 | Execution, effect, consumer, impact and qualification modules remain unimplemented | High | continue Tasks 003 through 013 in dependency order |
+| GAP-002 | Exact compatible producer revisions and fixtures for IT-001 remain to be selected | High | record real upstream pins and rights in Task-008 after execution bundles exist |
 | GAP-003 | A production external effect endpoint is intentionally unauthorized | Medium | use a local contract-faithful HTTP service and preserve the limitation in evidence |
 | GAP-004 | Quoin evidence intake may be unavailable at qualification time | Medium | record the vector unsupported or incomplete; never mock it to passed |
 
@@ -175,6 +175,6 @@ relationships:
 
 | Category | Total | Passed | Failed | Blocked | Coverage |
 |---|---|---|---|---|---|
-| Property | 6 | 0 | 0 | 6 | 0% executed; 100% criteria mapped |
+| Property | 6 | 1 | 0 | 5 | 16.7% executed; 100% criteria mapped |
 | Integration | 2 | 0 | 0 | 2 | 0% executed; 100% criteria mapped |
 | Static | 3 | 0 | 0 | 3 | 0% executed; 100% criteria mapped |
