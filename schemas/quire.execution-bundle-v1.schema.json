@@ -23,7 +23,7 @@
     "text": { "type": "string", "minLength": 1 },
     "domain": { "enum": ["state", "temporal", "observation", "protocol", "analysis", "backend"] },
     "disposition": { "enum": ["completed", "missing", "incompatible", "unsupported", "stale", "incomplete", "refused", "failed", "unexecuted"] },
-    "cause": { "enum": ["missing-input", "incompatible-selection", "unsupported-capability", "stale-evidence", "incomplete-evidence", "artifact-mismatch", "reader-refused", "prerequisite-contradiction", "producer-failed", "producer-resource-exhausted", "resource-exhausted", "not-invoked"] },
+    "cause": { "enum": ["missing-input", "incompatible-selection", "unsupported-capability", "stale-evidence", "incomplete-evidence", "artifact-mismatch", "reader-refused", "prerequisite-contradiction", "producer-failed", "producer-resource-exhausted", "resource-exhausted", "deadline-expired", "producer-deadline-expired", "not-invoked"] },
     "limits": {
       "type": "object",
       "additionalProperties": false,

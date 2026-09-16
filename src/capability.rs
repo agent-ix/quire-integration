@@ -3,7 +3,7 @@
 
 //! Separate, deny-by-default capability boundaries for composed operations.
 
-use crate::{ecosystem_lock::ValidatedLock, Meter, Result};
+use crate::ecosystem_lock::CapabilitySelection;
 
 /// Pure semantic producer capability; it has no persistence or adapter method.
 pub trait ProducerCapability {
@@ -12,13 +12,8 @@ pub trait ProducerCapability {
     /// Owner-produced result.
     type Output;
 
-    /// Evaluates one owner input under an already-validated exact ecosystem lock.
-    fn evaluate(
-        &self,
-        lock: &ValidatedLock,
-        input: &Self::Input,
-        meter: &mut Meter,
-    ) -> Result<Self::Output>;
+    /// Exact lock selection implemented by this capability.
+    fn selection(&self) -> &CapabilitySelection;
 }
 
 /// Non-authoritative renderer, analyzer, or code-generator capability.
@@ -28,13 +23,8 @@ pub trait ConsumerCapability {
     /// Attributable non-authoritative output.
     type Output;
 
-    /// Consumes validated semantics under an exact lock without acquiring producer authority.
-    fn consume(
-        &self,
-        lock: &ValidatedLock,
-        input: &Self::Input,
-        meter: &mut Meter,
-    ) -> Result<Self::Output>;
+    /// Exact lock selection implemented by this capability.
+    fn selection(&self) -> &CapabilitySelection;
 }
 
 /// Durable request-state capability, distinct from external dispatch.
@@ -42,8 +32,8 @@ pub trait PersistenceCapability {
     /// Persistable request record.
     type Record;
 
-    /// Persists an admitted record before any adapter invocation.
-    fn persist(&mut self, record: &Self::Record, meter: &mut Meter) -> Result<()>;
+    /// Exact lock selection implemented by this capability.
+    fn selection(&self) -> &CapabilitySelection;
 }
 
 /// Evidence intake capability, which cannot act as producer or decision authority.
@@ -51,8 +41,8 @@ pub trait EvidenceIntakeCapability {
     /// External evidence presented for validation.
     type Evidence;
 
-    /// Validates and retains evidence without deciding promotion.
-    fn ingest(&mut self, evidence: &Self::Evidence, meter: &mut Meter) -> Result<()>;
+    /// Exact lock selection implemented by this capability.
+    fn selection(&self) -> &CapabilitySelection;
 }
 
 /// Scoped human-decision capability, distinct from evidence and source authority.
@@ -62,6 +52,6 @@ pub trait DecisionCapability {
     /// Attributable decision record.
     type Decision;
 
-    /// Records a decision limited to the supplied scope.
-    fn decide(&mut self, scope: &Self::Scope, meter: &mut Meter) -> Result<Self::Decision>;
+    /// Exact lock selection implemented by this capability.
+    fn selection(&self) -> &CapabilitySelection;
 }

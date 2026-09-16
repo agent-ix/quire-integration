@@ -2,7 +2,7 @@
 id: Task-007
 title: "NFR-001/NFR-002 — resource and authority verification"
 type: Task
-status: not_started
+status: done
 track: G
 priority: P0
 relationships:
@@ -38,11 +38,11 @@ single permitted adapter-dispatch path across all implemented feature modules.
 
 ## Subtasks
 
-- [ ] Exercise equal-input, permutation, timeout and exact/one-over properties globally.
-- [ ] Prove completed siblings survive exhaustion and unexecuted siblings stay explicit.
-- [ ] Inventory every untrusted conversion/allocation and its checked bound.
-- [ ] Audit imports/call graph so only FR-003 can reach dispatch after persistence.
-- [ ] Attempt renderer/analyzer/codegen/evidence/decision authority confusion adversarially.
+- [x] Exercise equal-input, permutation, timeout and exact/one-over properties globally.
+- [x] Prove completed siblings survive exhaustion and unexecuted siblings stay explicit.
+- [x] Inventory every untrusted conversion/allocation and its checked bound.
+- [x] Audit imports/call graph so only FR-003 can reach dispatch after persistence.
+- [x] Attempt renderer/analyzer/codegen/evidence/decision authority confusion adversarially.
 
 ## Deliverables
 

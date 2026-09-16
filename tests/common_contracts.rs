@@ -5,6 +5,7 @@
 
 //! TC-007/TC-008: bounded common contracts and typed authority separation.
 
+use ix_trace_rs::trace;
 use quire_integration::{
     ArtifactId, Budget, BuildId, CanonicalEncode, CanonicalMap, CanonicalSet, ComponentId,
     ContractId, Disposition, ErrorCode, Meter, ProviderId, RepositoryId, ResourceDimension, RoleId,
@@ -12,6 +13,7 @@ use quire_integration::{
 };
 
 #[test]
+#[trace("TC-008", "NFR-002-AC-2")]
 fn tc008_equal_text_in_different_identity_domains_has_distinct_canonical_authority() {
     let repository = RepositoryId::new("shared", 64).expect("repository identity");
     let component = ComponentId::new("shared", 64).expect("component identity");
@@ -55,6 +57,7 @@ fn tc008_equal_text_in_different_identity_domains_has_distinct_canonical_authori
 }
 
 #[test]
+#[trace("TC-008")]
 fn tc008_non_success_dispositions_remain_closed_and_distinct() {
     let dispositions = [
         Disposition::Completed,
@@ -83,6 +86,7 @@ fn tc008_non_success_dispositions_remain_closed_and_distinct() {
 }
 
 #[test]
+#[trace("TC-007")]
 fn tc007_every_budget_dimension_admits_exact_and_refuses_one_over() {
     type MeterOperation = fn(&mut Meter) -> quire_integration::Result<()>;
 
@@ -150,6 +154,7 @@ fn tc007_every_budget_dimension_admits_exact_and_refuses_one_over() {
 }
 
 #[test]
+#[trace("TC-007")]
 fn tc007_canonical_collections_are_permutation_invariant_and_fail_closed() {
     let left = CanonicalMap::try_from_entries(
         vec![
@@ -212,6 +217,7 @@ fn tc007_canonical_collections_are_permutation_invariant_and_fail_closed() {
 }
 
 #[test]
+#[trace("TC-008", "TC-011", "NFR-002-AC-2", "NFR-002-AC-3")]
 fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
     fn assert_producer<T: quire_integration::ProducerCapability>() {}
     fn assert_consumer<T: quire_integration::ConsumerCapability>() {}
@@ -220,44 +226,34 @@ fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
     fn assert_evidence<T: quire_integration::EvidenceIntakeCapability>() {}
     fn assert_decision<T: quire_integration::DecisionCapability>() {}
 
-    struct Producer;
-    struct Consumer;
-    struct Persistence;
+    struct Producer(quire_integration::ecosystem_lock::CapabilitySelection);
+    struct Consumer(quire_integration::ecosystem_lock::CapabilitySelection);
+    struct Persistence(quire_integration::ecosystem_lock::CapabilitySelection);
     struct Adapter(quire_integration::effect_reconciliation::AdapterManifest);
-    struct Evidence;
-    struct Decision;
+    struct Evidence(quire_integration::ecosystem_lock::CapabilitySelection);
+    struct Decision(quire_integration::ecosystem_lock::CapabilitySelection);
 
     impl quire_integration::ProducerCapability for Producer {
         type Input = ();
         type Output = ();
 
-        fn evaluate(
-            &self,
-            _: &quire_integration::ecosystem_lock::ValidatedLock,
-            _: &(),
-            _: &mut Meter,
-        ) -> quire_integration::Result<()> {
-            Ok(())
+        fn selection(&self) -> &quire_integration::ecosystem_lock::CapabilitySelection {
+            &self.0
         }
     }
     impl quire_integration::ConsumerCapability for Consumer {
         type Input = ();
         type Output = ();
 
-        fn consume(
-            &self,
-            _: &quire_integration::ecosystem_lock::ValidatedLock,
-            _: &(),
-            _: &mut Meter,
-        ) -> quire_integration::Result<()> {
-            Ok(())
+        fn selection(&self) -> &quire_integration::ecosystem_lock::CapabilitySelection {
+            &self.0
         }
     }
     impl quire_integration::PersistenceCapability for Persistence {
         type Record = ();
 
-        fn persist(&mut self, _: &(), _: &mut Meter) -> quire_integration::Result<()> {
-            Ok(())
+        fn selection(&self) -> &quire_integration::ecosystem_lock::CapabilitySelection {
+            &self.0
         }
     }
     impl quire_integration::effect_reconciliation::AuthorizedEffectAdapter for Adapter {
@@ -290,16 +286,16 @@ fn tc008_capability_traits_are_separate_and_deny_ambient_authority() {
     impl quire_integration::EvidenceIntakeCapability for Evidence {
         type Evidence = ();
 
-        fn ingest(&mut self, _: &(), _: &mut Meter) -> quire_integration::Result<()> {
-            Ok(())
+        fn selection(&self) -> &quire_integration::ecosystem_lock::CapabilitySelection {
+            &self.0
         }
     }
     impl quire_integration::DecisionCapability for Decision {
         type Scope = ();
         type Decision = ();
 
-        fn decide(&mut self, _: &(), _: &mut Meter) -> quire_integration::Result<()> {
-            Ok(())
+        fn selection(&self) -> &quire_integration::ecosystem_lock::CapabilitySelection {
+            &self.0
         }
     }
 

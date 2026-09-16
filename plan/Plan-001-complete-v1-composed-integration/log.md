@@ -7,6 +7,14 @@ description: "Chronological log of changes to the Plan-001 bundle."
 
 ## History
 
+* **2026-09-16** — Completed Task-007 and the NFR-001/NFR-002 cross-cutting gate. TC-007
+  through TC-011 now bind generated exact/one-over, permutation, deadline and sibling-retention
+  evidence to a digest-pinned inventory of every production resource and authority boundary.
+  Lock validation and execution composition use trusted monotonic deadlines; common capability
+  declarations are selection-only while feature coordinators retain opaque invocation permits;
+  the sole adapter dispatch remains persistence-dominated. Independent Rust review SR-045 and
+  gap analysis SR-046 pass with no unresolved finding.
+
 * **2026-09-16** — Completed Task-006 and FR-005 with exact lock-admitted bounded
   comparison, graph, policy, corpus, evidence and manifest readers; independent structural,
   behavioral, presence, reachability, freshness, vector-requirement and availability axes;

@@ -2599,26 +2599,15 @@ fn validate_reader_inputs(inputs: &[ReaderInput], limits: Limits) -> Result<Vec<
             "exactly six strict-reader inputs are required",
         ));
     }
-    let mut ordered = inputs.to_vec();
-    ordered.sort_by_key(|input| input.contract);
-    for (expected, input) in [
-        InputContract::Comparison,
-        InputContract::Graph,
-        InputContract::Corpus,
-        InputContract::Evidence,
-        InputContract::Policy,
-        InputContract::Manifest,
-    ]
-    .into_iter()
-    .zip(&ordered)
-    {
-        if input.contract != expected || input.document.contract != expected {
+    let mut total = 0_u64;
+    for input in inputs {
+        if input.document.contract != input.contract {
             return Err(Error::new(
                 ErrorCode::Malformed,
-                "missing, duplicate or mismatched strict-reader input",
+                "strict-reader input and document contracts differ",
             ));
         }
-        if input.selection.contract().as_str() != expected.label() {
+        if input.selection.contract().as_str() != input.contract.label() {
             return Err(Error::new(
                 ErrorCode::CapabilityMismatch,
                 "reader selection contract does not match document contract",
@@ -2638,15 +2627,33 @@ fn validate_reader_inputs(inputs: &[ReaderInput], limits: Limits) -> Result<Vec<
                 "input document digest mismatch",
             ));
         }
+        total = checked_add(total, length)?;
     }
-    let total = ordered.iter().try_fold(0_u64, |sum, input| {
-        checked_add(sum, count(input.document.canonical_bytes.len())?)
-    })?;
     if total > limits.max_total_input_bytes {
         return Err(Error::exhausted(
             Resource::TotalInputBytes,
             "aggregate input bytes exceed ceiling",
         ));
+    }
+    let mut ordered = inputs.to_vec();
+    ordered.sort_by_key(|input| input.contract);
+    for (expected, input) in [
+        InputContract::Comparison,
+        InputContract::Graph,
+        InputContract::Corpus,
+        InputContract::Evidence,
+        InputContract::Policy,
+        InputContract::Manifest,
+    ]
+    .into_iter()
+    .zip(&ordered)
+    {
+        if input.contract != expected {
+            return Err(Error::new(
+                ErrorCode::Malformed,
+                "missing, duplicate or mismatched strict-reader input",
+            ));
+        }
     }
     Ok(ordered)
 }

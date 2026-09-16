@@ -6,23 +6,42 @@
 //! TC-001: exact ecosystem-lock validation and canonicalization.
 
 use std::cell::Cell;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+use std::time::Duration;
 
 use ix_trace_rs::trace;
 use proptest::prelude::*;
 use quire_integration::ecosystem_lock::{
-    validate, CapabilityBinding, CapabilitySelection, Compatibility, ComponentBinding,
-    DependencyEdge, Limits, LockSelection, PackageBinding, Pin, PinState, Reachability,
-    RefusalCode, RepositoryBinding, RoleBinding, SelectionDomain, WorkflowBinding, CONTRACT,
-    SCHEMA_SHA256,
+    validate, validate_then, validate_with_monotonic_clock, CapabilityBinding, CapabilitySelection,
+    Compatibility, ComponentBinding, DependencyEdge, Limits, LockSelection, MonotonicClock,
+    PackageBinding, Pin, PinState, Reachability, RefusalCode, RepositoryBinding, RoleBinding,
+    SelectionDomain, WorkflowBinding, CONTRACT, SCHEMA_SHA256,
 };
 use quire_integration::{
-    ArtifactId, Budget, BuildId, ComponentId, ContractId, DefinitionId, DeploymentId, Meter,
-    PackageId, ProducerCapability, ProviderId, RepositoryId, RoleId, RunId, ToolchainId,
-    WorkflowInstanceId,
+    ArtifactId, BuildId, ComponentId, ContractId, DefinitionId, DeploymentId, PackageId,
+    ProviderId, RepositoryId, RoleId, RunId, ToolchainId, WorkflowInstanceId,
 };
 use sha2::{Digest as _, Sha256};
 
 const ID_LIMIT: u64 = 128;
+
+#[derive(Debug, Default)]
+struct StepClock(AtomicU64);
+
+impl StepClock {
+    fn calls(&self) -> u64 {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+impl MonotonicClock for StepClock {
+    fn now(&self) -> Duration {
+        Duration::from_millis(self.0.fetch_add(1, Ordering::SeqCst))
+    }
+}
 
 fn id<T>(
     value: &'static str,
@@ -175,7 +194,8 @@ fn fixture() -> LockSelection {
 }
 
 fn limits(selection: &LockSelection) -> Limits {
-    Limits::for_selection(selection, 1_000_000, ID_LIMIT).expect("fixture-derived exact limits")
+    Limits::for_selection(selection, 1_000_000, ID_LIMIT, 10_000)
+        .expect("fixture-derived exact limits")
 }
 
 fn assert_selection_changes(
@@ -236,6 +256,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
     #[test]
+    #[trace("TC-007")]
     fn tc001_generated_discovery_permutations_are_canonical(
         package_seeds in any::<[u64; 2]>(),
         component_seeds in any::<[u64; 2]>(),
@@ -333,7 +354,7 @@ proptest! {
 }
 
 #[test]
-#[trace("TC-001", "FR-001-AC-1")]
+#[trace("TC-001", "TC-007", "FR-001-AC-1")]
 fn tc001_discovery_order_does_not_change_canonical_lock_or_identity() {
     let left_selection = fixture();
     let left = validate(&left_selection, limits(&left_selection)).expect("valid left lock");
@@ -384,7 +405,7 @@ fn tc001_discovery_order_does_not_change_canonical_lock_or_identity() {
 }
 
 #[test]
-#[trace("TC-001", "FR-001-AC-3")]
+#[trace("TC-001", "TC-007", "FR-001-AC-3")]
 fn tc001_every_collection_and_byte_limit_admits_exact_and_refuses_one_over() {
     type Lower = fn(&mut Limits);
     let selection = fixture();
@@ -689,27 +710,9 @@ fn tc001_every_meaning_affecting_pin_changes_lock_identity() {
 }
 
 #[test]
-#[trace("TC-001", "FR-001-AC-3")]
+#[trace("TC-001", "TC-007", "FR-001-AC-3")]
 fn tc001_invalid_states_and_one_over_refuse_before_invocation() {
-    struct CountingProducer<'a>(&'a Cell<u64>);
-
-    impl ProducerCapability for CountingProducer<'_> {
-        type Input = ();
-        type Output = ();
-
-        fn evaluate(
-            &self,
-            _: &quire_integration::ecosystem_lock::ValidatedLock,
-            _: &(),
-            _: &mut Meter,
-        ) -> quire_integration::Result<()> {
-            self.0.set(self.0.get() + 1);
-            Ok(())
-        }
-    }
-
     let invoked = Cell::new(0_u64);
-    let producer = CountingProducer(&invoked);
     let cases = [
         (PinState::Missing, RefusalCode::MissingSelection),
         (PinState::Stale, RefusalCode::StaleSelection),
@@ -748,11 +751,8 @@ fn tc001_invalid_states_and_one_over_refuse_before_invocation() {
     assert_eq!(refusal.domain(), Some(SelectionDomain::Repository));
     assert_eq!(invoked.get(), 0);
 
-    let lock = validate(&selection, exact).expect("valid lock unlocks capability seam");
-    let mut meter = Meter::new(Budget::new(1, 1, 1, 1, 1, 1, 1));
-    producer
-        .evaluate(&lock, &(), &mut meter)
-        .expect("validated lock admits producer");
+    validate_then(&selection, exact, |_| invoked.set(invoked.get() + 1))
+        .expect("validated lock admits the invocation seam");
     assert_eq!(invoked.get(), 1);
 }
 
@@ -993,6 +993,43 @@ fn tc001_reachability_and_compatibility_states_are_independent() {
     );
     let refusal = validate(&cycle, limits(&cycle)).expect_err("resolved graph cycle");
     assert_eq!(refusal.code(), RefusalCode::CyclicDependency);
+}
+
+#[test]
+#[trace("TC-007", "NFR-001-AC-3")]
+fn tc007_lock_deadline_is_work_proportional_and_excluded_from_identity() {
+    let baseline = fixture();
+    let mut generous = limits(&baseline);
+    generous.max_duration_ms = 1_000_000;
+    let baseline_clock = Arc::new(StepClock::default());
+    let baseline_lock = validate_with_monotonic_clock(&baseline, generous, baseline_clock.clone())
+        .expect("generous injected deadline admits the baseline lock");
+    let baseline_calls = baseline_clock.calls();
+    assert!(baseline_calls > 1);
+
+    let mut alternate_duration = generous;
+    alternate_duration.max_duration_ms = 2_000_000;
+    let same_lock = validate(&baseline, alternate_duration)
+        .expect("operational duration remains outside canonical identity");
+    assert_eq!(baseline_lock.identity(), same_lock.identity());
+    assert_eq!(baseline_lock.bytes(), same_lock.bytes());
+
+    let mut expanded = fixture();
+    expanded.packages_mut()[0]
+        .set_features(&["a", "b", "c", "d", "e", "f", "g", "h"], 8, ID_LIMIT)
+        .expect("expanded feature set remains valid");
+    let mut deadline = limits(&expanded);
+    deadline.max_duration_ms = baseline_calls;
+    let refusal =
+        validate_with_monotonic_clock(&expanded, deadline, Arc::new(StepClock::default()))
+            .expect_err("additional per-field work must exhaust the baseline-sized deadline");
+    assert_eq!(refusal.code(), RefusalCode::DurationExpired);
+
+    let mut zero = limits(&baseline);
+    zero.max_duration_ms = 0;
+    let refusal = validate_with_monotonic_clock(&baseline, zero, Arc::new(StepClock::default()))
+        .expect_err("zero duration refuses before lock output exists");
+    assert_eq!(refusal.code(), RefusalCode::DurationExpired);
 }
 
 #[test]

@@ -47,8 +47,8 @@ make a release decision.
 
 ### Non-Functional Requirements
 
-- [ ] **NFR-001**: reproduce all outputs under finite preselected resource budgets.
-- [ ] **NFR-002**: contain semantic authority and external-effect capabilities by type.
+- [x] **NFR-001**: reproduce all outputs under finite preselected resource budgets.
+- [x] **NFR-002**: contain semantic authority and external-effect capabilities by type.
 
 ## Dependency Graph
 
@@ -106,15 +106,15 @@ hold either adapter capability.
 
 ### Cross-cutting verification
 
-- [ ] **TC-007**: generated exact/one-over deterministic budgets, sibling retention,
+- [x] **TC-007**: generated exact/one-over deterministic budgets, sibling retention,
   operational deadline failures and canonical equality for NFR-001-AC-2/3.
-- [ ] **TC-008**: generated authority-confusion attempts and source/decision separation for
+- [x] **TC-008**: generated authority-confusion attempts and source/decision separation for
   NFR-002-AC-2.
-- [ ] **TC-009**: static proof that adapter invocation exists only in the effect boundary for
+- [x] **TC-009**: static proof that adapter invocation exists only in the effect boundary for
   FR-003-AC-6.
-- [ ] **TC-010**: static inventory of checked untrusted conversions and allocations for
+- [x] **TC-010**: static inventory of checked untrusted conversions and allocations for
   NFR-001-AC-1.
-- [ ] **TC-011**: static call-graph proof that effect dispatch crosses authority/persistence
+- [x] **TC-011**: static call-graph proof that effect dispatch crosses authority/persistence
   and pure owner readers cross exact lock admission for NFR-002-AC-1 and NFR-002-AC-3.
 
 ### Integration tests
@@ -193,7 +193,7 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 | Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | done |
 | Task-005 | C | FR-004 | TC-004 | done |
 | Task-006 | D | FR-005 | TC-005 | done |
-| Task-007 | G | NFR-001, NFR-002 | TC-007..TC-011 | not_started |
+| Task-007 | G | NFR-001, NFR-002 | TC-007..TC-011 | done |
 | Task-008 | I1 | FR-001, FR-002 | IT-001 | not_started |
 | Task-009 | I2 | FR-003 | IT-002 | not_started |
 | Task-010 | I3 | FR-004, FR-005 | IT-003 | not_started |

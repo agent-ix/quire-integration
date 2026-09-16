@@ -47,8 +47,8 @@ relationships:
 |---|---|---|---|
 | FR-001 | FR-001-AC-1..FR-001-AC-5 | TC-001 | ✅ passed |
 | FR-002 | FR-002-AC-1..FR-002-AC-5 | TC-002 | ✅ passed |
-| FR-003 | FR-003-AC-1..FR-003-AC-5 | TC-003 | 🚧 planned |
-| FR-003 | FR-003-AC-6 | TC-009 | 🚧 planned |
+| FR-003 | FR-003-AC-1..FR-003-AC-5 | TC-003 | ✅ passed |
+| FR-003 | FR-003-AC-6 | TC-009 | ✅ passed |
 | FR-004 | FR-004-AC-1..FR-004-AC-6 | TC-004 | ✅ passed |
 | FR-005 | FR-005-AC-1..FR-005-AC-6 | TC-005 | ✅ passed |
 | FR-006 | FR-006-AC-1..FR-006-AC-6 | TC-006 | 🚧 planned |
@@ -57,10 +57,10 @@ relationships:
 
 | Non-Functional Req | Verification Method | Evidence/Test Cases | Status |
 |---|---|---|---|
-| NFR-001 | Generated properties and boundary checks | TC-007 | 🚧 planned |
-| NFR-001 | Static conversion/allocation audit | TC-010 | 🚧 planned |
-| NFR-002 | Generated authority-confusion properties | TC-008 | 🚧 planned |
-| NFR-002 | Static adapter-capability audit | TC-011 | 🚧 planned |
+| NFR-001 | Generated properties and boundary checks | TC-007 | ✅ passed |
+| NFR-001 | Static conversion/allocation audit | TC-010 | ✅ passed |
+| NFR-002 | Generated authority-confusion properties | TC-008 | ✅ passed |
+| NFR-002 | Static adapter-capability audit | TC-011 | ✅ passed |
 
 ## Test Case Summary
 
@@ -68,15 +68,15 @@ relationships:
 |---|---|---|---|---|---|
 | TC-001 | Validate exact ecosystem locks | Property | P0 | FR-001-AC-1..FR-001-AC-5 | ✅ passed |
 | TC-002 | Compose independent domain results | Property | P0 | StR-001-VC-1, FR-002-AC-1..FR-002-AC-5 | ✅ passed |
-| TC-003 | Reconcile authorized persistent effects | Integration | P0 | StR-001-VC-2, FR-003-AC-1..FR-003-AC-5 | 🚧 planned |
+| TC-003 | Reconcile authorized persistent effects | Integration | P0 | StR-001-VC-2, FR-003-AC-1..FR-003-AC-5 | ✅ passed |
 | TC-004 | Compose bounded deterministic consumers | Property | P0 | StR-001-VC-3, FR-004-AC-1..FR-004-AC-6 | ✅ passed |
 | TC-005 | Classify compatibility and stale evidence | Property | P0 | StR-001-VC-3, FR-005-AC-1..FR-005-AC-6 | ✅ passed |
 | TC-006 | Qualify every required integration vector | Integration | P0 | StR-001-VC-4, FR-006-AC-1..FR-006-AC-6 | 🚧 planned |
-| TC-007 | Bound and reproduce composed execution | Property | P0 | NFR-001-AC-2, NFR-001-AC-3 | 🚧 planned |
-| TC-008 | Preserve source and decision authority | Property | P0 | NFR-002-AC-2 | 🚧 planned |
-| TC-009 | Exclude adapter access outside the effect boundary | Static | P0 | FR-003-AC-6 | 🚧 planned |
-| TC-010 | Check every untrusted resource conversion | Static | P0 | NFR-001-AC-1 | 🚧 planned |
-| TC-011 | Prove adapter capability containment | Static | P0 | NFR-002-AC-1, NFR-002-AC-3 | 🚧 planned |
+| TC-007 | Bound and reproduce composed execution | Property | P0 | NFR-001-AC-2, NFR-001-AC-3 | ✅ passed |
+| TC-008 | Preserve source and decision authority | Property | P0 | NFR-002-AC-2 | ✅ passed |
+| TC-009 | Exclude adapter access outside the effect boundary | Static | P0 | FR-003-AC-6 | ✅ passed |
+| TC-010 | Check every untrusted resource conversion | Static | P0 | NFR-001-AC-1 | ✅ passed |
+| TC-011 | Prove adapter capability containment | Static | P0 | NFR-002-AC-1, NFR-002-AC-3 | ✅ passed |
 
 ## Option Permutation Matrix
 

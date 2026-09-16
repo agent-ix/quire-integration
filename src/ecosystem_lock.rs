@@ -7,9 +7,13 @@
 //! cannot obtain a [`ValidatedLock`] until every selected pin, mapping,
 //! dependency contract, compatibility statement, and resource bound succeeds.
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io::Write;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use serde::{ser::SerializeSeq as _, Serialize};
 use sha2::{Digest as _, Sha256};
@@ -53,6 +57,8 @@ pub enum RefusalCode {
     Malformed,
     /// A caller-lowered resource ceiling was exceeded.
     ResourceExhausted,
+    /// The caller-lowered operational deadline expired.
+    DurationExpired,
     /// Supplied bytes do not match the independently selected lock.
     CanonicalMismatch,
     /// Checked integer arithmetic failed.
@@ -82,6 +88,7 @@ impl RefusalCode {
             Self::AffectedSelection => "QINT-LOCK-AFFECTED-SELECTION",
             Self::Malformed => "QINT-LOCK-MALFORMED",
             Self::ResourceExhausted => "QINT-LOCK-RESOURCE-EXHAUSTED",
+            Self::DurationExpired => "QINT-LOCK-DURATION-EXPIRED",
             Self::CanonicalMismatch => "QINT-LOCK-CANONICAL-MISMATCH",
             Self::IntegerOverflow => "QINT-LOCK-INTEGER-OVERFLOW",
             Self::UnresolvedDependency => "QINT-LOCK-UNRESOLVED-DEPENDENCY",
@@ -950,6 +957,8 @@ pub struct Limits {
     pub max_identity_bytes: u64,
     /// Canonical output bytes.
     pub max_output_bytes: u64,
+    /// Operational wall-clock duration; excluded from canonical lock identity.
+    pub max_duration_ms: u64,
 }
 
 impl Limits {
@@ -958,6 +967,7 @@ impl Limits {
         selection: &LockSelection,
         max_output_bytes: u64,
         max_identity_bytes: u64,
+        max_duration_ms: u64,
     ) -> Result<Self> {
         Ok(Self {
             max_repositories: count(selection.repositories.len())?,
@@ -973,12 +983,75 @@ impl Limits {
             max_workflows: count(selection.workflows.len())?,
             max_dependencies: count(selection.dependencies.len())?,
             max_traversal_steps: dependency_steps(selection)?,
-            max_input_bytes: selection_input_bytes(selection)?,
+            max_input_bytes: selection_input_bytes(selection, None)?,
             max_document_bytes: max_output_bytes,
             max_identity_bytes,
             max_output_bytes,
+            max_duration_ms,
         })
     }
+}
+
+/// Trusted monotonic source for deterministic deadline verification.
+pub trait MonotonicClock: Send + Sync {
+    /// Elapsed duration from an arbitrary stable origin.
+    fn now(&self) -> Duration;
+}
+
+#[derive(Debug)]
+struct SystemClock(Instant);
+
+impl SystemClock {
+    fn new() -> Self {
+        Self(Instant::now())
+    }
+}
+
+impl MonotonicClock for SystemClock {
+    fn now(&self) -> Duration {
+        self.0.elapsed()
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ValidationTimer<'a> {
+    clock: &'a dyn MonotonicClock,
+    started: Duration,
+    limit: Duration,
+}
+
+impl<'a> ValidationTimer<'a> {
+    fn start(clock: &'a dyn MonotonicClock, limit_ms: u64) -> Result<Self> {
+        if limit_ms == 0 {
+            return Err(duration_expired("zero lock-validation duration"));
+        }
+        Ok(Self {
+            clock,
+            started: clock.now(),
+            limit: Duration::from_millis(limit_ms),
+        })
+    }
+
+    fn check(self) -> Result<()> {
+        let elapsed = self
+            .clock
+            .now()
+            .checked_sub(self.started)
+            .ok_or_else(|| duration_expired("lock-validation clock moved backwards"))?;
+        if elapsed >= self.limit {
+            return Err(duration_expired("lock-validation duration expired"));
+        }
+        Ok(())
+    }
+}
+
+fn duration_expired(detail: &'static str) -> Refusal {
+    Refusal::selection(
+        RefusalCode::DurationExpired,
+        SelectionDomain::Lock,
+        CONTRACT,
+        detail,
+    )
 }
 
 /// Content-derived SHA-256 lock identity.
@@ -1591,33 +1664,85 @@ serialize_refs!(DependencyRefs<'_>, edge, {
 
 /// Validates and canonicalizes one complete lock before any producer invocation.
 pub fn validate(selection: &LockSelection, limits: Limits) -> Result<ValidatedLock> {
-    preflight(selection, limits)?;
-    let output_bytes = preflight_output(selection, limits)?;
+    validate_with_monotonic_clock(selection, limits, Arc::new(SystemClock::new()))
+}
 
-    let repositories = validate_repositories(&selection.repositories, limits)?;
+/// Validates one complete lock with an injected trusted monotonic clock.
+pub fn validate_with_monotonic_clock(
+    selection: &LockSelection,
+    limits: Limits,
+    clock: Arc<dyn MonotonicClock>,
+) -> Result<ValidatedLock> {
+    let timer = ValidationTimer::start(clock.as_ref(), limits.max_duration_ms)?;
+    validate_with_timer(selection, limits, timer)
+}
+
+fn validate_with_timer(
+    selection: &LockSelection,
+    limits: Limits,
+    timer: ValidationTimer<'_>,
+) -> Result<ValidatedLock> {
+    timer.check()?;
+    preflight(selection, limits, timer)?;
+    timer.check()?;
+    let output_bytes = preflight_output(selection, limits, timer)?;
+    timer.check()?;
+
+    let repositories = validate_repositories(&selection.repositories, limits, timer)?;
+    timer.check()?;
     let repository_ids = repositories.keys().cloned().collect::<BTreeSet<_>>();
-    let package_ids = validate_packages(&selection.packages, &repositories, limits)?;
-    let definition_ids =
-        validate_pins(&selection.definitions, SelectionDomain::Definition, limits)?;
-    let provider_ids = validate_pins(&selection.providers, SelectionDomain::Provider, limits)?;
-    validate_pins(&selection.toolchains, SelectionDomain::Toolchain, limits)?;
-    let build_ids = validate_pins(&selection.builds, SelectionDomain::Build, limits)?;
-    validate_pins(&selection.deployments, SelectionDomain::Deployment, limits)?;
-    let component_ids =
-        validate_components(&selection.components, &repository_ids, &package_ids, limits)?;
-    let role_ids = validate_roles(&selection.roles, &component_ids, limits)?;
+    let package_ids = validate_packages(&selection.packages, &repositories, limits, timer)?;
+    timer.check()?;
+    let definition_ids = validate_pins(
+        &selection.definitions,
+        SelectionDomain::Definition,
+        limits,
+        timer,
+    )?;
+    let provider_ids = validate_pins(
+        &selection.providers,
+        SelectionDomain::Provider,
+        limits,
+        timer,
+    )?;
+    validate_pins(
+        &selection.toolchains,
+        SelectionDomain::Toolchain,
+        limits,
+        timer,
+    )?;
+    let build_ids = validate_pins(&selection.builds, SelectionDomain::Build, limits, timer)?;
+    validate_pins(
+        &selection.deployments,
+        SelectionDomain::Deployment,
+        limits,
+        timer,
+    )?;
+    timer.check()?;
+    let component_ids = validate_components(
+        &selection.components,
+        &repository_ids,
+        &package_ids,
+        limits,
+        timer,
+    )?;
+    let role_ids = validate_roles(&selection.roles, &component_ids, limits, timer)?;
     validate_capabilities(
         &selection.capabilities,
         &role_ids,
         &provider_ids,
         &build_ids,
         limits,
+        timer,
     )?;
-    validate_workflows(&selection.workflows, &definition_ids, limits)?;
-    validate_dependencies(&selection.dependencies, &package_ids, limits)?;
+    timer.check()?;
+    validate_workflows(&selection.workflows, &definition_ids, limits, timer)?;
+    validate_dependencies(&selection.dependencies, &package_ids, limits, timer)?;
+    timer.check()?;
 
-    let wire = canonical_wire(selection, limits);
-    let bytes = serialize_wire(&wire, output_bytes)?;
+    let wire = canonical_wire(selection, limits, timer)?;
+    let bytes = serialize_wire(&wire, output_bytes, timer)?;
+    timer.check()?;
     let identity = LockIdentity(Sha256::digest(&bytes).into());
     Ok(ValidatedLock {
         identity,
@@ -1639,6 +1764,18 @@ pub fn validate_then<T>(
 
 /// Strict-reads canonical bytes against an independently supplied selection.
 pub fn read(bytes: &[u8], selection: &LockSelection, limits: Limits) -> Result<ValidatedLock> {
+    read_with_monotonic_clock(bytes, selection, limits, Arc::new(SystemClock::new()))
+}
+
+/// Strict-reads canonical bytes with an injected trusted monotonic clock.
+pub fn read_with_monotonic_clock(
+    bytes: &[u8],
+    selection: &LockSelection,
+    limits: Limits,
+    clock: Arc<dyn MonotonicClock>,
+) -> Result<ValidatedLock> {
+    let timer = ValidationTimer::start(clock.as_ref(), limits.max_duration_ms)?;
+    timer.check()?;
     if count(bytes.len())? > limits.max_document_bytes {
         return Err(Refusal::selection(
             RefusalCode::ResourceExhausted,
@@ -1647,7 +1784,7 @@ pub fn read(bytes: &[u8], selection: &LockSelection, limits: Limits) -> Result<V
             "lock document exceeds its caller-lowered byte ceiling",
         ));
     }
-    let expected = validate(selection, limits)?;
+    let expected = validate_with_timer(selection, limits, timer)?;
     if bytes != expected.bytes {
         return Err(Refusal::selection(
             RefusalCode::CanonicalMismatch,
@@ -1656,10 +1793,11 @@ pub fn read(bytes: &[u8], selection: &LockSelection, limits: Limits) -> Result<V
             "ecosystem lock bytes do not match the independent selection",
         ));
     }
+    timer.check()?;
     Ok(expected)
 }
 
-fn preflight(selection: &LockSelection, limits: Limits) -> Result<()> {
+fn preflight(selection: &LockSelection, limits: Limits, timer: ValidationTimer<'_>) -> Result<()> {
     check_collection(
         &selection.repositories,
         limits.max_repositories,
@@ -1744,7 +1882,7 @@ fn preflight(selection: &LockSelection, limits: Limits) -> Result<()> {
         false,
         |edge| edge.source.as_str(),
     )?;
-    let input_bytes = selection_input_bytes(selection)?;
+    let input_bytes = selection_input_bytes(selection, Some(timer))?;
     if input_bytes > limits.max_input_bytes {
         return Err(Refusal::selection(
             RefusalCode::ResourceExhausted,
@@ -1886,9 +2024,11 @@ fn validate_pins<T: PinIdentity>(
     pins: &[Pin<T>],
     domain: SelectionDomain,
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<BTreeSet<String>> {
     let mut identities = BTreeSet::new();
     for pin in pins {
+        timer.check()?;
         validate_state(pin, domain, limits)?;
         if !identities.insert(pin.identity.text().to_owned()) {
             return Err(Refusal::selection(
@@ -1905,9 +2045,11 @@ fn validate_pins<T: PinIdentity>(
 fn validate_repositories(
     repositories: &[RepositoryBinding],
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<BTreeMap<String, String>> {
     let mut identities = BTreeMap::new();
     for binding in repositories {
+        timer.check()?;
         validate_state(&binding.pin, SelectionDomain::Repository, limits)?;
         validate_text(
             &binding.remote,
@@ -1937,9 +2079,11 @@ fn validate_packages(
     packages: &[PackageBinding],
     repositories: &BTreeMap<String, String>,
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<BTreeSet<String>> {
     let mut identities = BTreeSet::new();
     for binding in packages {
+        timer.check()?;
         validate_state(&binding.pin, SelectionDomain::Package, limits)?;
         validate_text(
             &binding.version,
@@ -1954,6 +2098,7 @@ fn validate_packages(
             limits,
         )?;
         for feature in &binding.features {
+            timer.check()?;
             validate_text(
                 feature,
                 SelectionDomain::Package,
@@ -1990,9 +2135,11 @@ fn validate_components(
     repositories: &BTreeSet<String>,
     packages: &BTreeSet<String>,
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<BTreeSet<String>> {
     let mut identities = BTreeSet::new();
     for binding in components {
+        timer.check()?;
         validate_state(&binding.pin, SelectionDomain::Component, limits)?;
         if !repositories.contains(binding.repository.as_str()) {
             return Err(cross_domain(
@@ -2020,9 +2167,11 @@ fn validate_roles(
     roles: &[RoleBinding],
     components: &BTreeSet<String>,
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<BTreeSet<String>> {
     let mut identities = BTreeSet::new();
     for binding in roles {
+        timer.check()?;
         validate_state(&binding.pin, SelectionDomain::Role, limits)?;
         if !components.contains(binding.component.as_str()) {
             return Err(cross_domain(
@@ -2046,9 +2195,11 @@ fn validate_capabilities(
     providers: &BTreeSet<String>,
     builds: &BTreeSet<String>,
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<()> {
     let mut bound_roles = BTreeSet::new();
     for binding in capabilities {
+        timer.check()?;
         let selection = &binding.selection;
         validate_text(
             selection.role.as_str(),
@@ -2131,9 +2282,11 @@ fn validate_workflows(
     workflows: &[WorkflowBinding],
     definitions: &BTreeSet<String>,
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<()> {
     let mut identities = BTreeSet::new();
     for binding in workflows {
+        timer.check()?;
         validate_state(&binding.pin, SelectionDomain::WorkflowInstance, limits)?;
         if !definitions.contains(binding.definition.as_str()) {
             return Err(cross_domain(
@@ -2155,17 +2308,18 @@ fn validate_dependencies(
     dependencies: &[DependencyEdge],
     packages: &BTreeSet<String>,
     limits: Limits,
+    timer: ValidationTimer<'_>,
 ) -> Result<()> {
     let mut identities = BTreeSet::new();
-    let mut adjacency = packages
-        .iter()
-        .map(|package| (package.clone(), Vec::<String>::new()))
-        .collect::<BTreeMap<_, _>>();
-    let mut indegree = packages
-        .iter()
-        .map(|package| (package.clone(), 0_u64))
-        .collect::<BTreeMap<_, _>>();
+    let mut adjacency = BTreeMap::new();
+    let mut indegree = BTreeMap::new();
+    for package in packages {
+        timer.check()?;
+        adjacency.insert(package.clone(), Vec::<String>::new());
+        indegree.insert(package.clone(), 0_u64);
+    }
     for edge in dependencies {
+        timer.check()?;
         validate_text(
             &edge.contract,
             SelectionDomain::Dependency,
@@ -2281,12 +2435,16 @@ fn validate_dependencies(
         })?;
     }
 
-    let mut ready = indegree
-        .iter()
-        .filter_map(|(package, degree)| (*degree == 0).then_some(package.clone()))
-        .collect::<BTreeSet<_>>();
+    let mut ready = BTreeSet::new();
+    for (package, degree) in &indegree {
+        timer.check()?;
+        if *degree == 0 {
+            ready.insert(package.clone());
+        }
+    }
     let mut visited = 0_u64;
     while let Some(package) = ready.pop_first() {
+        timer.check()?;
         visited = visited.checked_add(1).ok_or_else(|| {
             Refusal::selection(
                 RefusalCode::IntegerOverflow,
@@ -2299,6 +2457,7 @@ fn validate_dependencies(
             .get(&package)
             .expect("every package owns an adjacency entry")
         {
+            timer.check()?;
             let degree = indegree
                 .get_mut(target)
                 .expect("every package owns an indegree entry");
@@ -2367,127 +2526,166 @@ fn borrowed_wire(selection: &LockSelection, limits: Limits) -> LockWireRef<'_> {
     }
 }
 
-fn canonical_wire(selection: &LockSelection, limits: Limits) -> LockWire {
+fn canonical_wire(
+    selection: &LockSelection,
+    limits: Limits,
+    timer: ValidationTimer<'_>,
+) -> Result<LockWire> {
     let mut repositories = selection
         .repositories
         .iter()
-        .map(|binding| RepositoryWire {
-            identity: binding.pin.identity.as_str().to_owned(),
-            revision: binding.pin.revision.clone(),
-            remote: binding.remote.clone(),
+        .map(|binding| {
+            timer.check()?;
+            Ok(RepositoryWire {
+                identity: binding.pin.identity.as_str().to_owned(),
+                revision: binding.pin.revision.clone(),
+                remote: binding.remote.clone(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     repositories.sort();
     let mut packages = selection
         .packages
         .iter()
-        .map(|binding| PackageWire {
-            identity: binding.pin.identity.as_str().to_owned(),
-            revision: binding.pin.revision.clone(),
-            version: binding.version.clone(),
-            repository: binding.repository.as_str().to_owned(),
-            repository_revision: binding.repository_revision.clone(),
-            features: binding.features.clone(),
+        .map(|binding| {
+            timer.check()?;
+            Ok(PackageWire {
+                identity: binding.pin.identity.as_str().to_owned(),
+                revision: binding.pin.revision.clone(),
+                version: binding.version.clone(),
+                repository: binding.repository.as_str().to_owned(),
+                repository_revision: binding.repository_revision.clone(),
+                features: binding.features.clone(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     packages.sort();
     let mut components = selection
         .components
         .iter()
-        .map(|binding| ComponentWire {
-            identity: binding.pin.identity.as_str().to_owned(),
-            revision: binding.pin.revision.clone(),
-            repository: binding.repository.as_str().to_owned(),
-            package: binding.package.as_str().to_owned(),
+        .map(|binding| {
+            timer.check()?;
+            Ok(ComponentWire {
+                identity: binding.pin.identity.as_str().to_owned(),
+                revision: binding.pin.revision.clone(),
+                repository: binding.repository.as_str().to_owned(),
+                package: binding.package.as_str().to_owned(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     components.sort();
     let mut roles = selection
         .roles
         .iter()
-        .map(|binding| RoleWire {
-            identity: binding.pin.identity.as_str().to_owned(),
-            revision: binding.pin.revision.clone(),
-            component: binding.component.as_str().to_owned(),
+        .map(|binding| {
+            timer.check()?;
+            Ok(RoleWire {
+                identity: binding.pin.identity.as_str().to_owned(),
+                revision: binding.pin.revision.clone(),
+                component: binding.component.as_str().to_owned(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     roles.sort();
     let mut capabilities = selection
         .capabilities
         .iter()
-        .map(|binding| CapabilityWire {
-            role: binding.selection.role.as_str().to_owned(),
-            provider: binding.selection.provider.as_str().to_owned(),
-            build: binding.selection.build.as_str().to_owned(),
-            contract: binding.selection.contract.as_str().to_owned(),
-            options: binding.selection.options.as_str().to_owned(),
+        .map(|binding| {
+            timer.check()?;
+            Ok(CapabilityWire {
+                role: binding.selection.role.as_str().to_owned(),
+                provider: binding.selection.provider.as_str().to_owned(),
+                build: binding.selection.build.as_str().to_owned(),
+                contract: binding.selection.contract.as_str().to_owned(),
+                options: binding.selection.options.as_str().to_owned(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     capabilities.sort();
     let mut workflow_instances = selection
         .workflows
         .iter()
-        .map(|binding| WorkflowWire {
-            identity: binding.pin.identity.as_str().to_owned(),
-            revision: binding.pin.revision.clone(),
-            definition: binding.definition.as_str().to_owned(),
+        .map(|binding| {
+            timer.check()?;
+            Ok(WorkflowWire {
+                identity: binding.pin.identity.as_str().to_owned(),
+                revision: binding.pin.revision.clone(),
+                definition: binding.definition.as_str().to_owned(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     workflow_instances.sort();
     let mut dependencies = selection
         .dependencies
         .iter()
-        .map(|edge| DependencyWire {
-            source: edge.source.as_str().to_owned(),
-            target: edge.target.as_str().to_owned(),
-            contract: edge.contract.clone(),
-            reachability: edge.reachability,
-            compatibility: edge.compatibility,
+        .map(|edge| {
+            timer.check()?;
+            Ok(DependencyWire {
+                source: edge.source.as_str().to_owned(),
+                target: edge.target.as_str().to_owned(),
+                contract: edge.contract.clone(),
+                reachability: edge.reachability,
+                compatibility: edge.compatibility,
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     dependencies.sort();
-    LockWire {
+    Ok(LockWire {
         contract: CONTRACT.to_owned(),
         limits: limits.into(),
         repositories,
         packages,
-        definitions: canonical_pins(&selection.definitions),
-        providers: canonical_pins(&selection.providers),
-        toolchains: canonical_pins(&selection.toolchains),
-        builds: canonical_pins(&selection.builds),
-        deployments: canonical_pins(&selection.deployments),
+        definitions: canonical_pins(&selection.definitions, timer)?,
+        providers: canonical_pins(&selection.providers, timer)?,
+        toolchains: canonical_pins(&selection.toolchains, timer)?,
+        builds: canonical_pins(&selection.builds, timer)?,
+        deployments: canonical_pins(&selection.deployments, timer)?,
         components,
         roles,
         capabilities,
         workflow_instances,
         dependencies,
-    }
+    })
 }
 
-fn canonical_pins<T: PinIdentity>(pins: &[Pin<T>]) -> Vec<PinWire> {
+fn canonical_pins<T: PinIdentity>(
+    pins: &[Pin<T>],
+    timer: ValidationTimer<'_>,
+) -> Result<Vec<PinWire>> {
     let mut wire = pins
         .iter()
-        .map(|pin| PinWire {
-            identity: pin.identity.text().to_owned(),
-            revision: pin.revision.clone(),
+        .map(|pin| {
+            timer.check()?;
+            Ok(PinWire {
+                identity: pin.identity.text().to_owned(),
+                revision: pin.revision.clone(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     wire.sort();
-    wire
+    Ok(wire)
 }
 
-struct BoundedWriter {
+struct BoundedWriter<'a> {
     bytes: Vec<u8>,
     maximum: u64,
+    timer: ValidationTimer<'a>,
+    deadline_expired: bool,
 }
 
-struct CountingWriter {
+struct CountingWriter<'a> {
     consumed: u64,
     maximum: u64,
+    timer: ValidationTimer<'a>,
+    deadline_expired: bool,
 }
 
-impl Write for CountingWriter {
+impl Write for CountingWriter<'_> {
     fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        if self.timer.check().is_err() {
+            self.deadline_expired = true;
+            return Err(std::io::Error::other("lock-validation duration expired"));
+        }
         let incoming = u64::try_from(buffer.len())
             .map_err(|_| std::io::Error::other("canonical write length is not representable"))?;
         let next = self
@@ -2508,13 +2706,23 @@ impl Write for CountingWriter {
     }
 }
 
-fn preflight_output(selection: &LockSelection, limits: Limits) -> Result<u64> {
+fn preflight_output(
+    selection: &LockSelection,
+    limits: Limits,
+    timer: ValidationTimer<'_>,
+) -> Result<u64> {
     let borrowed = borrowed_wire(selection, limits);
     let mut writer = CountingWriter {
         consumed: 0,
         maximum: limits.max_output_bytes,
+        timer,
+        deadline_expired: false,
     };
-    serde_json::to_writer(&mut writer, &borrowed).map_err(|error| {
+    let serialized = serde_json::to_writer(&mut writer, &borrowed);
+    if writer.deadline_expired {
+        return Err(duration_expired("lock-output preflight duration expired"));
+    }
+    serialized.map_err(|error| {
         let code = if error.is_io() {
             RefusalCode::ResourceExhausted
         } else {
@@ -2530,8 +2738,12 @@ fn preflight_output(selection: &LockSelection, limits: Limits) -> Result<u64> {
     Ok(writer.consumed)
 }
 
-impl Write for BoundedWriter {
+impl Write for BoundedWriter<'_> {
     fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        if self.timer.check().is_err() {
+            self.deadline_expired = true;
+            return Err(std::io::Error::other("lock-validation duration expired"));
+        }
         let current = u64::try_from(self.bytes.len())
             .map_err(|_| std::io::Error::other("canonical length is not representable"))?;
         let incoming = u64::try_from(buffer.len())
@@ -2553,7 +2765,11 @@ impl Write for BoundedWriter {
     }
 }
 
-fn serialize_wire(wire: &LockWire, exact_length: u64) -> Result<Vec<u8>> {
+fn serialize_wire(
+    wire: &LockWire,
+    exact_length: u64,
+    timer: ValidationTimer<'_>,
+) -> Result<Vec<u8>> {
     let capacity = usize::try_from(exact_length).map_err(|_| {
         Refusal::selection(
             RefusalCode::IntegerOverflow,
@@ -2565,8 +2781,14 @@ fn serialize_wire(wire: &LockWire, exact_length: u64) -> Result<Vec<u8>> {
     let mut writer = BoundedWriter {
         bytes: Vec::with_capacity(capacity),
         maximum: exact_length,
+        timer,
+        deadline_expired: false,
     };
-    serde_json::to_writer(&mut writer, wire).map_err(|error| {
+    let serialized = serde_json::to_writer(&mut writer, wire);
+    if writer.deadline_expired {
+        return Err(duration_expired("lock serialization duration expired"));
+    }
+    serialized.map_err(|error| {
         let code = if error.is_io() {
             RefusalCode::ResourceExhausted
         } else {
@@ -2590,10 +2812,16 @@ fn serialize_wire(wire: &LockWire, exact_length: u64) -> Result<Vec<u8>> {
     Ok(writer.bytes)
 }
 
-fn selection_input_bytes(selection: &LockSelection) -> Result<u64> {
+fn selection_input_bytes(
+    selection: &LockSelection,
+    timer: Option<ValidationTimer<'_>>,
+) -> Result<u64> {
     let mut total = 0_u64;
     macro_rules! add {
         ($value:expr) => {{
+            if let Some(timer) = timer {
+                timer.check()?;
+            }
             let length = u64::try_from($value.len()).map_err(|_| {
                 Refusal::selection(
                     RefusalCode::IntegerOverflow,

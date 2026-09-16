@@ -234,7 +234,8 @@ fn validated_lock_with_deployment_revision(
         )],
         vec![],
     );
-    let limits = LockLimits::for_selection(&selection, 64 * 1024, ID_LIMIT).expect("lock limits");
+    let limits =
+        LockLimits::for_selection(&selection, 64 * 1024, ID_LIMIT, 10_000).expect("lock limits");
     validate(&selection, limits).expect("validated exact lock")
 }
 
@@ -2160,7 +2161,7 @@ fn tc003_post_call_failures_are_typed_and_conclusive_nonacceptance_is_retryable(
 }
 
 #[test]
-#[trace("TC-003", "FR-003-AC-2")]
+#[trace("TC-003", "TC-007", "FR-003-AC-2", "NFR-001-AC-3")]
 fn tc003_deadline_crossing_after_adapter_call_remains_typed_and_reconcilable() {
     let lock = validated_lock();
     let request = submission(
@@ -2672,7 +2673,7 @@ fn tc003_persisted_request_round_trips_strictly_and_supersession_is_immutable() 
 }
 
 #[test]
-#[trace("TC-003", "FR-003-AC-1")]
+#[trace("TC-003", "TC-007", "FR-003-AC-1")]
 fn tc003_argument_and_receipt_payload_limits_accept_exact_and_refuse_one_over() {
     let lock = validated_lock();
     let request = submission(
@@ -2855,6 +2856,7 @@ fn tc003_argument_and_receipt_payload_limits_accept_exact_and_refuse_one_over() 
 }
 
 #[test]
+#[trace("TC-009", "TC-011", "FR-003-AC-6", "NFR-002-AC-1", "NFR-002-AC-3")]
 fn tc009_tc011_dispatch_requires_coordinator_permit_after_persistence() {
     let source = include_str!("../src/effect_reconciliation.rs");
     let capability_source = include_str!("../src/capability.rs");

@@ -3,7 +3,12 @@
 
 //! Canonical composition of independently owned execution results.
 
-use std::{cell::Cell, collections::BTreeMap};
+use std::{
+    cell::Cell,
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use serde::{
     de::{DeserializeSeed as _, IgnoredAny, Visitor},
@@ -22,13 +27,15 @@ pub const CONTRACT: &str = "quire.execution-bundle/v1";
 /// Pinned JSON Schema bytes for [`CONTRACT`].
 pub const SCHEMA_BYTES: &[u8] = include_bytes!("../schemas/quire.execution-bundle-v1.schema.json");
 /// Lowercase SHA-256 digest of [`SCHEMA_BYTES`].
-pub const SCHEMA_SHA256: &str = "fbc286367f74cb1f4acdfe5577fc3bd3263ef3a7128f5271c5db2a9535865ec2";
+pub const SCHEMA_SHA256: &str = "a4e1dc8069bd38fd99d3248cccb21c1d07422d3705e80054d120ce7c3adae433";
 
 /// Stable boundary error code.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BundleErrorCode {
     /// A caller-lowered item or byte bound was exceeded.
     ResourceExhausted,
+    /// The caller-lowered operational deadline expired.
+    DurationExpired,
     /// A requested or completed item key occurred more than once.
     DuplicateResult,
     /// An operation named an item absent from the request.
@@ -60,6 +67,10 @@ impl BundleError {
 
     fn resource(detail: &'static str) -> Self {
         Self::new(BundleErrorCode::ResourceExhausted, None, detail)
+    }
+
+    fn duration(detail: &'static str) -> Self {
+        Self::new(BundleErrorCode::DurationExpired, None, detail)
     }
 
     fn from_common(error: CommonError) -> Self {
@@ -513,6 +524,10 @@ pub enum NoResultCause {
     ProducerResourceExhausted,
     /// Work could not begin within its caller-lowered resource envelope.
     ResourceExhausted,
+    /// Work could not begin or continue before the operational deadline.
+    DeadlineExpired,
+    /// An invoked producer returned after the operational deadline.
+    ProducerDeadlineExpired,
     /// No invocation was attempted before finalization.
     NotInvoked,
 }
@@ -528,8 +543,12 @@ impl NoResultCause {
             Self::ArtifactMismatch | Self::ReaderRefused | Self::PrerequisiteContradiction => {
                 Disposition::Refused
             }
-            Self::ProducerFailed | Self::ProducerResourceExhausted => Disposition::Failed,
-            Self::ResourceExhausted | Self::NotInvoked => Disposition::Unexecuted,
+            Self::ProducerFailed
+            | Self::ProducerResourceExhausted
+            | Self::ProducerDeadlineExpired => Disposition::Failed,
+            Self::ResourceExhausted | Self::DeadlineExpired | Self::NotInvoked => {
+                Disposition::Unexecuted
+            }
         }
     }
 }
@@ -619,6 +638,7 @@ pub struct ReaderRefusal {
 pub struct StrictReadContext<'a> {
     artifact: &'a ArtifactId,
     admission: AdmittedCapability<'a>,
+    remaining_duration_ms: u64,
 }
 
 impl StrictReadContext<'_> {
@@ -632,6 +652,12 @@ impl StrictReadContext<'_> {
     #[must_use]
     pub const fn admission(&self) -> AdmittedCapability<'_> {
         self.admission
+    }
+
+    /// Caller-lowered remaining operational duration.
+    #[must_use]
+    pub const fn remaining_duration_ms(&self) -> u64 {
+        self.remaining_duration_ms
     }
 }
 
@@ -700,18 +726,96 @@ pub trait StrictReader {
 }
 
 /// Exact Rust producer selected for one owner-checked artifact type.
-pub trait ExecutionProducer<Checked> {
+pub trait ExecutionProducer {
+    /// Owner-checked artifact accepted by this producer.
+    type Checked;
+
     /// Exact lock selection implemented by this producer.
     fn selection(&self) -> &CapabilitySelection;
 
     /// Executes only with a constructor-private lock admission proof.
     fn evaluate(
         &self,
-        admission: AdmittedCapability<'_>,
-        checked: &Checked,
+        permit: &ExecutionPermit<'_>,
+        checked: &Self::Checked,
         meter: &mut Meter,
         limits: ExecutionLimits,
     ) -> std::result::Result<OwnerResult, ProducerFailure>;
+}
+
+/// Opaque proof that one exact execution producer was selected and admitted.
+#[derive(Clone, Copy, Debug)]
+pub struct ExecutionPermit<'a> {
+    admission: AdmittedCapability<'a>,
+    remaining_duration_ms: u64,
+}
+
+impl ExecutionPermit<'_> {
+    /// Exact admitted capability proof.
+    #[must_use]
+    pub const fn admission(&self) -> AdmittedCapability<'_> {
+        self.admission
+    }
+
+    /// Caller-lowered remaining operational duration.
+    #[must_use]
+    pub const fn remaining_duration_ms(&self) -> u64 {
+        self.remaining_duration_ms
+    }
+}
+
+/// Trusted monotonic source for deterministic execution deadline verification.
+pub trait MonotonicClock: Send + Sync {
+    /// Elapsed duration from an arbitrary stable origin.
+    fn now(&self) -> Duration;
+}
+
+#[derive(Debug)]
+struct SystemClock(Instant);
+
+impl SystemClock {
+    fn new() -> Self {
+        Self(Instant::now())
+    }
+}
+
+impl MonotonicClock for SystemClock {
+    fn now(&self) -> Duration {
+        self.0.elapsed()
+    }
+}
+
+fn remaining_duration_ms(
+    clock: &dyn MonotonicClock,
+    started: Duration,
+    limit: Duration,
+) -> Result<u64> {
+    let elapsed = clock
+        .now()
+        .checked_sub(started)
+        .ok_or_else(|| BundleError::duration("execution clock moved backwards"))?;
+    let remaining = limit
+        .checked_sub(elapsed)
+        .ok_or_else(|| BundleError::duration("execution duration expired"))?;
+    let millis = u64::try_from(remaining.as_millis())
+        .map_err(|_| BundleError::resource("execution duration is not representable"))?;
+    if millis == 0 {
+        return Err(BundleError::duration("execution duration expired"));
+    }
+    Ok(millis)
+}
+
+#[derive(Clone, Copy)]
+struct ExecutionDeadline<'a> {
+    clock: &'a dyn MonotonicClock,
+    started: Duration,
+    limit: Duration,
+}
+
+impl ExecutionDeadline<'_> {
+    fn check(self) -> Result<()> {
+        remaining_duration_ms(self.clock, self.started, self.limit).map(|_| ())
+    }
 }
 
 /// Staged coordinator that prevents ambient or substitute dispatch.
@@ -721,6 +825,9 @@ pub struct Coordinator<'a> {
     prerequisites: SharedPrerequisites,
     limits: ExecutionLimits,
     results: BTreeMap<ItemKey, ItemResult>,
+    clock: Arc<dyn MonotonicClock>,
+    started: Duration,
+    duration_limit: Duration,
 }
 
 impl<'a> Coordinator<'a> {
@@ -730,13 +837,40 @@ impl<'a> Coordinator<'a> {
         request: ExecutionRequest,
         prerequisites: SharedPrerequisites,
         limits: ExecutionLimits,
+        max_duration_ms: u64,
     ) -> Result<Self> {
+        Self::with_monotonic_clock(
+            lock,
+            request,
+            prerequisites,
+            limits,
+            max_duration_ms,
+            Arc::new(SystemClock::new()),
+        )
+    }
+
+    /// Starts under an exact lock with an injected trusted monotonic clock.
+    pub fn with_monotonic_clock(
+        lock: &'a ValidatedLock,
+        request: ExecutionRequest,
+        prerequisites: SharedPrerequisites,
+        limits: ExecutionLimits,
+        max_duration_ms: u64,
+        clock: Arc<dyn MonotonicClock>,
+    ) -> Result<Self> {
+        if max_duration_ms == 0 {
+            return Err(BundleError::duration("zero execution duration"));
+        }
+        let started = clock.now();
+        let duration_limit = Duration::from_millis(max_duration_ms);
         check_count(
             request.items.len(),
             limits.max_items,
             "request item count exceeds execution limit",
         )?;
+        remaining_duration_ms(clock.as_ref(), started, duration_limit)?;
         validate_request_limits(&request, &prerequisites, limits)?;
+        remaining_duration_ms(clock.as_ref(), started, duration_limit)?;
         if !lock.contains_package(&request.package) || !lock.contains_workflow(&request.workflow) {
             return Err(BundleError::new(
                 BundleErrorCode::UnknownItem,
@@ -744,16 +878,16 @@ impl<'a> Coordinator<'a> {
                 "request package or workflow is absent from the exact lock",
             ));
         }
-        if request
-            .items
-            .iter()
-            .any(|item| !lock.contains_definition(&item.key.identity))
-        {
-            return Err(BundleError::new(
-                BundleErrorCode::UnknownItem,
-                None,
-                "requested item definition is absent from the exact lock",
-            ));
+        remaining_duration_ms(clock.as_ref(), started, duration_limit)?;
+        for item in &request.items {
+            if !lock.contains_definition(&item.key.identity) {
+                return Err(BundleError::new(
+                    BundleErrorCode::UnknownItem,
+                    None,
+                    "requested item definition is absent from the exact lock",
+                ));
+            }
+            remaining_duration_ms(clock.as_ref(), started, duration_limit)?;
         }
         Ok(Self {
             lock,
@@ -761,7 +895,14 @@ impl<'a> Coordinator<'a> {
             prerequisites,
             limits,
             results: BTreeMap::new(),
+            clock,
+            started,
+            duration_limit,
         })
+    }
+
+    fn remaining_duration_ms(&self) -> Result<u64> {
+        remaining_duration_ms(self.clock.as_ref(), self.started, self.duration_limit)
     }
 
     /// Strict-reads and dispatches one exact requested item.
@@ -776,10 +917,18 @@ impl<'a> Coordinator<'a> {
     ) -> Result<()>
     where
         R: StrictReader,
-        P: ExecutionProducer<R::Checked>,
+        P: ExecutionProducer<Checked = R::Checked>,
     {
         let selected = self.selected(key)?.clone();
         self.ensure_pending(key)?;
+        if self.remaining_duration_ms().is_err() {
+            self.insert_unavailable(
+                selected,
+                Disposition::Unexecuted,
+                NoResultCause::DeadlineExpired,
+            );
+            return Ok(());
+        }
         if selected.prerequisites != self.prerequisites {
             self.insert_unavailable(
                 selected,
@@ -851,14 +1000,38 @@ impl<'a> Coordinator<'a> {
             );
             return Ok(());
         }
-        let checked = match reader.read(
+        let remaining_duration_ms = match self.remaining_duration_ms() {
+            Ok(remaining) => remaining,
+            Err(_) => {
+                self.insert_unavailable(
+                    selected,
+                    Disposition::Unexecuted,
+                    NoResultCause::DeadlineExpired,
+                );
+                return Ok(());
+            }
+        };
+        let read_result = reader.read(
             StrictReadContext {
                 artifact: &selected.artifact,
                 admission,
+                remaining_duration_ms,
             },
             bytes,
             meter,
-        ) {
+        );
+        let remaining_duration_ms = match self.remaining_duration_ms() {
+            Ok(remaining) => remaining,
+            Err(_) => {
+                self.insert_unavailable(
+                    selected,
+                    Disposition::Unexecuted,
+                    NoResultCause::DeadlineExpired,
+                );
+                return Ok(());
+            }
+        };
+        let checked = match read_result {
             Ok(checked) => checked,
             Err(refusal) => {
                 let disposition = if refusal.resource {
@@ -884,7 +1057,20 @@ impl<'a> Coordinator<'a> {
             );
             return Ok(());
         }
-        match producer.evaluate(admission, &checked, meter, self.limits) {
+        let permit = ExecutionPermit {
+            admission,
+            remaining_duration_ms,
+        };
+        let producer_result = producer.evaluate(&permit, &checked, meter, self.limits);
+        if self.remaining_duration_ms().is_err() {
+            self.insert_unavailable(
+                selected,
+                Disposition::Failed,
+                NoResultCause::ProducerDeadlineExpired,
+            );
+            return Ok(());
+        }
+        match producer_result {
             Ok(owner) => {
                 if owner.validate(self.limits).is_err() {
                     self.insert_unavailable(
@@ -927,7 +1113,15 @@ impl<'a> Coordinator<'a> {
         }
         let selected = self.selected(key)?.clone();
         self.ensure_pending(key)?;
-        self.insert_unavailable(selected, disposition, cause);
+        if self.remaining_duration_ms().is_err() {
+            self.insert_unavailable(
+                selected,
+                Disposition::Unexecuted,
+                NoResultCause::DeadlineExpired,
+            );
+        } else {
+            self.insert_unavailable(selected, disposition, cause);
+        }
         Ok(())
     }
 
@@ -943,13 +1137,27 @@ impl<'a> Coordinator<'a> {
                 .refuse_shared_prerequisite()
                 .map(CompositionOutcome::Refused);
         }
-        self.fill_unexecuted();
+        if self.remaining_duration_ms().is_err() {
+            self.fill_unexecuted_with(NoResultCause::DeadlineExpired);
+        } else {
+            self.fill_unexecuted();
+        }
+        let deadline_clock = Arc::clone(&self.clock);
+        let serialization_deadline = self
+            .remaining_duration_ms()
+            .ok()
+            .map(|_| ExecutionDeadline {
+                clock: deadline_clock.as_ref(),
+                started: self.started,
+                limit: self.duration_limit,
+            });
         ExecutionBundle::build(
             self.lock.identity().to_hex(),
             self.request,
             self.prerequisites,
             self.results.into_values().collect(),
             self.limits,
+            serialization_deadline,
         )
         .map(|bundle| CompositionOutcome::Bundle(Box::new(bundle)))
     }
@@ -983,7 +1191,11 @@ impl<'a> Coordinator<'a> {
                 NoResultCause::PrerequisiteContradiction,
             );
         }
-        self.fill_unexecuted();
+        if self.remaining_duration_ms().is_err() {
+            self.fill_unexecuted_with(NoResultCause::DeadlineExpired);
+        } else {
+            self.fill_unexecuted();
+        }
         Ok(CompositionRefusal {
             affected,
             items: self.results.into_values().collect(),
@@ -1029,14 +1241,23 @@ impl<'a> Coordinator<'a> {
     }
 
     fn fill_unexecuted(&mut self) {
-        for request in &self.request.items {
-            self.results.entry(request.key.clone()).or_insert_with(|| {
-                ItemResult::unavailable(
-                    request.clone(),
-                    Disposition::Unexecuted,
-                    NoResultCause::NotInvoked,
-                )
-            });
+        self.fill_unexecuted_with(NoResultCause::NotInvoked);
+    }
+
+    fn fill_unexecuted_with(&mut self, cause: NoResultCause) {
+        for request in self.request.items.clone() {
+            if self.results.contains_key(&request.key) {
+                continue;
+            }
+            let cause = if self.remaining_duration_ms().is_err() {
+                NoResultCause::DeadlineExpired
+            } else {
+                cause
+            };
+            self.results.insert(
+                request.key.clone(),
+                ItemResult::unavailable(request, Disposition::Unexecuted, cause),
+            );
         }
     }
 }
@@ -1110,6 +1331,7 @@ impl ExecutionBundle {
         prerequisites: SharedPrerequisites,
         items: Vec<ItemResult>,
         limits: ExecutionLimits,
+        deadline: Option<ExecutionDeadline<'_>>,
     ) -> Result<Self> {
         check_count(
             items.len(),
@@ -1126,7 +1348,7 @@ impl ExecutionBundle {
             limits,
             bytes: Vec::new(),
         };
-        bundle.bytes = serialize_bundle(&bundle, limits.max_output_bytes)?;
+        bundle.bytes = serialize_bundle(&bundle, limits.max_output_bytes, deadline)?;
         Ok(bundle)
     }
 
@@ -2175,13 +2397,22 @@ fn wire_ref(bundle: &ExecutionBundle) -> BundleWireRef<'_> {
     }
 }
 
-struct CountingWriter {
+struct CountingWriter<'a> {
     consumed: u64,
     maximum: u64,
+    deadline: Option<ExecutionDeadline<'a>>,
+    deadline_expired: bool,
 }
 
-impl std::io::Write for CountingWriter {
+impl std::io::Write for CountingWriter<'_> {
     fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        if self
+            .deadline
+            .is_some_and(|deadline| deadline.check().is_err())
+        {
+            self.deadline_expired = true;
+            return Err(std::io::Error::other("execution duration expired"));
+        }
         let incoming = u64::try_from(buffer.len())
             .map_err(|_| std::io::Error::other("bundle length is not representable"))?;
         let next = self
@@ -2200,13 +2431,22 @@ impl std::io::Write for CountingWriter {
     }
 }
 
-struct BoundedWriter {
+struct BoundedWriter<'a> {
     bytes: Vec<u8>,
     maximum: u64,
+    deadline: Option<ExecutionDeadline<'a>>,
+    deadline_expired: bool,
 }
 
-impl std::io::Write for BoundedWriter {
+impl std::io::Write for BoundedWriter<'_> {
     fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        if self
+            .deadline
+            .is_some_and(|deadline| deadline.check().is_err())
+        {
+            self.deadline_expired = true;
+            return Err(std::io::Error::other("execution duration expired"));
+        }
         let current = u64::try_from(self.bytes.len())
             .map_err(|_| std::io::Error::other("bundle length is not representable"))?;
         let incoming = u64::try_from(buffer.len())
@@ -2226,20 +2466,39 @@ impl std::io::Write for BoundedWriter {
     }
 }
 
-fn serialize_bundle(bundle: &ExecutionBundle, maximum: u64) -> Result<Vec<u8>> {
+fn serialize_bundle(
+    bundle: &ExecutionBundle,
+    maximum: u64,
+    deadline: Option<ExecutionDeadline<'_>>,
+) -> Result<Vec<u8>> {
     let mut counter = CountingWriter {
         consumed: 0,
         maximum,
+        deadline,
+        deadline_expired: false,
     };
-    serde_json::to_writer(&mut counter, &wire_ref(bundle))
-        .map_err(|_| BundleError::resource("canonical bundle output exceeds its ceiling"))?;
+    let counted = serde_json::to_writer(&mut counter, &wire_ref(bundle));
+    if counter.deadline_expired {
+        return Err(BundleError::duration(
+            "execution duration expired during output preflight",
+        ));
+    }
+    counted.map_err(|_| BundleError::resource("canonical bundle output exceeds its ceiling"))?;
     let capacity = usize::try_from(counter.consumed)
         .map_err(|_| BundleError::resource("canonical bundle length is not representable"))?;
     let mut writer = BoundedWriter {
         bytes: Vec::with_capacity(capacity),
         maximum: counter.consumed,
+        deadline,
+        deadline_expired: false,
     };
-    serde_json::to_writer(&mut writer, &wire_ref(bundle)).map_err(|_| {
+    let serialized = serde_json::to_writer(&mut writer, &wire_ref(bundle));
+    if writer.deadline_expired {
+        return Err(BundleError::duration(
+            "execution duration expired during output serialization",
+        ));
+    }
+    serialized.map_err(|_| {
         BundleError::new(
             BundleErrorCode::CanonicalMismatch,
             None,
@@ -2478,7 +2737,7 @@ pub fn read(bytes: &[u8], limits: ExecutionLimits) -> Result<ExecutionBundle> {
         limits,
         bytes: Vec::new(),
     };
-    bundle.bytes = serialize_bundle(&bundle, limits.max_output_bytes)?;
+    bundle.bytes = serialize_bundle(&bundle, limits.max_output_bytes, None)?;
     if bundle.bytes != bytes {
         return Err(BundleError::new(
             BundleErrorCode::CanonicalMismatch,

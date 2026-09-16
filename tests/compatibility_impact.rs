@@ -158,7 +158,8 @@ fn validated_lock(
         )],
         vec![],
     );
-    let limits = LockLimits::for_selection(&lock, 128 * 1024, ID_LIMIT).expect("lock limits");
+    let limits =
+        LockLimits::for_selection(&lock, 128 * 1024, ID_LIMIT, 10_000).expect("lock limits");
     validate(&lock, limits).expect("validated exact lock")
 }
 
@@ -2024,7 +2025,7 @@ fn tc005_rejects_unkeyed_results_incomplete_seed_tables_and_foreign_graph_values
 }
 
 #[test]
-#[trace("TC-005", "FR-005-AC-3", "FR-005-AC-6")]
+#[trace("TC-005", "TC-007", "FR-005-AC-3", "FR-005-AC-6", "NFR-001-AC-3")]
 fn tc005_deadline_is_failed_and_operational_limit_is_not_identity() {
     let mut deadline_fixture = fixture();
     let mut readers: Vec<&mut dyn StrictImpactReader> = deadline_fixture
@@ -2183,7 +2184,7 @@ fn tc005_names_every_invalid_closed_limit_dimension() {
 }
 
 #[test]
-#[trace("TC-005", "FR-005-AC-3")]
+#[trace("TC-005", "TC-007", "FR-005-AC-3")]
 fn tc005_admits_exact_and_classifies_one_over_active_boundaries() {
     macro_rules! boundary {
         ($field:ident, $resource:expr, $demand:expr, $phase:expr) => {{
@@ -2333,7 +2334,7 @@ fn tc005_admits_exact_and_classifies_one_over_active_boundaries() {
 }
 
 #[test]
-#[trace("TC-005", "FR-005-AC-3")]
+#[trace("TC-005", "TC-007", "FR-005-AC-3")]
 fn tc005_admits_exact_and_refuses_one_over_sparse_boundaries() {
     macro_rules! boundary {
         ($fixture:ident, $field:ident, $resource:expr, $demand:expr) => {{
@@ -2459,7 +2460,12 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    #[trace("TC-005", "FR-005-AC-2", "FR-005-AC-6")]
+    #[trace(
+        "TC-005",
+        "TC-007",
+        "FR-005-AC-2",
+        "FR-005-AC-6"
+    )]
     fn tc005_property_permutations_reproduce_canonical_bytes(
         reverse_inputs in any::<bool>(),
         reverse_graph in any::<bool>(),

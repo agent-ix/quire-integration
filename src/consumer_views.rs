@@ -1798,6 +1798,18 @@ impl ConsumerCoordinator {
                 "empty obligation inventory",
             ));
         }
+        for obligation in &request.obligations {
+            validate_local_identity(&obligation.id.0, self.limits.max_identity_bytes)?;
+            validate_local_identity(
+                obligation.semantic.definition.as_str(),
+                self.limits.max_identity_bytes,
+            )?;
+            validate_local_identity(
+                obligation.semantic.semantic.as_str(),
+                self.limits.max_identity_bytes,
+            )?;
+            validate_source(&obligation.source, self.limits.max_identity_bytes)?;
+        }
         let mut obligations = request.obligations.clone();
         obligations.sort_by(|left, right| left.id.cmp(&right.id));
         if obligations.windows(2).any(|pair| pair[0].id == pair[1].id) {
@@ -1816,16 +1828,6 @@ impl ConsumerCoordinator {
         let mut preflight_invalid = false;
         let mut invocation_exhausted = false;
         for obligation in obligations {
-            validate_local_identity(&obligation.id.0, self.limits.max_identity_bytes)?;
-            validate_local_identity(
-                obligation.semantic.definition.as_str(),
-                self.limits.max_identity_bytes,
-            )?;
-            validate_local_identity(
-                obligation.semantic.semantic.as_str(),
-                self.limits.max_identity_bytes,
-            )?;
-            validate_source(&obligation.source, self.limits.max_identity_bytes)?;
             if !lock.contains_definition(&obligation.semantic.definition) {
                 preflight_invalid = true;
                 records.push(AccountingRecord {

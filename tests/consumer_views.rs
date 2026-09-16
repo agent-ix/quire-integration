@@ -116,7 +116,8 @@ fn validated_lock_for(deployment_id: &str) -> quire_integration::ecosystem_lock:
         )],
         vec![],
     );
-    let limits = LockLimits::for_selection(&selection, 64 * 1024, ID_LIMIT).expect("lock limits");
+    let limits =
+        LockLimits::for_selection(&selection, 64 * 1024, ID_LIMIT, 10_000).expect("lock limits");
     validate(&selection, limits).expect("validated exact lock")
 }
 
@@ -398,7 +399,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    #[trace("TC-004", "FR-004-AC-1")]
+    #[trace("TC-004", "TC-007", "FR-004-AC-1")]
     fn tc004_equal_inputs_are_canonical_across_all_input_orders(
         reverse_nodes in any::<bool>(),
         reverse_edges in any::<bool>(),
@@ -444,7 +445,7 @@ proptest! {
     }
 
     #[test]
-    #[trace("TC-004", "FR-004-AC-3")]
+    #[trace("TC-004", "TC-007", "FR-004-AC-3")]
     fn tc004_generated_one_over_bounds_preserve_the_exact_edge_frontier(
         cause in 0_u8..3,
         reverse_nodes in any::<bool>(),
@@ -533,9 +534,10 @@ proptest! {
     }
 
     #[test]
-    #[trace("TC-004", "FR-004-AC-5")]
+    #[trace("TC-004", "TC-008", "FR-004-AC-5", "NFR-002-AC-2")]
     fn tc004_generated_presentation_text_cannot_mutate_checked_semantics(
         presentation in "[A-Za-z0-9 _-]{1,32}",
+        kind_case in 0_u8..3,
     ) {
         let lock = validated_lock();
         let view = view_with(projection(false, false), limits());
@@ -543,8 +545,15 @@ proptest! {
         let requested = obligation("generated-presentation", "root", Some(64));
         let bytes = presentation.into_bytes();
         let end = u64::try_from(bytes.len()).unwrap();
+        let kind = match kind_case {
+            0 => ConsumerKind::Renderer,
+            1 => ConsumerKind::Analyzer,
+            _ => ConsumerKind::CodeGenerator,
+        };
+        let mut consumer_manifest = manifest(&["generated-presentation"]);
+        consumer_manifest.kind = kind;
         let mut consumer = TestConsumer::new(
-            manifest(&["generated-presentation"]),
+            consumer_manifest,
             vec![completion(
                 &requested,
                 ConsumerOutput::Generated {
@@ -554,8 +563,10 @@ proptest! {
                 },
             )],
         );
+        let mut consumer_request = request(vec![requested]);
+        consumer_request.kind = kind;
         let run = ConsumerCoordinator::new(limits())
-            .consume(&lock, &view, &request(vec![requested]), &mut consumer)
+            .consume(&lock, &view, &consumer_request, &mut consumer)
             .unwrap();
         let generated = matches!(run.records()[0].outcome, AccountingOutcome::Generated { .. });
         prop_assert!(generated, "generated presentation lost its facade state");
@@ -854,7 +865,7 @@ fn tc004_exact_bounds_complete_and_one_over_has_exact_frontier() {
 }
 
 #[test]
-#[trace("TC-004", "FR-004-AC-3", "FR-004-AC-4")]
+#[trace("TC-004", "TC-007", "FR-004-AC-3", "FR-004-AC-4")]
 fn tc004_feature_local_retention_and_invocation_limits_are_exact() {
     let lock = validated_lock();
 
@@ -1131,7 +1142,7 @@ fn tc004_feature_local_retention_and_invocation_limits_are_exact() {
 }
 
 #[test]
-#[trace("TC-004", "FR-004-AC-3", "FR-004-AC-4")]
+#[trace("TC-004", "TC-007", "FR-004-AC-3", "FR-004-AC-4", "NFR-001-AC-3")]
 fn tc004_post_finalization_deadline_is_accounted_for_every_prior_state() {
     let lock = validated_lock();
     let view = view_with(projection(false, false), limits());
@@ -1782,7 +1793,7 @@ fn tc004_presentation_and_parser_metamorphisms_do_not_change_semantics() {
 }
 
 #[test]
-#[trace("TC-004", "FR-004-AC-6")]
+#[trace("TC-004", "TC-008", "FR-004-AC-6", "NFR-002-AC-2")]
 fn tc004_facade_types_do_not_implement_owner_promotion_traits() {
     macro_rules! assert_not_impl {
         ($subject:ty: $promotes:path) => {{
@@ -1798,4 +1809,11 @@ fn tc004_facade_types_do_not_implement_owner_promotion_traits() {
 
     assert_not_impl!(ConsumerRun: Into<OwnerPackage>);
     assert_not_impl!(AccountingRecord: Into<ReaderProjection>);
+    assert_not_impl!(ConsumerRun: quire_integration::ProducerCapability);
+    assert_not_impl!(ConsumerRun: quire_integration::PersistenceCapability);
+    assert_not_impl!(ConsumerRun: quire_integration::EvidenceIntakeCapability);
+    assert_not_impl!(ConsumerRun: quire_integration::DecisionCapability);
+    assert_not_impl!(ConsumerRun: quire_integration::effect_reconciliation::AuthorizedEffectAdapter);
+    assert_not_impl!(AccountingRecord: quire_integration::ProducerCapability);
+    assert_not_impl!(AccountingRecord: quire_integration::DecisionCapability);
 }

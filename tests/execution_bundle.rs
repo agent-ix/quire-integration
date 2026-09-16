@@ -4,6 +4,11 @@
 //! TC-002: independent, canonical, exact-producer execution bundles.
 
 use std::cell::Cell;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc,
+};
+use std::time::Duration;
 
 use ix_trace_rs::trace;
 use proptest::prelude::*;
@@ -13,8 +18,8 @@ use quire_integration::ecosystem_lock::{
 };
 use quire_integration::execution_bundle::{
     BundleDisposition, BundleErrorCode, Coordinator, Domain, ExecutionBundle, ExecutionLimits,
-    ExecutionProducer, ExecutionRequest, ItemKey, ItemRequest, NoResultCause, OwnerResult,
-    ResultAxes, SharedPrerequisites, StrictReadContext, StrictReader,
+    ExecutionProducer, ExecutionRequest, ItemKey, ItemRequest, MonotonicClock, NoResultCause,
+    OwnerResult, ReaderRefusal, ResultAxes, SharedPrerequisites, StrictReadContext, StrictReader,
 };
 use quire_integration::{
     ArtifactId, Budget, BuildId, ComponentId, ContractId, DefinitionId, DeploymentId, Disposition,
@@ -23,6 +28,7 @@ use quire_integration::{
 use sha2::{Digest as _, Sha256};
 
 const ID_LIMIT: u64 = 128;
+const DURATION_MS: u64 = 10_000;
 
 trait FixtureIdentity: Sized {
     fn fixture_new(value: &str, maximum: u64) -> quire_integration::Result<Self>;
@@ -174,7 +180,8 @@ fn validated_lock() -> quire_integration::ecosystem_lock::ValidatedLock {
         ],
         vec![],
     );
-    let limits = Limits::for_selection(&selection, 64 * 1024, ID_LIMIT).expect("lock limits");
+    let limits =
+        Limits::for_selection(&selection, 64 * 1024, ID_LIMIT, 10_000).expect("lock limits");
     validate(&selection, limits).expect("validated exact lock")
 }
 
@@ -325,21 +332,151 @@ struct Producer {
     selection: CapabilitySelection,
 }
 
-impl ExecutionProducer<Vec<u8>> for Producer {
+#[derive(Debug, Default)]
+struct ManualClock(AtomicU64);
+
+impl ManualClock {
+    fn set(&self, millis: u64) {
+        self.0.store(millis, Ordering::SeqCst);
+    }
+}
+
+impl MonotonicClock for ManualClock {
+    fn now(&self) -> Duration {
+        Duration::from_millis(self.0.load(Ordering::SeqCst))
+    }
+}
+
+#[derive(Debug, Default)]
+struct StepClock(AtomicU64);
+
+impl MonotonicClock for StepClock {
+    fn now(&self) -> Duration {
+        Duration::from_millis(self.0.fetch_add(1, Ordering::SeqCst))
+    }
+}
+
+#[derive(Debug, Default)]
+struct SwitchClock {
+    millis: AtomicU64,
+    ticking: AtomicBool,
+}
+
+impl SwitchClock {
+    fn enable(&self) {
+        self.ticking.store(true, Ordering::SeqCst);
+    }
+}
+
+impl MonotonicClock for SwitchClock {
+    fn now(&self) -> Duration {
+        let millis = if self.ticking.load(Ordering::SeqCst) {
+            self.millis.fetch_add(1, Ordering::SeqCst)
+        } else {
+            self.millis.load(Ordering::SeqCst)
+        };
+        Duration::from_millis(millis)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum DeadlineReaderOutcome {
+    Success,
+    Malformed,
+    Resource,
+}
+
+struct DeadlineReader {
+    calls: Cell<u64>,
+    selection: CapabilitySelection,
+    artifact: ArtifactId,
+    clock: Arc<ManualClock>,
+    advance_to_ms: u64,
+    outcome: DeadlineReaderOutcome,
+}
+
+impl StrictReader for DeadlineReader {
+    type Checked = Vec<u8>;
+
+    fn selection(&self) -> &CapabilitySelection {
+        &self.selection
+    }
+
+    fn read(
+        &self,
+        context: StrictReadContext<'_>,
+        artifact: &[u8],
+        _meter: &mut Meter,
+    ) -> Result<Self::Checked, ReaderRefusal> {
+        assert_eq!(context.artifact(), &self.artifact);
+        assert!(context.remaining_duration_ms() <= DURATION_MS);
+        self.calls.set(self.calls.get() + 1);
+        self.clock.set(self.advance_to_ms);
+        match self.outcome {
+            DeadlineReaderOutcome::Success => Ok(artifact.to_vec()),
+            DeadlineReaderOutcome::Malformed => Err(ReaderRefusal::malformed("deadline reader")),
+            DeadlineReaderOutcome::Resource => {
+                let error = Meter::new(Budget::new(0, 0, 0, 0, 0, 0, 0))
+                    .consume_input_bytes(1)
+                    .expect_err("zero input budget refuses one byte");
+                Err(ReaderRefusal::resource(error))
+            }
+        }
+    }
+}
+
+struct DeadlineProducer {
+    calls: Cell<u64>,
+    remaining_ms: Cell<u64>,
+    selection: CapabilitySelection,
+    clock: Arc<ManualClock>,
+    advance_to_ms: u64,
+}
+
+impl ExecutionProducer for DeadlineProducer {
+    type Checked = Vec<u8>;
+
     fn selection(&self) -> &CapabilitySelection {
         &self.selection
     }
 
     fn evaluate(
         &self,
-        admission: quire_integration::ecosystem_lock::AdmittedCapability<'_>,
+        permit: &quire_integration::execution_bundle::ExecutionPermit<'_>,
+        checked: &Self::Checked,
+        _meter: &mut Meter,
+        limits: ExecutionLimits,
+    ) -> Result<OwnerResult, quire_integration::execution_bundle::ProducerFailure> {
+        self.calls.set(self.calls.get() + 1);
+        self.remaining_ms.set(permit.remaining_duration_ms());
+        self.clock.set(self.advance_to_ms);
+        OwnerResult::new(
+            Disposition::Completed,
+            checked,
+            axes("deadline"),
+            limits.max_result_bytes(),
+        )
+        .map_err(quire_integration::execution_bundle::ProducerFailure::boundary)
+    }
+}
+
+impl ExecutionProducer for Producer {
+    type Checked = Vec<u8>;
+
+    fn selection(&self) -> &CapabilitySelection {
+        &self.selection
+    }
+
+    fn evaluate(
+        &self,
+        permit: &quire_integration::execution_bundle::ExecutionPermit<'_>,
         checked: &Vec<u8>,
         meter: &mut Meter,
         limits: ExecutionLimits,
     ) -> Result<OwnerResult, quire_integration::execution_bundle::ProducerFailure> {
-        assert_eq!(admission.contract(), "quire.execution.owner/v1");
-        assert_eq!(admission.package(), "owner");
-        assert_eq!(admission.features(), &["default"]);
+        assert_eq!(permit.admission().contract(), "quire.execution.owner/v1");
+        assert_eq!(permit.admission().package(), "owner");
+        assert_eq!(permit.admission().features(), &["default"]);
         self.calls.set(self.calls.get() + 1);
         meter
             .consume_duration_millis(1)
@@ -387,7 +524,7 @@ fn execute(
 }
 
 #[test]
-#[trace("TC-002", "FR-002-AC-1", "FR-002-AC-3")]
+#[trace("TC-002", "TC-007", "FR-002-AC-1", "FR-002-AC-3")]
 fn tc002_requested_items_execute_once_and_completion_order_cannot_change_bytes() {
     let lock = validated_lock();
     let build = |workflow: &str, items: &[ItemRequest], order: &[usize]| {
@@ -396,6 +533,7 @@ fn tc002_requested_items_execute_once_and_completion_order_cannot_change_bytes()
             request_for(workflow, items.to_vec()),
             prerequisites(),
             limits(6, 128, 64 * 1024),
+            DURATION_MS,
         )
         .expect("coordinator");
         for index in order {
@@ -445,7 +583,7 @@ fn tc002_requested_items_execute_once_and_completion_order_cannot_change_bytes()
 
 proptest! {
     #[test]
-    #[trace("TC-002", "FR-002-AC-2")]
+    #[trace("TC-002", "TC-007", "FR-002-AC-2")]
     fn tc002_bundle_disposition_is_total_and_does_not_relabel_siblings(
         left in 0_u8..9,
         right in 0_u8..9,
@@ -469,6 +607,7 @@ proptest! {
             request(items.clone()),
             prerequisites(),
             limits(2, 128, 64 * 1024),
+            DURATION_MS,
         ).unwrap();
         for (item, disposition) in items.iter().zip(dispositions) {
             if disposition == Disposition::Completed
@@ -510,6 +649,7 @@ fn tc002_owner_bytes_and_every_independent_axis_are_preserved() {
         request(vec![selected.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     execute(
@@ -533,7 +673,7 @@ fn tc002_owner_bytes_and_every_independent_axis_are_preserved() {
 }
 
 #[test]
-#[trace("TC-002", "FR-002-AC-2")]
+#[trace("TC-002", "TC-007", "FR-002-AC-2")]
 fn tc002_post_invocation_resource_failure_remains_an_executed_failure() {
     let selected = item(Domain::Analysis, "analysis:refund");
     let lock = validated_lock();
@@ -555,6 +695,7 @@ fn tc002_post_invocation_resource_failure_remains_an_executed_failure() {
         request(vec![selected.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     coordinator
@@ -578,7 +719,239 @@ fn tc002_post_invocation_resource_failure_remains_an_executed_failure() {
 }
 
 #[test]
-#[trace("TC-002", "FR-002-AC-4")]
+#[trace("TC-007", "NFR-001-AC-2")]
+fn tc007_invocation_exhaustion_preserves_completed_and_names_unexecuted_siblings() {
+    let completed = item(Domain::State, "state:refund");
+    let exhausted = item(Domain::Temporal, "temporal:refund");
+    let pending = item(Domain::Analysis, "analysis:refund");
+    let lock = validated_lock();
+    let mut coordinator = Coordinator::new(
+        &lock,
+        request(vec![completed.clone(), exhausted.clone(), pending.clone()]),
+        prerequisites(),
+        limits(3, 128, 64 * 1024),
+        DURATION_MS,
+    )
+    .expect("bounded coordinator");
+
+    execute(
+        &mut coordinator,
+        &completed,
+        Disposition::Completed,
+        "retained-completion",
+    );
+
+    let reader = Reader {
+        calls: Cell::new(0),
+        reject: false,
+        selection: capability(),
+        artifact: exhausted.artifact().clone(),
+    };
+    let producer = Producer {
+        calls: Cell::new(0),
+        disposition: Disposition::Completed,
+        label: "must-not-run",
+        selection: capability(),
+    };
+    coordinator
+        .execute(
+            exhausted.key(),
+            exhausted.artifact(),
+            b"checked",
+            &reader,
+            &producer,
+            &mut meter(0),
+        )
+        .expect("item-local invocation exhaustion is accounted");
+    assert_eq!(reader.calls.get(), 1);
+    assert_eq!(producer.calls.get(), 0);
+
+    let bundle = finish_bundle(coordinator);
+    let completed_result = bundle
+        .items()
+        .iter()
+        .find(|result| result.key() == completed.key())
+        .expect("completed sibling retained");
+    assert_eq!(completed_result.disposition(), Disposition::Completed);
+    assert_eq!(
+        completed_result.owner_bytes(),
+        Some(b"retained-completion".as_slice())
+    );
+    let exhausted_result = bundle
+        .items()
+        .iter()
+        .find(|result| result.key() == exhausted.key())
+        .expect("exhausted sibling retained");
+    assert_eq!(exhausted_result.disposition(), Disposition::Unexecuted);
+    assert_eq!(
+        exhausted_result.cause(),
+        Some(NoResultCause::ResourceExhausted)
+    );
+    let pending_result = bundle
+        .items()
+        .iter()
+        .find(|result| result.key() == pending.key())
+        .expect("not-reached sibling retained");
+    assert_eq!(pending_result.disposition(), Disposition::Unexecuted);
+    assert_eq!(pending_result.cause(), Some(NoResultCause::NotInvoked));
+}
+
+#[test]
+#[trace("TC-007", "NFR-001-AC-3")]
+fn tc007_execution_deadline_covers_constructor_reader_producer_and_finalization() {
+    let lock = validated_lock();
+    let selected = item(Domain::State, "state:refund");
+
+    let constructor_error = match Coordinator::with_monotonic_clock(
+        &lock,
+        request(vec![selected.clone()]),
+        prerequisites(),
+        limits(1, 128, 64 * 1024),
+        3,
+        Arc::new(StepClock::default()),
+    ) {
+        Ok(_) => panic!("constructor work must consume its operational deadline"),
+        Err(error) => error,
+    };
+    assert_eq!(constructor_error.code(), BundleErrorCode::DurationExpired);
+
+    for outcome in [
+        DeadlineReaderOutcome::Success,
+        DeadlineReaderOutcome::Malformed,
+        DeadlineReaderOutcome::Resource,
+    ] {
+        let clock = Arc::new(ManualClock::default());
+        let reader = DeadlineReader {
+            calls: Cell::new(0),
+            selection: capability(),
+            artifact: selected.artifact().clone(),
+            clock: clock.clone(),
+            advance_to_ms: DURATION_MS,
+            outcome,
+        };
+        let producer = DeadlineProducer {
+            calls: Cell::new(0),
+            remaining_ms: Cell::new(0),
+            selection: capability(),
+            clock: clock.clone(),
+            advance_to_ms: DURATION_MS,
+        };
+        let mut coordinator = Coordinator::with_monotonic_clock(
+            &lock,
+            request(vec![selected.clone()]),
+            prerequisites(),
+            limits(1, 128, 64 * 1024),
+            DURATION_MS,
+            clock,
+        )
+        .expect("manual clock starts within the deadline");
+        coordinator
+            .execute(
+                selected.key(),
+                selected.artifact(),
+                b"checked",
+                &reader,
+                &producer,
+                &mut meter(1),
+            )
+            .expect("deadline is an attributable item-local outcome");
+        assert_eq!(reader.calls.get(), 1);
+        assert_eq!(producer.calls.get(), 0);
+        let bundle = finish_bundle(coordinator);
+        assert_eq!(bundle.items()[0].disposition(), Disposition::Unexecuted);
+        assert_eq!(
+            bundle.items()[0].cause(),
+            Some(NoResultCause::DeadlineExpired)
+        );
+    }
+
+    let clock = Arc::new(ManualClock::default());
+    let reader = DeadlineReader {
+        calls: Cell::new(0),
+        selection: capability(),
+        artifact: selected.artifact().clone(),
+        clock: clock.clone(),
+        advance_to_ms: 1,
+        outcome: DeadlineReaderOutcome::Success,
+    };
+    let producer = DeadlineProducer {
+        calls: Cell::new(0),
+        remaining_ms: Cell::new(0),
+        selection: capability(),
+        clock: clock.clone(),
+        advance_to_ms: DURATION_MS,
+    };
+    let mut coordinator = Coordinator::with_monotonic_clock(
+        &lock,
+        request(vec![selected.clone()]),
+        prerequisites(),
+        limits(1, 128, 64 * 1024),
+        DURATION_MS,
+        clock,
+    )
+    .expect("manual clock starts within the deadline");
+    coordinator
+        .execute(
+            selected.key(),
+            selected.artifact(),
+            b"checked",
+            &reader,
+            &producer,
+            &mut meter(1),
+        )
+        .expect("producer deadline is an attributable item-local outcome");
+    assert_eq!(reader.calls.get(), 1);
+    assert_eq!(producer.calls.get(), 1);
+    assert_eq!(producer.remaining_ms.get(), DURATION_MS - 1);
+    let bundle = finish_bundle(coordinator);
+    assert_eq!(bundle.items()[0].disposition(), Disposition::Failed);
+    assert_eq!(
+        bundle.items()[0].cause(),
+        Some(NoResultCause::ProducerDeadlineExpired)
+    );
+
+    let clock = Arc::new(ManualClock::default());
+    let coordinator = Coordinator::with_monotonic_clock(
+        &lock,
+        request(vec![selected]),
+        prerequisites(),
+        limits(1, 128, 64 * 1024),
+        DURATION_MS,
+        clock.clone(),
+    )
+    .expect("manual clock starts within the deadline");
+    clock.set(DURATION_MS);
+    let bundle = finish_bundle(coordinator);
+    assert_eq!(
+        bundle.items()[0].cause(),
+        Some(NoResultCause::DeadlineExpired)
+    );
+
+    let selected = item(Domain::State, "state:refund");
+    let clock = Arc::new(SwitchClock::default());
+    let mut coordinator = Coordinator::with_monotonic_clock(
+        &lock,
+        request(vec![selected.clone()]),
+        prerequisites(),
+        limits(1, 128, 64 * 1024),
+        10,
+        clock.clone(),
+    )
+    .expect("stationary clock admits constructor work");
+    execute(
+        &mut coordinator,
+        &selected,
+        Disposition::Completed,
+        "serialization-deadline",
+    );
+    clock.enable();
+    let refusal = finish_result(coordinator)
+        .expect_err("canonical serialization must remain inside the operational deadline");
+    assert_eq!(refusal.code(), BundleErrorCode::DurationExpired);
+}
+
+#[test]
+#[trace("TC-002", "TC-007", "FR-002-AC-4")]
 fn tc002_shared_contradiction_names_exact_affected_items_and_keeps_other_evidence() {
     let unaffected = item(Domain::Analysis, "analysis:refund");
     let mut affected = item(Domain::Backend, "backend:refund");
@@ -600,6 +973,7 @@ fn tc002_shared_contradiction_names_exact_affected_items_and_keeps_other_evidenc
         ]),
         prerequisites(),
         limits(3, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     execute(
@@ -708,6 +1082,7 @@ fn tc002_unknown_capability_and_strict_reader_refusal_never_invoke_a_producer() 
         request(vec![wrong.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     coordinator
@@ -744,6 +1119,7 @@ fn tc002_unknown_capability_and_strict_reader_refusal_never_invoke_a_producer() 
         request(vec![selected.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     coordinator
@@ -780,6 +1156,7 @@ fn tc002_unknown_capability_and_strict_reader_refusal_never_invoke_a_producer() 
         request(vec![selected.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     coordinator
@@ -800,6 +1177,7 @@ fn tc002_unknown_capability_and_strict_reader_refusal_never_invoke_a_producer() 
         request_for_package("other", "refund:fixture", vec![selected.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     coordinator
@@ -837,6 +1215,7 @@ fn tc002_unknown_capability_and_strict_reader_refusal_never_invoke_a_producer() 
         request(vec![selected.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     coordinator
@@ -867,6 +1246,7 @@ fn tc002_missing_and_duplicate_completions_are_explicit_without_fallback() {
         request(vec![selected.clone()]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     coordinator
@@ -891,6 +1271,7 @@ fn tc002_missing_and_duplicate_completions_are_explicit_without_fallback() {
         request(vec![pending]),
         prerequisites(),
         limits(1, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     let bundle = finish_bundle(coordinator);
@@ -899,7 +1280,7 @@ fn tc002_missing_and_duplicate_completions_are_explicit_without_fallback() {
 }
 
 #[test]
-#[trace("TC-002", "FR-002-AC-1")]
+#[trace("TC-002", "TC-007", "FR-002-AC-1")]
 fn tc002_item_result_and_output_bounds_admit_exact_and_refuse_one_over() {
     let selected = item(Domain::State, "state:bounded");
     let lock = validated_lock();
@@ -929,6 +1310,7 @@ fn tc002_item_result_and_output_bounds_admit_exact_and_refuse_one_over() {
         foreign_request,
         prerequisites(),
         limits(1, 4, 64 * 1024),
+        DURATION_MS,
     ) {
         Ok(_) => panic!("package absent from lock must refuse before dispatch"),
         Err(refusal) => refusal,
@@ -940,11 +1322,80 @@ fn tc002_item_result_and_output_bounds_admit_exact_and_refuse_one_over() {
         unlocked_request,
         prerequisites(),
         limits(1, 4, 64 * 1024),
+        DURATION_MS,
     ) {
         Ok(_) => panic!("definition absent from lock must refuse before dispatch"),
         Err(refusal) => refusal,
     };
     assert_eq!(unlocked_refusal.code(), BundleErrorCode::UnknownItem);
+    let reader = Reader {
+        calls: Cell::new(0),
+        reject: false,
+        selection: capability(),
+        artifact: selected.artifact().clone(),
+    };
+    let producer = Producer {
+        calls: Cell::new(0),
+        disposition: Disposition::Completed,
+        label: "must-not-run",
+        selection: capability(),
+    };
+    let mut artifact_exact = Coordinator::new(
+        &lock,
+        request(vec![selected.clone()]),
+        prerequisites(),
+        limits_with_artifact(1, 128, 128, 64 * 1024),
+        DURATION_MS,
+    )
+    .expect("artifact ceiling is enforced per item");
+    artifact_exact
+        .execute(
+            selected.key(),
+            selected.artifact(),
+            &[b'x'; 128],
+            &reader,
+            &producer,
+            &mut meter(1),
+        )
+        .expect("exact artifact bound executes");
+    assert_eq!(reader.calls.get(), 1);
+    assert_eq!(producer.calls.get(), 1);
+    assert_eq!(
+        finish_bundle(artifact_exact).items()[0].disposition(),
+        Disposition::Completed
+    );
+
+    reader.calls.set(0);
+    producer.calls.set(0);
+    let mut artifact_one_over = Coordinator::new(
+        &lock,
+        request(vec![selected.clone()]),
+        prerequisites(),
+        limits_with_artifact(1, 128, 128, 64 * 1024),
+        DURATION_MS,
+    )
+    .expect("artifact ceiling is enforced per item");
+    artifact_one_over
+        .execute(
+            selected.key(),
+            selected.artifact(),
+            &[b'x'; 129],
+            &reader,
+            &producer,
+            &mut meter(1),
+        )
+        .expect("one-over artifact is an explicit item-local outcome");
+    assert_eq!(reader.calls.get(), 0);
+    assert_eq!(producer.calls.get(), 0);
+    let one_over_bundle = finish_bundle(artifact_one_over);
+    assert_eq!(
+        one_over_bundle.items()[0].disposition(),
+        Disposition::Unexecuted
+    );
+    assert_eq!(
+        one_over_bundle.items()[0].cause(),
+        Some(NoResultCause::ResourceExhausted)
+    );
     let build = |output_ceiling| {
         let reader = Reader {
             calls: Cell::new(0),
@@ -963,6 +1414,7 @@ fn tc002_item_result_and_output_bounds_admit_exact_and_refuse_one_over() {
             request(vec![selected.clone()]),
             prerequisites(),
             limits(1, 4, output_ceiling),
+            DURATION_MS,
         )
         .unwrap();
         coordinator
@@ -1021,6 +1473,7 @@ fn tc002_bundle_reader_rejects_unknown_fields_and_noncanonical_item_order() {
         request(items.clone()),
         prerequisites(),
         limits(3, 128, 64 * 1024),
+        DURATION_MS,
     )
     .unwrap();
     execute(&mut coordinator, &items[0], Disposition::Completed, "state");
@@ -1172,6 +1625,7 @@ fn tc002_bundle_reader_rejects_unknown_fields_and_noncanonical_item_order() {
         request(vec![compact_item.clone()]),
         prerequisites(),
         compact_limits,
+        DURATION_MS,
     )
     .expect("all caller-owned strings fit the compact ceiling");
     execute(
