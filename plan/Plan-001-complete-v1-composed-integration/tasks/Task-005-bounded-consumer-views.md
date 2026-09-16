@@ -2,7 +2,7 @@
 id: Task-005
 title: "FR-004 — bounded deterministic consumer views"
 type: Task
-status: not_started
+status: done
 track: C
 priority: P0
 relationships:
@@ -22,16 +22,18 @@ without allowing presentation or generated artifacts to become authority.
 
 ## Subtasks
 
-- [ ] Write TC-004 determinism, frontier, unsupported and authority-isolation tests first.
-- [ ] Traverse only selected typed relations from the exact qualified root.
-- [ ] Stop before bounds and report the exact omitted frontier.
-- [ ] Map every output region/finding/artifact to exact source and semantic identities.
-- [ ] Preserve displayed/omitted/generated/unsupported/requires-bound/invalid/failed states.
+- [x] Write TC-004 determinism, frontier, state-axis and authority-isolation tests first.
+- [x] Validate one owner-produced checked projection and closed query under the exact lock.
+- [x] Traverse only selected typed relations by canonical breadth-first order.
+- [x] Stop before bounds and report exact usage plus the immediate pending frontier.
+- [x] Map every output region/finding/artifact to exact source and semantic identities.
+- [x] Preserve aggregate, facade-item and owner mapping-loss axes without translation.
+- [x] Enforce pure consumer admission, complete obligation accounting and no promotion.
 
 ## Deliverables
 
 - View/query and consumer-accounting modules with trace-tagged property tests.
-- Canonical mapping/loss records and no substitute artifacts.
+- Canonical feature-local facade accounting/loss records and no substitute artifacts.
 
 ## Notes
 

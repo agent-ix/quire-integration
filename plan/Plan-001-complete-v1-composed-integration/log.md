@@ -7,6 +7,14 @@ description: "Chronological log of changes to the Plan-001 bundle."
 
 ## History
 
+* **2026-09-16** — Completed Task-005 and FR-004 with a canonical bounded semantic-view
+  traversal, exact immediate frontier and usage accounting, coordinator-owned bounded
+  consumer output sink, independent aggregate/facade/mapping-loss axes, strict source and
+  semantic attribution, closed UTF-8/binary region rules, and compile-time authority
+  isolation. TC-004 supplies generated permutation, exact/one-over, adverse-phase,
+  metamorphic, deadline and no-promotion evidence. Independent Rust review SR-033 and gap
+  analysis SR-034 pass; real owner-contract adapters remain assigned to Task-010/IT-003.
+
 * **2026-09-15** — Completed Task-003 and FR-002 with exact typed strict-reader and producer
   dispatch, canonical six-domain execution bundles, opaque owner bytes and independent axes,
   total sibling rollup, derived shared-prerequisite refusal, field-aware resource preflight

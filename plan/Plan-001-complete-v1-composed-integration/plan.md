@@ -41,7 +41,7 @@ make a release decision.
 - [x] **FR-001**: validate one exact canonical ecosystem lock before invocation.
 - [x] **FR-002**: compose every requested independent domain result exactly once.
 - [x] **FR-003**: persist, dispatch and reconcile authorized idempotent effect requests.
-- [ ] **FR-004**: compose bounded deterministic views and consumer accounting.
+- [x] **FR-004**: compose bounded deterministic views and consumer accounting.
 - [ ] **FR-005**: classify compatibility impact and stale evidence independently.
 - [ ] **FR-006**: record every required complete-V1 qualification cell and vector.
 
@@ -95,10 +95,10 @@ hold either adapter capability.
   and pre-invocation refusals for FR-001-AC-1 through FR-001-AC-5.
 - [x] **TC-002**: exact result multiplicity, sibling dispositions, completion-order
   metamorphisms, shared contradictions and unsupported producers for FR-002-AC-1..5.
-- [ ] **TC-003**: persist-before-dispatch, crash/reconcile, authority abuse, key conflict and
+- [x] **TC-003**: persist-before-dispatch, crash/reconcile, authority abuse, key conflict and
   receipt/effect separation for FR-003-AC-1 through FR-003-AC-5.
-- [ ] **TC-004**: deterministic bounded views, identity maps, exact frontiers and consumer
-  accounting for FR-004-AC-1 through FR-004-AC-5.
+- [x] **TC-004**: deterministic bounded views, identity maps, exact frontiers, distinct
+  state axes and consumer accounting for FR-004-AC-1 through FR-004-AC-6.
 - [ ] **TC-005**: four impact classes, explicit paths, cycles/unknowns, stale evidence and
   regression-vector selection for FR-005-AC-1 through FR-005-AC-5.
 - [ ] **TC-006**: 176-cell inventory accounting, no-promotion rollups, reproducible run
@@ -191,7 +191,7 @@ Task-001 -> Task-002 -> Task-003 -> Task-008 --\
 | Task-002 | S | FR-001 | TC-001 | done |
 | Task-003 | A | FR-002 | TC-002 | done |
 | Task-004 | B | FR-003 | TC-003, TC-009, TC-011 | done |
-| Task-005 | C | FR-004 | TC-004 | not_started |
+| Task-005 | C | FR-004 | TC-004 | done |
 | Task-006 | D | FR-005 | TC-005 | not_started |
 | Task-007 | G | NFR-001, NFR-002 | TC-007..TC-011 | not_started |
 | Task-008 | I1 | FR-001, FR-002 | IT-001 | not_started |

@@ -49,7 +49,7 @@ relationships:
 | FR-002 | FR-002-AC-1..FR-002-AC-5 | TC-002 | ✅ passed |
 | FR-003 | FR-003-AC-1..FR-003-AC-5 | TC-003 | 🚧 planned |
 | FR-003 | FR-003-AC-6 | TC-009 | 🚧 planned |
-| FR-004 | FR-004-AC-1..FR-004-AC-5 | TC-004 | 🚧 planned |
+| FR-004 | FR-004-AC-1..FR-004-AC-6 | TC-004 | ✅ passed |
 | FR-005 | FR-005-AC-1..FR-005-AC-5 | TC-005 | 🚧 planned |
 | FR-006 | FR-006-AC-1..FR-006-AC-6 | TC-006 | 🚧 planned |
 
@@ -69,7 +69,7 @@ relationships:
 | TC-001 | Validate exact ecosystem locks | Property | P0 | FR-001-AC-1..FR-001-AC-5 | ✅ passed |
 | TC-002 | Compose independent domain results | Property | P0 | StR-001-VC-1, FR-002-AC-1..FR-002-AC-5 | ✅ passed |
 | TC-003 | Reconcile authorized persistent effects | Integration | P0 | StR-001-VC-2, FR-003-AC-1..FR-003-AC-5 | 🚧 planned |
-| TC-004 | Compose bounded deterministic consumers | Property | P0 | StR-001-VC-3, FR-004-AC-1..FR-004-AC-5 | 🚧 planned |
+| TC-004 | Compose bounded deterministic consumers | Property | P0 | StR-001-VC-3, FR-004-AC-1..FR-004-AC-6 | ✅ passed |
 | TC-005 | Classify compatibility and stale evidence | Property | P0 | StR-001-VC-3, FR-005-AC-1..FR-005-AC-5 | 🚧 planned |
 | TC-006 | Qualify every required integration vector | Integration | P0 | StR-001-VC-4, FR-006-AC-1..FR-006-AC-6 | 🚧 planned |
 | TC-007 | Bound and reproduce composed execution | Property | P0 | NFR-001-AC-2 | 🚧 planned |
@@ -85,7 +85,7 @@ relationships:
 | TC-001 | identity domain: repository/package/definition/provider/toolchain/build/deployment/role | pin state: exact/missing/duplicate/stale/dirty/moving | graph state: compatible/incompatible/unknown/cyclic | accept only one complete exact lock and preserve every classification |
 | TC-002 | workflow: ConfigVersion/timed-refund/compensated choreography | result: completed/unsupported/incomplete/refused/failed/unexecuted | completion order: canonical/permuted | preserve each requested owner result exactly once in canonical bytes and roll up `Failed > Refused > Incomplete > Completed` without relabeling siblings |
 | TC-003 | authority: valid/missing/expired/mismatched/over-broad | request: fresh/exact replay/conflicting replay | failure point: before persistence/after persistence/after adapter acceptance | dispatch only persisted authorized requests and reconcile one effect identity |
-| TC-004 | consumer: view/renderer/analyzer/codegen | obligation: supported/unsupported/requires-bound/failed | limit: exact/one-over | account for every item without promoting output to semantic authority |
+| TC-004 | consumer: view/renderer/analyzer/codegen | item: displayed/omitted/generated/unsupported/requires-bound/invalid/failed; mapping loss: preserved/conditional/unrepresented/refused | limit: exact/one-over | account for every item without translating state axes or promoting output to semantic authority |
 | TC-005 | change: additive/payload break/behavioral-only/absent | graph: resolved/cyclic/unresolved/foreign | vector: available/unavailable/unsupported | retain exact impact paths and explicit evidence states |
 | TC-006 | surface: API/CLI/WASM/workflow/provider/backend/intake | vector: passed/failed/unsupported/incomplete/refused/waived/unexecuted | decision: absent/accept/reject/accept-with-limits | complete only the exact supported evidence scope |
 
@@ -99,8 +99,10 @@ relationships:
 | lock collection limits | above maximum | effective limit + 1 | TC-001 | refusal before allocation or traversal |
 | execution result count | exact | requested item count | TC-002 | every item appears once |
 | execution result count | duplicate | one duplicated result identity | TC-002 | typed contradiction |
-| view traversal/output | maximum | exact effective bound | TC-004 | complete result |
-| view traversal/output | above maximum | effective bound + 1 | TC-004 | incomplete with exact frontier |
+| view traversal/result | maximum | exact effective bound | TC-004 | complete result |
+| view traversal/result | above maximum | effective bound + 1 | TC-004 | incomplete with exact immediate frontier |
+| view frontier/accounting | above maximum | effective bound + 1 | TC-004 | typed refusal with no partial completeness claim |
+| consumer output | above maximum | effective bound + 1 | TC-004 | incomplete accounting with no partial plausible package |
 | dependency traversal | cycle boundary | first repeated identity | TC-005 | finite unknown path, never compatible by default |
 | qualification inventory | exact | all 176 rows accounted | TC-006 | scoped rollup may complete |
 | qualification inventory | below exact | one required row/vector absent | TC-006 | containing scope incomplete |
@@ -112,7 +114,7 @@ relationships:
 | TC-001 | Missing/moving/dirty/unknown/cross-domain lock selection | Pre-invocation typed refusal naming the exact domain |
 | TC-002 | Producer mismatch/failure, duplicate item, or contradictory shared prerequisite | Item-local outcome or scoped composition refusal; completed siblings retained |
 | TC-003 | Persistence failure, conflicting key, uncertain delivery, unsupported adapter guarantee, or foreign observation | No unauthorized effect; `delivery-unknown` remains distinct from receipt and effect |
-| TC-004 | Foreign subject, unsupported obligation, consumer failure, or truncated traversal | Exact refused/unsupported/failed/incomplete accounting without substitute artifact |
+| TC-004 | Unknown/foreign subject, relation, filter or projection; profile/lock mismatch; unsupported or missing-bound obligation; malformed response/map; consumer failure; or truncated/output-exhausted work | Deterministic refused/unsupported/requires-bound/invalid/failed/incomplete accounting without substitute artifact |
 | TC-005 | Unknown rule, cyclic/unresolved graph, missing vector, or bound exhaustion | Explicit unknown/unavailable/unsupported/refused state, never default compatibility |
 | TC-006 | Missing cell, unavailable surface, intake refusal, stale evidence, or over-broad decision | Exact typed state; no passed or complete promotion |
 
