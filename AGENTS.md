@@ -4,6 +4,18 @@ Read this file, `README.md`, `LICENSE-DECISION.md`, `CONTENT_RIGHTS.md`, and the
 owning issues before editing. This private bootstrap implements Research #34/#74
 under integration epics #39/#40.
 
+## Hash / digest / pin antipattern: present, slated for removal
+
+This repository still contains hashes, digests, SHAs, pins, checksum catalogs and
+records that track files, versions or tools. That is an antipattern and it is slated
+for removal. Do not introduce any new use of it. When you touch code or specs that
+contain one, remove it as part of the change. The only hash that stays is a canonical
+identity digest that binds a proof to the exact content it proved. Package versions
+live in Cargo.toml / package.json and their lockfiles only; reports name the app
+version they ran.
+
+## Rules
+
 - Complete the repository-wide `/specify` and owner-selected self
   `/spec-review` cycle for C10 through C14 before production implementation.
 - First-party production, test, qualification, generator, validator, adapter,
