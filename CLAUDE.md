@@ -31,8 +31,6 @@ All checks are local. This repository intentionally has no hosted workflow, and
 
 ## Safety scaffolding
 
-Backported from `agent-ix/ecaz`:
-
 - `deny.toml` allow-lists licenses and denies unknown registries/git sources
 - `scripts/check_unsafe_comments.sh` runs locally via `make audit-unsafe`. Every `unsafe {` block must have a `// SAFETY:` comment within the 3 preceding lines, or be listed in `scripts/unsafe_comment_baseline.txt`. Update the baseline with `bash scripts/check_unsafe_comments.sh --update-baseline`.
 - `rustfmt.toml` uses 100-char width and `StdExternalCrate` import grouping. Local checks fail on drift.
