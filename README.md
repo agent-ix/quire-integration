@@ -8,8 +8,8 @@ Quire V1.
 This repository will implement the AD-008/AD-011 composed-execution boundary,
 including exact ecosystem locks, ordered execution bundles, authorized
 decision/effect-adapter coordination, deterministic model views, and the real
-IT-070 through IT-078 qualification harness. It consumes immutable versioned
-artifacts from QSL, TL, QObs, Protocol, Verification, Contract IR, and codegen.
+IT-070 through IT-078 qualification harness. It consumes artifacts from QSL,
+TL, QObs, Protocol, Verification, Contract IR, and codegen.
 
 ## Non-goals
 
@@ -43,6 +43,4 @@ make audit-unsafe
 ## License and content rights
 
 Original project content is licensed under `AGPL-3.0-or-later`. See `LICENSE`,
-`LICENSE-DECISION.md`, and `CONTENT_RIGHTS.md`. External material is prohibited
-unless its exact provenance, license or permission, attribution, approver, date,
-and distribution scope are recorded before inclusion.
+`LICENSE-DECISION.md`, and `CONTENT_RIGHTS.md`.
