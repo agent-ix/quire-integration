@@ -17,7 +17,7 @@ license. External material is prohibited by default.
 - Counsel communications, legal-review packets, or material awaiting a rights decision.
 - Private research files, internal scratch paths, or local workstation paths.
 - Protected source documents or exports, including PDF, office-document, and spreadsheet
-  files, unless a documented human approval explicitly permits the exact file.
+  files, unless a human has approved the file.
 
 These exclusions apply to ignored files, Git LFS, branches, issues, pull requests, commit
 messages, CI artifacts, and private repositories as well as the default branch.
