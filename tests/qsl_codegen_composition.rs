@@ -25,7 +25,7 @@ use quire_spec_language::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use support::{
-    bound_clause, parameter_names, public_function, public_functions, run, GeneratedCrate,
+    bound_clause, config, parameter_names, public_function, public_functions, run, GeneratedCrate,
     CONFIG_DOMAIN,
 };
 
@@ -319,6 +319,20 @@ fn actual_command_exports_selected_bytes_and_backend_generates_numeric_oracle() 
     let error = error.value().unwrap();
     assert_eq!(error["code"], "unsupported_projection");
     assert_eq!(error["details"]["profile"], "integer-ir/v1");
+
+    // A supported first clause does not leak a prefix when the later clause
+    // is the unsupported one.
+    let later = support::rule_package_with(&models, "amount < 7", "self.n < 7");
+    let refusal = lowering::lower_for(&later, TARGET, LoweringLimits::default())
+        .expect_err("a later unsupported clause refuses the whole projection");
+    assert_eq!(refusal.clause.unwrap().clause().as_str(), "other_rule");
+    write_job(directory.path(), &later, &models[0], None);
+    let error = command::lower_for(&directory.path().join("compile.json"), TARGET)
+        .expect_err("a later unsupported clause exports nothing");
+    assert_eq!(error.exit_code(), 21);
+    let error = error.value().unwrap();
+    assert_eq!(error["code"], "unsupported_projection");
+    assert_eq!(error["details"]["clause"]["clause"], "other_rule");
 }
 
 // ---------------------------------------------------------------------------
@@ -351,10 +365,12 @@ fn exported_boolean_bytes_reach_the_ir_reader_and_the_complete_backend_populatio
         .unwrap_or_else(|error| panic!("{error}"));
     assert!(!exported.ends_with(b"\n"));
 
-    // Rebuild the model from the exported model file, as a consumer would.
+    // Re-admit the model from the exported model file, re-check the program
+    // against it and lower that: the command's bytes must match.
     let model_text = fs::read_to_string(directory.path().join("model.json")).unwrap();
-    assert_eq!(model_text, models[0].source().source().text());
-    let expected = lowering::lower(&native, LoweringLimits::default()).unwrap();
+    let readmitted = [support::admit_rule_model(&model_text)];
+    let rechecked = support::rule_package(&readmitted, "true implies flag");
+    let expected = lowering::lower(&rechecked, LoweringLimits::default()).unwrap();
     assert_eq!(exported, expected.bytes());
     let consumer = ir::BoundPackage::from_json_bytes(&exported).unwrap();
     assert_eq!(consumer.digest(), expected.bound().digest());
@@ -590,11 +606,7 @@ fn main() {{
     fs::write(source_root.join("src/main.rs"), program).unwrap();
     fs::write(
         source_root.join("Cargo.toml"),
-        support::runtime_manifest(
-            "native-boolean-parity",
-            &[],
-            "proptest = { version = \"=1.5.0\", default-features = false, features = [\"std\"] }\n",
-        ),
+        support::runtime_manifest("native-boolean-parity", &[], support::PROPTEST_DEPENDENCY),
     )
     .unwrap();
 
@@ -617,7 +629,7 @@ fn main() {{
     }
     let target = root.path().join("target");
     run(Command::new(env!("CARGO"))
-        .args(["build", "--offline", "-j", "1", "--target-dir"])
+        .args(["build", "-j", "1", "--target-dir"])
         .arg(&target)
         .current_dir(&source_root)
         .env_remove("CARGO_ENCODED_RUSTFLAGS")
@@ -739,7 +751,7 @@ fn main() {{
             [true, expected]
         );
         let export = run(Command::new(env!("CARGO"))
-            .args(["llvm-cov", "report", "--json", "--offline"])
+            .args(["llvm-cov", "report", "--json"])
             .current_dir(&source_root)
             .env("CARGO_LLVM_COV_TARGET_DIR", &report_target)
             .env("LLVM_COV", llvm.join("llvm-cov"))
@@ -859,7 +871,7 @@ fn compiled_state_oracle_and_native_execute_agree_on_complete_corpus() {
     else {
         panic!("ConfigVersion has one executable state comparison")
     };
-    let clause = bound_clause(&consumer, "version_unchanged");
+    let clause = bound_clause(&consumer, config::CLAUSE);
     let generated_clause = generated
         .clauses()
         .iter()
@@ -869,10 +881,10 @@ fn compiled_state_oracle_and_native_execute_agree_on_complete_corpus() {
         serde_json::from_str(&generated_clause.bundle().source_map.contents).unwrap();
     assert!(!map.is_empty());
     assert!(map.iter().all(|region| {
-        region.package_id == "example/config-version"
-            && region.requirement_id == "VersionUnchanged"
-            && region.requirement_revision == 1
-            && region.clause_id == "version_unchanged"
+        region.package_id == config::REQUIREMENT_PACKAGE
+            && region.requirement_id == config::REQUIREMENT
+            && region.requirement_revision == config::REQUIREMENT_REVISION
+            && region.clause_id == config::CLAUSE
     }));
     let oracle = OracleExecutable::compile(&generated_clause.bundle().rust.contents);
     for pre in CORPUS {
@@ -980,12 +992,19 @@ pub fn take_observations() -> Vec<(i64, i64, bool)> {{
     instrumented
 }
 
-const CAMPAIGN_REPORT: &str = r#"quire_contract_runtime::CampaignReport::new(
+/// Generated-crate expression for an empty campaign report of the clause.
+fn campaign_report() -> String {
+    format!(
+        r#"quire_contract_runtime::CampaignReport::new(
             quire_contract_runtime::ContractIdentity::new(
-                quire_contract_runtime::RequirementId::new("VersionUnchanged"),
-                quire_contract_runtime::RevisionId::new("1"),
+                quire_contract_runtime::RequirementId::new("{}"),
+                quire_contract_runtime::RevisionId::new("{}"),
             ),
-        )"#;
+        )"#,
+        config::REQUIREMENT,
+        config::REQUIREMENT_REVISION
+    )
+}
 
 #[test]
 #[trace("IT-010-SC-02", "IT-010-SC-04")]
@@ -993,12 +1012,13 @@ fn generated_proptest_populations_execute_in_domain_with_zero_discards() {
     let models = [support::config_model()];
     let native = support::config_package(&models);
     let bound = config_bound(&native);
-    let clause = bound_clause(&bound, "version_unchanged");
+    let clause = bound_clause(&bound, config::CLAUSE);
+    let campaign_report = campaign_report();
 
     let generated_crate = GeneratedCrate::new(
         "configversion-strategies",
         &[],
-        "proptest = { version = \"=1.5.0\", default-features = false, features = [\"std\"] }\n",
+        support::PROPTEST_DEPENDENCY,
     );
     let mut root =
         String::from("#![deny(warnings)]\n//! Executed IT-010 strategy populations.\n\n");
@@ -1045,7 +1065,7 @@ fn generated_proptest_populations_execute_in_domain_with_zero_discards() {
                 r#"
     #[test]
     fn boundary_census_executes_exact_in_domain_cases() {{
-        let mut report = {CAMPAIGN_REPORT};
+        let mut report = {campaign_report};
         let summary = super::boundary::{runner}(&mut report).unwrap();
         let observed = super::boundary::take_observations();
         assert_eq!(observed.len(), usize::try_from(summary.attempted).unwrap());
@@ -1081,7 +1101,7 @@ fn generated_proptest_populations_execute_in_domain_with_zero_discards() {
             ),
         );
         let strategy = super::{module}::{strategy}();
-        let mut report = {CAMPAIGN_REPORT};
+        let mut report = {campaign_report};
         let summary = super::{module}::{runner}(&mut runner, &strategy, &mut report).unwrap();
         let observed = super::{module}::take_observations();
         assert_eq!(observed.len(), 256);

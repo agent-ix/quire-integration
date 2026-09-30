@@ -12,8 +12,8 @@
 mod support;
 
 use std::{
-    env, fs,
-    path::{Path, PathBuf},
+    fs,
+    path::Path,
     process::{Command, Output},
 };
 
@@ -23,7 +23,10 @@ use quire_contract_codegen as codegen;
 use quire_contract_ir as ir;
 use quire_spec_language::lowering::{lower_for, LoweringLimits, ProjectionTarget};
 use serde_json::json;
-use support::{bound_clause, runtime_manifest, GeneratedCrate, CONFIG_DOMAIN, RUNTIME_GIT_URL};
+use support::{
+    bound_clause, config, package_root, parameter_names, runtime_manifest, GeneratedCrate,
+    CONFIG_DOMAIN, RUNTIME_GIT_URL,
+};
 
 /// Run `bundle` plus `subject` under `cargo kani` with the bundle's own
 /// options. `runtime_patch` replaces `quire-contract-runtime` with a local
@@ -59,7 +62,6 @@ fn execute_kani(
         .arg("kani")
         .args(&graph.options)
         .env("CARGO_TARGET_DIR", generated.target())
-        .env("CARGO_NET_OFFLINE", "true")
         .current_dir(generated.path())
         .output()
         .expect("cargo kani executes")
@@ -74,7 +76,7 @@ fn transcript(output: &Output) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// IT-010-SC-05: ConfigVersion VersionUnchanged proves for the identity subject
+// IT-010-SC-05: the VersionUnchanged-shaped postcondition proves for the identity subject
 // and its counterexample replays through native execution.
 // ---------------------------------------------------------------------------
 
@@ -106,7 +108,7 @@ fn kani_proves_identity_and_counterexample_replays_natively() {
     )
     .unwrap();
     let bound = ir::BoundPackage::from_json_bytes(projection.bytes()).unwrap();
-    let clause = bound_clause(&bound, "version_unchanged");
+    let clause = bound_clause(&bound, config::CLAUSE);
     let bundle = support::absent_precondition_kani_bundle(
         clause,
         "version_unchanged_absent_precondition",
@@ -115,8 +117,8 @@ fn kani_proves_identity_and_counterexample_replays_natively() {
     let graph: codegen::ProofDependencyGraph =
         serde_json::from_str(&bundle.proof_graph.contents).unwrap();
     assert_eq!(graph.proof_id, "it-010-config-version");
-    assert_eq!(graph.requirement_id, "VersionUnchanged");
-    assert_eq!(graph.requirement_revision, 1);
+    assert_eq!(graph.requirement_id, config::REQUIREMENT);
+    assert_eq!(graph.requirement_revision, config::REQUIREMENT_REVISION);
     assert!(graph.dependencies.is_empty());
     assert_eq!(graph.subject_arguments.len(), 1);
     assert_eq!(graph.subject_results.len(), 1);
@@ -193,14 +195,6 @@ fn kani_proves_identity_and_counterexample_replays_natively() {
 /// postcondition oracle Kani discharges checks against.
 const CLAIMED_MODULES: [&str; 1] = ["PopulationRule@7/population_rule"];
 
-/// `quire_contract_runtime::operators::implies_short_circuit`'s current
-/// source, matched before mutating it so an upstream edit fails loudly
-/// instead of silently mutating nothing.
-const CONNECTIVE_HELPER_HEALTHY: &str = "pub fn implies_short_circuit<R: From<bool>>(antecedent: bool, consequent: impl FnOnce() -> R) -> R {\n    if antecedent {\n        consequent()\n    } else {\n        R::from(true)\n    }\n}";
-
-/// The mutation control: unconditionally false, ignoring both operands.
-const CONNECTIVE_HELPER_MUTATED: &str = "pub fn implies_short_circuit<R: From<bool>>(_antecedent: bool, _consequent: impl FnOnce() -> R) -> R {\n    R::from(false)\n}";
-
 /// This clause's ABI derives no subject result: the postcondition is a pure
 /// fact over the input.
 const HEALTHY_SUBJECT: &str = "pub fn subject(_amount_current: i64) {}";
@@ -260,32 +254,6 @@ fn discharged_success_checks(output: &str) -> u64 {
     panic!("Kani transcript has no '** <failed> of <total> failed' summary line:\n{output}");
 }
 
-fn cargo_home() -> PathBuf {
-    env::var_os("CARGO_HOME").map_or_else(
-        || PathBuf::from(env::var_os("HOME").expect("HOME is set")).join(".cargo"),
-        PathBuf::from,
-    )
-}
-
-/// Cargo's git checkout of `quire-contract-runtime` at `revision`, which the
-/// unmutated Kani run has already fetched.
-fn cached_runtime_checkout(revision: &str) -> PathBuf {
-    let checkouts = cargo_home().join("git/checkouts");
-    let short = &revision[..7];
-    fs::read_dir(&checkouts)
-        .unwrap_or_else(|error| panic!("cargo git checkouts {checkouts:?}: {error}"))
-        .map(|entry| entry.unwrap().path().join(short))
-        .find(|candidate| {
-            fs::read_to_string(candidate.join("Cargo.toml"))
-                .is_ok_and(|manifest| manifest.contains("name = \"quire-contract-runtime\""))
-        })
-        .unwrap_or_else(|| {
-            panic!(
-                "quire-contract-runtime@{revision} is not in cargo's git checkouts {checkouts:?}"
-            )
-        })
-}
-
 fn copy_tree(from: &Path, to: &Path) {
     fs::create_dir_all(to).unwrap();
     for entry in fs::read_dir(from).unwrap() {
@@ -299,12 +267,57 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// A throwaway copy of `quire-contract-runtime` with
-/// `operators::implies_short_circuit` mutated to return `false`. The copy
-/// keeps the manifest's features and dependencies and drops only its
+/// Byte offset of a `proc-macro2` line (1-based) / column (0-based, in
+/// characters) position in `source`.
+fn byte_offset(source: &str, position: proc_macro2::LineColumn) -> usize {
+    let line_start: usize = source
+        .split_inclusive('\n')
+        .take(position.line - 1)
+        .map(str::len)
+        .sum();
+    line_start
+        + source[line_start..]
+            .chars()
+            .take(position.column)
+            .map(char::len_utf8)
+            .sum::<usize>()
+}
+
+/// `source` with `fn implies_short_circuit`'s body replaced by
+/// `R::from(false)`, its parameters ignored.
+fn mutate_connective_helper(source: &str) -> String {
+    let file = syn::parse_file(source).expect("operators.rs is Rust");
+    let function = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Fn(function) if function.sig.ident == "implies_short_circuit" => {
+                Some(function)
+            }
+            _ => None,
+        })
+        .expect("quire-contract-runtime's operators.rs defines fn implies_short_circuit");
+    let ignored: String = parameter_names(function)
+        .iter()
+        .map(|name| format!("let _ = {name}; "))
+        .collect();
+    let body = function.block.brace_token.span.join();
+    let (start, end) = (
+        byte_offset(source, body.start()),
+        byte_offset(source, body.end()),
+    );
+    format!(
+        "{}{{ {ignored}R::from(false) }}{}",
+        &source[..start],
+        &source[end..]
+    )
+}
+
+/// A throwaway copy of the `quire-contract-runtime` checkout at `source`
+/// with `operators::implies_short_circuit` mutated to return `false`. The
+/// copy keeps the manifest's features and dependencies and drops only its
 /// `[workspace]` table, so it builds as a plain crate.
-fn mutated_runtime_copy(revision: &str) -> tempfile::TempDir {
-    let source = cached_runtime_checkout(revision);
+fn mutated_runtime_copy(source: &Path) -> tempfile::TempDir {
     let directory = tempfile::tempdir().unwrap();
     let manifest = fs::read_to_string(source.join("Cargo.toml")).unwrap();
     let start = manifest
@@ -324,16 +337,9 @@ fn mutated_runtime_copy(revision: &str) -> tempfile::TempDir {
     );
     let operators = directory.path().join("src/operators.rs");
     let original = fs::read_to_string(&operators).unwrap();
-    assert!(
-        original.contains(CONNECTIVE_HELPER_HEALTHY),
-        "operators::implies_short_circuit no longer matches this mutation control's expected \
-         source; update CONNECTIVE_HELPER_HEALTHY/_MUTATED"
-    );
-    fs::write(
-        &operators,
-        original.replace(CONNECTIVE_HELPER_HEALTHY, CONNECTIVE_HELPER_MUTATED),
-    )
-    .unwrap();
+    let mutated = mutate_connective_helper(&original);
+    assert_ne!(mutated, original);
+    fs::write(&operators, mutated).unwrap();
     directory
 }
 
@@ -385,7 +391,11 @@ fn mutating_the_compiled_postconditions_connective_helper_fails_the_proof() {
         "control run must verify before mutating:\n{}",
         transcript(&unmutated)
     );
-    let mutated_runtime = mutated_runtime_copy(codegen::RUNTIME_REVISION);
+    // The runtime checkout the generated Kani crate resolves, fetched if needed.
+    let locator = GeneratedCrate::new("composed-kani", &["exact"], "");
+    locator.write("src/lib.rs", "");
+    let runtime = package_root(&locator.path().join("Cargo.toml"), "quire-contract-runtime");
+    let mutated_runtime = mutated_runtime_copy(&runtime);
     let mutated = execute_kani(&bundle, HEALTHY_SUBJECT, Some(mutated_runtime.path()));
     let output = transcript(&mutated);
     assert!(

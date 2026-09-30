@@ -1392,6 +1392,7 @@ name = "quire-integration"
 version = "0.1.0"
 dependencies = [
  "ix-trace-rs",
+ "proc-macro2",
  "qsl-foundation",
  "qsl-replay",
  "quire-contract-codegen",

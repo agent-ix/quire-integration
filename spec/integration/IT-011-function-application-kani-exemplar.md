@@ -28,9 +28,10 @@ proof-result envelope (`qsl_replay::TerminalRecord`).
 
 ## Preconditions
 
-`cargo kani` is available locally, and the `quire-contract-runtime` checkout
-codegen's generated manifests name is in cargo's git cache (the unmutated run
-fetches it). Missing prerequisites fail the test. No hosted workflow is
+`cargo kani` is available locally. The generated crates fetch the
+`quire-contract-runtime` that codegen's generated manifests name, and the
+mutation control copies that same resolved checkout, located through
+`cargo metadata`. Missing prerequisites fail the test. No hosted workflow is
 dispatched.
 
 ## Inputs
@@ -54,10 +55,11 @@ ABI derives no subject result. The claimed-module list is exactly
 2. Confirm the compiled postcondition calls
    `quire_contract_runtime::operators::implies_short_circuit`, verify the
    unmutated run, then rerun the same bundle and subject against a copy of the
-   runtime whose `implies_short_circuit` always returns `false`.
+   runtime in which the parsed `fn implies_short_circuit` has its body replaced
+   by `R::from(false)`, ignoring its parameters.
    IT-011-SC-02: the unmutated run verifies and the mutated run fails with
-   `VERIFICATION:- FAILED`; the mutation control refuses to run if the helper's
-   source no longer matches the expected healthy body.
+   `VERIFICATION:- FAILED`; the mutation control fails if the function is not
+   found.
 
 ## Expected Results
 

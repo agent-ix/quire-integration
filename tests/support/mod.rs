@@ -48,30 +48,33 @@ struct MetadataPackage {
     manifest_path: PathBuf,
 }
 
+/// Root directory of package `name` in the dependency graph of `manifest`,
+/// as `cargo metadata` resolves it (fetching it when needed).
+pub fn package_root(manifest: &Path, name: &str) -> PathBuf {
+    let output = run(Command::new(env!("CARGO"))
+        .args(["metadata", "--format-version", "1", "--manifest-path"])
+        .arg(manifest));
+    let metadata: Metadata = serde_json::from_slice(&output.stdout).unwrap();
+    let package = metadata
+        .packages
+        .into_iter()
+        .find(|package| package.name == name)
+        .unwrap_or_else(|| panic!("{name} is not in the dependency graph of {manifest:?}"));
+    package
+        .manifest_path
+        .parent()
+        .expect("a manifest path has a parent directory")
+        .to_path_buf()
+}
+
 /// Root directory of the resolved `quire-spec-language` package.
 pub fn qsl_root() -> &'static Path {
     static ROOT: OnceLock<PathBuf> = OnceLock::new();
     ROOT.get_or_init(|| {
-        let output = run(Command::new(env!("CARGO"))
-            .args([
-                "metadata",
-                "--format-version",
-                "1",
-                "--offline",
-                "--manifest-path",
-            ])
-            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")));
-        let metadata: Metadata = serde_json::from_slice(&output.stdout).unwrap();
-        let package = metadata
-            .packages
-            .into_iter()
-            .find(|package| package.name == "quire-spec-language")
-            .expect("quire-spec-language is in the resolved dependency graph");
-        package
-            .manifest_path
-            .parent()
-            .expect("a manifest path has a parent directory")
-            .to_path_buf()
+        package_root(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml"),
+            "quire-spec-language",
+        )
     })
 }
 
@@ -161,23 +164,32 @@ fn push(arena: &mut Vec<ValueNode>, value: ValueNode) -> ValueId {
     id
 }
 
+/// QSL's authored rule model fixture (`tests/fixtures/native-rule-model.json`).
+fn rule_fixture() -> &'static Value {
+    static FIXTURE: OnceLock<Value> = OnceLock::new();
+    FIXTURE.get_or_init(|| {
+        let path = qsl_root().join("tests/fixtures/native-rule-model.json");
+        let text = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
+        serde_json::from_str(&text).unwrap()
+    })
+}
+
 /// QSL's authored rule model with state values added to it.
 ///
 /// `values` pairs a value name with its model type, for example
 /// `("flag", json!({"kind": "boolean"}))`.
 pub fn rule_model(values: &[(&str, Value)]) -> NativeModel {
-    let path = qsl_root().join("tests/fixtures/native-rule-model.json");
-    let text = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-    let mut model: Value = serde_json::from_str(&text).unwrap();
+    let mut model = rule_fixture().clone();
     let declared = model["values"].as_array_mut().unwrap();
     for (name, value_type) in values {
         declared.push(serde_json::json!({"name": name, "kind": "state", "type": value_type}));
     }
-    admit_model(
-        &serde_json::to_string_pretty(&model).unwrap(),
-        "ix://quire-integration/rule-model",
-        "RuleModelSource",
-    )
+    admit_rule_model(&serde_json::to_string_pretty(&model).unwrap())
+}
+
+/// Admit a rule-model source text under the identity [`rule_model`] uses.
+pub fn admit_rule_model(text: &str) -> NativeModel {
+    admit_model(text, "ix://quire-integration/rule-model", "RuleModelSource")
 }
 
 /// The requirement every rule-program clause is bound to.
@@ -189,9 +201,18 @@ pub fn rule_owner() -> ir::RequirementRef {
 /// `Rule` (clause `population_rule`) holds `expression`, `Other`
 /// (clause `other_rule`) holds `true`.
 pub fn rule_package<'m>(models: &'m [NativeModel], expression: &str) -> NativePackage<'m> {
+    rule_package_with(models, expression, "true")
+}
+
+/// [`rule_package`] with `other` as the later `Other` clause's expression.
+pub fn rule_package_with<'m>(
+    models: &'m [NativeModel],
+    expression: &str,
+    other: &str,
+) -> NativePackage<'m> {
     let owner = models[0].environment().owner();
     let text = format!(
-        "language \"ix:native\" edition \"0-draft\";\nprofile \"state-finite/0-draft\";\nmodel M = {} version \"{}\" digest \"{}\";\ninvariant Rule on M::Node at current {{ {expression} }}\ninvariant Other on M::Node at current {{ true }}\n",
+        "language \"ix:native\" edition \"0-draft\";\nprofile \"state-finite/0-draft\";\nmodel M = {} version \"{}\" digest \"{}\";\ninvariant Rule on M::Node at current {{ {expression} }}\ninvariant Other on M::Node at current {{ {other} }}\n",
         serde_json::to_string(owner.package().as_str()).unwrap(),
         owner.revision().get(),
         models[0].digest(),
@@ -216,42 +237,88 @@ pub fn rule_package<'m>(models: &'m [NativeModel], expression: &str) -> NativePa
     )
 }
 
+/// The record every rule-program clause is written on.
+const NODE: &str = "Node";
+
+/// The first element of fixture array `array` whose `key` equals `value`.
+fn fixture_entry(array: &str, key: &str, value: &str) -> &'static Value {
+    rule_fixture()[array]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry[key] == value)
+        .unwrap_or_else(|| panic!("rule model has no {array} entry with {key} = {value}"))
+}
+
+/// The universe the rule model declares for `Node` objects.
+fn node_universe() -> &'static str {
+    fixture_entry("objects", "record", NODE)["universe"]
+        .as_str()
+        .unwrap()
+}
+
 fn node(model: &NativeModel, key: &str) -> ObjectIdentity {
     ObjectIdentity {
         model: model.environment().owner().clone(),
-        record: symbol("Node"),
-        universe: symbol("nodes"),
+        record: symbol(NODE),
+        universe: symbol(node_universe()),
         key: key.into(),
     }
 }
 
-/// A current snapshot holding one complete `Node` named `self` and the given
-/// state values.
-pub fn node_snapshot(model: &NativeModel, values: &[(&str, ValueNode)]) -> Snapshot {
-    let mut arena = Vec::new();
-    let fields = [
-        ("n", ValueNode::Integer { value: 1 }),
-        ("signed", ValueNode::Integer { value: 0 }),
-        ("den", ValueNode::Integer { value: 1 }),
-        ("wide", ValueNode::Integer { value: 0 }),
-        ("count", ValueNode::Integer { value: 0 }),
-        ("distance", ValueNode::Integer { value: 1 }),
-        ("duration", ValueNode::Integer { value: 1 }),
-        ("parent", ValueNode::Absent),
-        (
-            "peer",
+/// A value for a `Node` field of `value_type`, chosen by type alone: `0`
+/// clamped into an integer scalar's bounds, empty text, `false`, absent,
+/// an empty sequence, or a reference to the `self` node.
+fn field_value(model: &NativeModel, value_type: &Value) -> ValueNode {
+    match value_type["kind"].as_str() {
+        Some("boolean") => ValueNode::Boolean { value: false },
+        Some("option") => ValueNode::Absent,
+        Some("sequence") => ValueNode::Sequence { values: Vec::new() },
+        Some("scalar") => {
+            let scalar = fixture_entry("scalars", "name", value_type["name"].as_str().unwrap());
+            match scalar["kind"].as_str() {
+                Some("integer") => ValueNode::Integer {
+                    value: 0_i64.clamp(
+                        scalar["minimum"].as_i64().unwrap(),
+                        scalar["maximum"].as_i64().unwrap(),
+                    ),
+                },
+                Some("text") => ValueNode::Text {
+                    value: String::new(),
+                },
+                _ => panic!("no type-derived value for scalar {scalar}"),
+            }
+        }
+        Some("record") => {
+            let object =
+                fixture_entry("objects", "reference", value_type["name"].as_str().unwrap());
+            assert_eq!(
+                object["record"], NODE,
+                "a type-derived reference can only name the one `self` node"
+            );
             ValueNode::Reference {
                 identity: node(model, "self"),
-            },
-        ),
-        ("items", ValueNode::Sequence { values: Vec::new() }),
-    ]
-    .into_iter()
-    .map(|(name, value)| FieldBinding {
-        name: symbol(name),
-        value: push(&mut arena, value),
-    })
-    .collect();
+            }
+        }
+        _ => panic!("no type-derived value for field type {value_type}"),
+    }
+}
+
+/// A current snapshot holding one complete `Node` named `self` and the given
+/// state values. The node's fields are every field the rule model declares
+/// for `Node`, each with a value chosen by its type; the tests' assertions
+/// depend only on the explicitly given state values.
+pub fn node_snapshot(model: &NativeModel, values: &[(&str, ValueNode)]) -> Snapshot {
+    let mut arena = Vec::new();
+    let fields = fixture_entry("records", "name", NODE)["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|field| FieldBinding {
+            name: symbol(field["name"].as_str().unwrap()),
+            value: push(&mut arena, field_value(model, &field["type"])),
+        })
+        .collect();
     let values = values
         .iter()
         .map(|(name, value)| ValueBinding {
@@ -272,8 +339,8 @@ pub fn node_snapshot(model: &NativeModel, values: &[(&str, ValueNode)]) -> Snaps
             }],
             populations: vec![Population {
                 model: model.environment().owner().clone(),
-                record: symbol("Node"),
-                universe: symbol("nodes"),
+                record: symbol(NODE),
+                universe: symbol(node_universe()),
                 complete: true,
                 objects: vec![ObjectEntry {
                     key: "self".into(),
@@ -320,26 +387,53 @@ pub fn config_model() -> NativeModel {
     )
 }
 
-/// The checked ConfigVersion `VersionUnchanged` postcondition.
+/// This repository's own ConfigVersion inputs: a `VersionUnchanged`-shaped
+/// postcondition over QSL's ConfigVersion model, and the two-object version
+/// history it runs against.
+pub mod config {
+    /// Requirement package the postcondition is bound to.
+    pub const REQUIREMENT_PACKAGE: &str = "quire-integration/config-version";
+    /// Requirement the postcondition is bound to.
+    pub const REQUIREMENT: &str = "VersionUnchanged";
+    /// Revision of [`REQUIREMENT`].
+    pub const REQUIREMENT_REVISION: u64 = 1;
+    /// Clause id of the postcondition.
+    pub const CLAUSE: &str = "version_unchanged";
+    /// The postcondition: `attemptUpdate` leaves the version unchanged.
+    pub const EXPRESSION: &str = "self.versionNumber = pre(self.versionNumber)";
+    /// Version of the history's root object; each case varies the child's.
+    pub const ROOT_VERSION: i64 = 3;
+}
+
+/// The checked `VersionUnchanged`-shaped postcondition over `models[0]`.
 pub fn config_package(models: &[NativeModel]) -> NativePackage<'_> {
+    let owner = models[0].environment().owner();
     let text = format!(
-        "language \"ix:native\" edition \"0-draft\";\nprofile \"state-finite/0-draft\";\nmodel Config = \"example/config-version\" version \"1\" digest \"{}\";\npost VersionUnchanged on Config::ConfigVersion::attemptUpdate {{ self.versionNumber = pre(self.versionNumber) }}\n",
+        "language \"ix:native\" edition \"0-draft\";\nprofile \"state-finite/0-draft\";\nmodel Config = {} version \"{}\" digest \"{}\";\npost {} on Config::ConfigVersion::attemptUpdate {{ {} }}\n",
+        serde_json::to_string(owner.package().as_str()).unwrap(),
+        owner.revision().get(),
         models[0].digest(),
+        config::REQUIREMENT,
+        config::EXPRESSION,
     );
     let clause = ClauseBinding {
-        name: "VersionUnchanged".into(),
-        requirement: ir::RequirementRef::parse("example/config-version", "VersionUnchanged", 1)
-            .unwrap(),
-        clause: ir::ClauseId::new("version_unchanged").unwrap(),
+        name: config::REQUIREMENT.into(),
+        requirement: ir::RequirementRef::parse(
+            config::REQUIREMENT_PACKAGE,
+            config::REQUIREMENT,
+            config::REQUIREMENT_REVISION,
+        )
+        .unwrap(),
+        clause: ir::ClauseId::new(config::CLAUSE).unwrap(),
         execution_point: ir::ExecutionPoint::Post {
             operation: ir::AnchorName::new("attemptUpdate").unwrap(),
         },
     };
     check_program(
         models,
-        "ix://example/config-version/native/unchanged-version",
+        "ix://quire-integration/config-version/program",
         &text,
-        "ConfigVersionUnchanged",
+        "ConfigVersionProgram",
         vec![clause],
     )
 }
@@ -390,7 +484,7 @@ fn config_snapshot(
         }
     };
     let objects = vec![
-        entry("root", 1, None),
+        entry("root", config::ROOT_VERSION, None),
         entry("child", version, Some("root")),
     ];
     Snapshot::new(
@@ -565,6 +659,10 @@ pub fn absent_precondition_kani_bundle(
     .unwrap()
 }
 
+/// The `[dependencies]` line for proptest in generated crates.
+pub const PROPTEST_DEPENDENCY: &str =
+    "proptest = { version = \"1\", default-features = false, features = [\"std\"] }\n";
+
 /// Git source of `quire-contract-runtime`, as codegen's generated manifests name it.
 pub const RUNTIME_GIT_URL: &str = "https://github.com/agent-ix/quire-contract-runtime";
 
@@ -616,12 +714,12 @@ impl GeneratedCrate {
         self.path().join("target")
     }
 
-    /// Run `cargo <subcommand>` offline with warnings denied; a non-empty
-    /// `trailing` is passed after `--`.
+    /// Run `cargo <subcommand>` with warnings denied; a non-empty `trailing`
+    /// is passed after `--`.
     pub fn cargo(&self, subcommand: &str, trailing: &[&str]) -> Output {
         let mut command = Command::new(env!("CARGO"));
         command
-            .args([subcommand, "--offline", "--quiet", "--target-dir"])
+            .args([subcommand, "--quiet", "--target-dir"])
             .arg(self.target())
             .env("RUSTFLAGS", "-Dwarnings")
             .current_dir(self.path());

@@ -44,8 +44,11 @@ dispatched.
 
 ## Inputs
 
-Use QSL's authored ConfigVersion model and the native `VersionUnchanged` postcondition over
-`versionNumber: 0..1000`, plus a plain obligation-free integer comparison over the same domain.
+Use QSL's ConfigVersion model (read from the resolved `quire-spec-language` checkout) with this
+repository's own inputs: a `VersionUnchanged`-shaped native postcondition,
+`self.versionNumber = pre(self.versionNumber)` on `attemptUpdate`, over
+`versionNumber: 0..1000`, run against a two-object root/child version history; plus a plain
+obligation-free integer comparison over the same domain.
 The shared deterministic corpus contains `-1`, `0`, `1000` and `1001`; `-1` and `1001` are
 deliberately outside the model domain. In-domain state pairs include unchanged and changed values.
 The violating Kani subject always returns an in-domain value different from its input so its
@@ -56,7 +59,7 @@ source clause or an approximation of unsupported semantics.
 
 ## Test Procedure
 
-1. Compile the actual ConfigVersion and plain-integer native fixtures, lower them through their
+1. Compile the ConfigVersion postcondition and plain-integer native programs, lower them through their
    explicit targets and pass the emitted bytes through the public strict IR reader to codegen.
    The plain-integer bytes are exported through QSL's `lower` command path.
    IT-010-SC-02: the numeric oracle, strategy bundle and Kani bundle retain the authored clause,
@@ -106,6 +109,7 @@ dispatch hosted CI.
 
 ## Traceability
 
-IT-010 verifies the ConfigVersion runtime workflow and both numeric/state lowering requirements
+IT-010 verifies the state-scalar runtime workflow over the ConfigVersion model and both
+numeric/state lowering requirements
 against the separately owned codegen contracts. Each `IT-010-SC-NN` token binds to a real Rust test
 assertion in `tests/qsl_codegen_composition.rs` or `tests/qsl_kani_exemplar.rs`.
