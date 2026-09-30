@@ -2,7 +2,7 @@
 name = "quire-integration"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.98"
 description = "Version-locked composition and integration runtime for native Quire V1."
 authors = ["Agent IX <agent@agent-ix.dev>"]
 license = "AGPL-3.0-or-later"
@@ -16,6 +16,20 @@ path = "src/lib.rs"
 [dependencies]
 
 [dev-dependencies]
+# QSL-334: the composed QSL -> IR -> codegen tests live here, because nothing depends on
+# this crate. Every first-party crate is `branch = "main"`, so each resolves to one copy.
+quire-spec-language = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
+qsl-foundation = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
+qsl-replay = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
+quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
+quire-contract-codegen = { git = "https://github.com/agent-ix/quire-contract-codegen", branch = "main" }
+ix-trace-rs = { git = "https://github.com/agent-ix/ix-trace-rs", branch = "main" }
+# `span-locations` lets the Kani mutation control splice one function body by position.
+proc-macro2 = { version = "1", features = ["span-locations"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+syn = { version = "2", features = ["full"] }
+tempfile = "3"
 
 [profile.release]
 lto = "thin"

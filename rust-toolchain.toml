@@ -1,4 +1,6 @@
 [toolchain]
-channel = "stable"
-components = ["rustfmt", "clippy"]
+# quire-spec-language and quire-contract-codegen require Rust 1.98; llvm-tools backs the
+# measured-coverage composition test.
+channel = "1.98.1"
+components = ["rustfmt", "clippy", "llvm-tools"]
 profile = "minimal"
