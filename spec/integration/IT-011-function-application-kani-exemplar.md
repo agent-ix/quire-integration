@@ -24,7 +24,8 @@ verified proof into a failed one.
 Native parse/link/check/package → `lowering::lower_for` with `integer-ir/v1` →
 contract IR reader → quire-contract-codegen `generate_kani_bundle` → real
 `cargo kani` over the bundle and a hand-written subject → codegen's
-`classify_kani_run`.
+`classify_kani_run` → codegen's `decode_falsification` for a falsified run's
+counterexample.
 
 ## Preconditions
 
@@ -58,8 +59,18 @@ ABI derives no subject result.
    IT-011-SC-02: the unmutated run exits successfully and codegen's
    `classify_kani_run` classifies the mutated run `Falsified`; the mutation
    control fails if the function is not found.
+3. Rerun the same bundle and subject with the one `+` in the compiled
+   postcondition oracle returning `left + right + 1`, so the rule reads
+   `amount < 1000 implies amount + 2 <= 1000`. The mutant is non-equivalent:
+   it is false at `amount = 999`. An equivalent mutant (dropping the `+ 1`)
+   leaves a rule every in-domain value satisfies, so a proof of it is correct.
+   IT-011-SC-03: the unmutated run exits successfully, codegen's
+   `classify_kani_run` classifies the mutated run `Falsified`, and codegen's
+   `decode_falsification` reads the counterexample as `amount_current = 999`;
+   the mutation control fails if the oracle does not contain exactly one `+`.
 
 ## Expected Results
 
-Both runs use real `cargo kani`. A zero discharge count, a missing summary line
-or an unchanged verdict under mutation fails the test.
+Every run in all three procedures uses real `cargo kani`. A zero discharge
+count, a missing summary line, an unchanged verdict under either mutation, or a
+mutated counterexample other than `amount_current = 999` fails the test.

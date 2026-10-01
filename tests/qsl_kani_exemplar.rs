@@ -137,28 +137,30 @@ fn replay_twin(argument: &str, post_of: &str) -> codegen::ReplayPackage {
         text_input_bytes: u64::try_from(MAX_ENCODED_BYTES).unwrap(),
         ..UNLIMITED
     };
-    codegen::ReplayPackage::new(codegen::ReplayInputs {
-        source: codegen::LockedSource {
-            authority: "agent-ix".to_owned(),
-            identity: "ix://quire-integration/config-version/replay-twin".to_owned(),
-            namespace: "test".to_owned(),
-            revision: "1".to_owned(),
-            bytes: source.into_bytes(),
+    codegen::ReplayPackage::new(
+        codegen::ReplayInputs {
+            source: codegen::LockedSource {
+                authority: "agent-ix".to_owned(),
+                identity: "ix://quire-integration/config-version/replay-twin".to_owned(),
+                namespace: "test".to_owned(),
+                revision: "1".to_owned(),
+                bytes: source.into_bytes(),
+            },
+            dependencies: Vec::new(),
+            backend_manifest: DigestRecord::mint(
+                DigestDomain::ToolManifestJcsV1,
+                ByteDigest::of(b"kani").as_bytes(),
+            ),
+            accounting_limits: UNLIMITED,
+            stage_limits: StageLimits {
+                s1,
+                s2: UNLIMITED,
+                s3: UNLIMITED,
+                s4: UNLIMITED,
+            },
         },
-        dependencies: Vec::new(),
-        function: TWIN_FUNCTION.to_owned(),
-        backend_manifest: DigestRecord::mint(
-            DigestDomain::ToolManifestJcsV1,
-            ByteDigest::of(b"kani").as_bytes(),
-        ),
-        accounting_limits: UNLIMITED,
-        stage_limits: StageLimits {
-            s1,
-            s2: UNLIMITED,
-            s3: UNLIMITED,
-            s4: UNLIMITED,
-        },
-    })
+        TWIN_FUNCTION,
+    )
     .unwrap_or_else(|refusal| panic!("replay twin does not compile: {refusal}"))
 }
 
@@ -513,5 +515,112 @@ fn mutating_the_compiled_postconditions_connective_helper_fails_the_proof() {
         "mutating implies_short_circuit did not falsify the proof -- the connective helper is not \
          load-bearing for this exemplar: {outcome:?}\n{}",
         transcript(&mutated)
+    );
+}
+
+/// The compiled postcondition oracle of the function-application exemplar.
+const POSTCONDITION_ORACLE: &str = "oracle_populationrule_7_population_rule";
+
+/// Every `+` expression in a function body.
+#[derive(Default)]
+struct Additions<'a>(Vec<&'a syn::ExprBinary>);
+
+impl<'a> syn::visit::Visit<'a> for Additions<'a> {
+    fn visit_expr_binary(&mut self, expression: &'a syn::ExprBinary) {
+        if matches!(expression.op, syn::BinOp::Add(_)) {
+            self.0.push(expression);
+        }
+        syn::visit::visit_expr_binary(self, expression);
+    }
+}
+
+/// `source` with the one `+` in `fn {POSTCONDITION_ORACLE}` returning
+/// `left + right + 1`: `amount_current + 1_i64` becomes
+/// `amount_current + 1_i64 + 1_i64`.
+fn mutate_postcondition_addition(source: &str) -> String {
+    let file = syn::parse_file(source).expect("generated Kani source is Rust");
+    let function = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Fn(function) if function.sig.ident == POSTCONDITION_ORACLE => Some(function),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("the Kani bundle defines fn {POSTCONDITION_ORACLE}"));
+    let mut additions = Additions::default();
+    syn::visit::Visit::visit_item_fn(&mut additions, function);
+    let [addition] = additions.0.as_slice() else {
+        panic!(
+            "fn {POSTCONDITION_ORACLE} has {} additions, not the exemplar's one `amount + 1`",
+            additions.0.len()
+        )
+    };
+    let end = byte_offset(source, syn::spanned::Spanned::span(*addition).end());
+    format!("{} + 1_i64{}", &source[..end], &source[end..])
+}
+
+/// The decode schema of a bundle's symbolic arguments, in the order the
+/// bundle's harness calls `kani::any()`.
+fn bundle_arguments(graph: &codegen::ProofDependencyGraph) -> Vec<codegen::ObligationBinding> {
+    graph
+        .subject_arguments
+        .iter()
+        .map(|binding| codegen::ObligationBinding {
+            identifier: binding.identifier.clone(),
+            role: binding.role,
+            primitive_type: binding.primitive_type,
+            integer_bounds: binding.integer_bounds.clone(),
+            dependencies: vec![binding.dependency.clone()],
+        })
+        .collect()
+}
+
+/// IT-011-SC-03: the mutation control for the exemplar's arithmetic.
+///
+/// The mutant must be non-equivalent: it has to make the claim false. An
+/// equivalent mutant such as dropping the `+ 1` leaves
+/// `amount < 1000 implies amount <= 1000`, which every in-domain `amount`
+/// satisfies, so Kani proving it is the correct verdict, not a vacuous one.
+/// Here the `+` returns `left + right + 1`, so the rule reads
+/// `amount < 1000 implies amount + 2 <= 1000`, which is false exactly at
+/// `amount = 999`.
+#[test]
+#[trace("IT-011-SC-03")]
+fn mutating_the_compiled_postconditions_addition_falsifies_the_proof() {
+    let bundle = function_application_bundle();
+    let unmutated = execute_kani(&bundle, HEALTHY_SUBJECT, None);
+    assert!(
+        unmutated.status.success(),
+        "control run must verify before mutating:\n{}",
+        transcript(&unmutated)
+    );
+    let mut mutated_bundle = bundle.clone();
+    mutated_bundle.rust.contents = mutate_postcondition_addition(&bundle.rust.contents);
+    assert_ne!(mutated_bundle.rust.contents, bundle.rust.contents);
+    let mutated = execute_kani(&mutated_bundle, HEALTHY_SUBJECT, None);
+    let outcome = classify(&mutated);
+    let codegen::KaniRunOutcome::Falsified { counterexample } = &outcome else {
+        panic!(
+            "an `add` returning `left + right + 1` still proves -- the exemplar's arithmetic is \
+             not load-bearing: {outcome:?}\n{}",
+            transcript(&mutated)
+        )
+    };
+    let graph: codegen::ProofDependencyGraph =
+        serde_json::from_str(&bundle.proof_graph.contents).unwrap();
+    let harness = graph
+        .options
+        .windows(2)
+        .find_map(|pair| (pair[0] == "--harness").then_some(pair[1].as_str()))
+        .expect("the bundle's options name its harness");
+    let (module, proof) = harness
+        .split_once("::")
+        .expect("the bundle's harness is module-qualified");
+    let decoded =
+        codegen::decode_falsification(proof, module, &bundle_arguments(&graph), counterexample)
+            .unwrap_or_else(|failure| panic!("counterexample does not decode: {failure:?}"));
+    assert_eq!(
+        decoded,
+        [("amount_current".to_owned(), WitnessValue::Integer(999))]
     );
 }
