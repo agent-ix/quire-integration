@@ -137,28 +137,30 @@ fn replay_twin(argument: &str, post_of: &str) -> codegen::ReplayPackage {
         text_input_bytes: u64::try_from(MAX_ENCODED_BYTES).unwrap(),
         ..UNLIMITED
     };
-    codegen::ReplayPackage::new(codegen::ReplayInputs {
-        source: codegen::LockedSource {
-            authority: "agent-ix".to_owned(),
-            identity: "ix://quire-integration/config-version/replay-twin".to_owned(),
-            namespace: "test".to_owned(),
-            revision: "1".to_owned(),
-            bytes: source.into_bytes(),
+    codegen::ReplayPackage::new(
+        codegen::ReplayInputs {
+            source: codegen::LockedSource {
+                authority: "agent-ix".to_owned(),
+                identity: "ix://quire-integration/config-version/replay-twin".to_owned(),
+                namespace: "test".to_owned(),
+                revision: "1".to_owned(),
+                bytes: source.into_bytes(),
+            },
+            dependencies: Vec::new(),
+            backend_manifest: DigestRecord::mint(
+                DigestDomain::ToolManifestJcsV1,
+                ByteDigest::of(b"kani").as_bytes(),
+            ),
+            accounting_limits: UNLIMITED,
+            stage_limits: StageLimits {
+                s1,
+                s2: UNLIMITED,
+                s3: UNLIMITED,
+                s4: UNLIMITED,
+            },
         },
-        dependencies: Vec::new(),
-        function: TWIN_FUNCTION.to_owned(),
-        backend_manifest: DigestRecord::mint(
-            DigestDomain::ToolManifestJcsV1,
-            ByteDigest::of(b"kani").as_bytes(),
-        ),
-        accounting_limits: UNLIMITED,
-        stage_limits: StageLimits {
-            s1,
-            s2: UNLIMITED,
-            s3: UNLIMITED,
-            s4: UNLIMITED,
-        },
-    })
+        TWIN_FUNCTION,
+    )
     .unwrap_or_else(|refusal| panic!("replay twin does not compile: {refusal}"))
 }
 
