@@ -24,7 +24,8 @@ verified proof into a failed one.
 Native parse/link/check/package → `lowering::lower_for` with `integer-ir/v1` →
 contract IR reader → quire-contract-codegen `generate_kani_bundle` → real
 `cargo kani` over the bundle and a hand-written subject → codegen's
-`classify_kani_run`.
+`classify_kani_run` → codegen's `decode_falsification` for a falsified run's
+counterexample.
 
 ## Preconditions
 
@@ -70,5 +71,6 @@ ABI derives no subject result.
 
 ## Expected Results
 
-Both runs use real `cargo kani`. A zero discharge count, a missing summary line
-or an unchanged verdict under mutation fails the test.
+Every run in all three procedures uses real `cargo kani`. A zero discharge
+count, a missing summary line, an unchanged verdict under either mutation, or a
+mutated counterexample other than `amount_current = 999` fails the test.
