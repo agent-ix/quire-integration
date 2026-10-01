@@ -51,8 +51,8 @@ repository's own inputs: a `VersionUnchanged`-shaped native postcondition,
 obligation-free integer comparison over the same domain.
 The shared deterministic corpus contains `-1`, `0`, `1000` and `1001`; `-1` and `1001` are
 deliberately outside the model domain. In-domain state pairs include unchanged and changed values.
-The violating Kani subject always returns an in-domain value different from its input so its
-counterexample can be replayed as a valid native invocation. Because VersionUnchanged has no
+The violating Kani subject returns `1000 - version`, an in-domain value that differs from its input
+everywhere except 500, so its counterexample can be replayed as a valid native invocation. Because VersionUnchanged has no
 authored precondition, its Kani adapter uses an explicitly identified, zero-dependency Boolean true
 precondition; this is the exact logical identity for absence of a precondition, not an authored
 source clause or an approximation of unsupported semantics.
@@ -74,12 +74,15 @@ source clause or an approximation of unsupported semantics.
    IT-010-SC-04: every sampled value is within `0..=1000`, every tagged expectation matches the
    generated oracle and native verdict, framework discards are zero, and the accepted/rejected/
    discarded counts are reported.
-4. Run the generated Kani contract against the identity subject and an always-changed, in-domain
-   subject, with concrete playback enabled.
-   IT-010-SC-05: the identity subject proves, the changed subject fails, the printed counterexample
-   and canonical absent-precondition identity are retained, the printed counterexample is decoded
-   without substituting another value, and replay through `runtime::execute` returns the same false
-   contract verdict.
+4. Run codegen's Kani obligation harness for the postcondition through codegen's executor against
+   the identity subject and a changed, in-domain subject (`1000 - version`), with concrete
+   playback enabled.
+   IT-010-SC-05: codegen classifies the identity run `Verified` and the changed run `Falsified`;
+   codegen's `decode_falsification` decodes the counterexample against the obligation's own
+   argument schema; codegen's `replay_counterexample` replays it through `qsl_replay::replay`
+   against a QSL function mirroring the clause over the changed subject and QSL settles it
+   `Reproduced`, while the same counterexample against the identity mirror is evidence failure;
+   and `runtime::execute` of the authored clause over the decoded pre/post returns false.
 
 ## Expected Results
 
