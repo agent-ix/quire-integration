@@ -515,3 +515,84 @@ fn mutating_the_compiled_postconditions_connective_helper_fails_the_proof() {
         transcript(&mutated)
     );
 }
+
+/// The compiled postcondition oracle of the function-application exemplar.
+const POSTCONDITION_ORACLE: &str = "oracle_populationrule_7_population_rule";
+
+/// Every `+` expression in a function body.
+#[derive(Default)]
+struct Additions<'a>(Vec<&'a syn::ExprBinary>);
+
+impl<'a> syn::visit::Visit<'a> for Additions<'a> {
+    fn visit_expr_binary(&mut self, expression: &'a syn::ExprBinary) {
+        if matches!(expression.op, syn::BinOp::Add(_)) {
+            self.0.push(expression);
+        }
+        syn::visit::visit_expr_binary(self, expression);
+    }
+}
+
+/// `source` with the one `+` in `fn {POSTCONDITION_ORACLE}` replaced by its
+/// left operand: an `add` that returns its left operand.
+fn mutate_postcondition_addition(source: &str) -> String {
+    let file = syn::parse_file(source).expect("generated Kani source is Rust");
+    let function = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Fn(function) if function.sig.ident == POSTCONDITION_ORACLE => Some(function),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("the Kani bundle defines fn {POSTCONDITION_ORACLE}"));
+    let mut additions = Additions::default();
+    syn::visit::Visit::visit_item_fn(&mut additions, function);
+    let [addition] = additions.0.as_slice() else {
+        panic!(
+            "fn {POSTCONDITION_ORACLE} has {} additions, not the exemplar's one `amount + 1`",
+            additions.0.len()
+        )
+    };
+    let offsets = |span: proc_macro2::Span| {
+        (
+            byte_offset(source, span.start()),
+            byte_offset(source, span.end()),
+        )
+    };
+    let (start, end) = offsets(syn::spanned::Spanned::span(*addition));
+    let (left_start, left_end) = offsets(syn::spanned::Spanned::span(&*addition.left));
+    format!(
+        "{}{}{}",
+        &source[..start],
+        &source[left_start..left_end],
+        &source[end..]
+    )
+}
+
+/// An `add` that returns its left operand turns the postcondition into
+/// `amount < 1000 implies amount <= 1000`, which every in-domain `amount`
+/// satisfies. A proof that still verifies under that mutation has not
+/// exercised the arithmetic. Expected to fail until quire-contract-codegen
+/// IR-458 lands: the mutated postcondition is still a valid property over
+/// the domain, so Kani proves it.
+#[test]
+#[trace("IT-011-SC-03")]
+fn mutating_the_compiled_postconditions_addition_falsifies_the_proof() {
+    let bundle = function_application_bundle();
+    let unmutated = execute_kani(&bundle, HEALTHY_SUBJECT, None);
+    assert!(
+        unmutated.status.success(),
+        "control run must verify before mutating:\n{}",
+        transcript(&unmutated)
+    );
+    let mut mutated_bundle = bundle.clone();
+    mutated_bundle.rust.contents = mutate_postcondition_addition(&bundle.rust.contents);
+    assert_ne!(mutated_bundle.rust.contents, bundle.rust.contents);
+    let mutated = execute_kani(&mutated_bundle, HEALTHY_SUBJECT, None);
+    let outcome = classify(&mutated);
+    assert!(
+        matches!(outcome, codegen::KaniRunOutcome::Falsified { .. }),
+        "an `add` returning its left operand still proves -- the exemplar's arithmetic is not \
+         load-bearing: {outcome:?}\n{}",
+        transcript(&mutated)
+    );
+}

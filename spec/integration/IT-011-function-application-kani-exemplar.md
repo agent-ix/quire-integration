@@ -58,6 +58,12 @@ ABI derives no subject result.
    IT-011-SC-02: the unmutated run exits successfully and codegen's
    `classify_kani_run` classifies the mutated run `Falsified`; the mutation
    control fails if the function is not found.
+3. Rerun the same bundle and subject with the one `+` in the compiled
+   postcondition oracle replaced by its left operand (an `add` returning its
+   left operand).
+   IT-011-SC-03: the unmutated run exits successfully and codegen's
+   `classify_kani_run` classifies the mutated run `Falsified`; the mutation
+   control fails if the oracle does not contain exactly one `+`.
 
 ## Expected Results
 
