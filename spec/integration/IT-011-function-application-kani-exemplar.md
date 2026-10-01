@@ -61,8 +61,9 @@ ABI derives no subject result.
    SUCCESS check.
    IT-011-SC-04: every claimed module is attributed at least one SUCCESS
    check, and a claimed module attributed none fails the test, which names
-   it. A file whose path the module's path is a prefix of, or a file with the
-   same crate-relative path in another crate, is not attributed to it.
+   it. A file whose path only starts with the module's path (for example
+   `src/lib.rs.orig` for `src/lib.rs`), or a file with the same crate-relative
+   path in another crate, is not attributed to it.
 2. Confirm the compiled postcondition calls
    `quire_contract_runtime::operators::implies_short_circuit`, verify the
    unmutated run, then rerun the same bundle and subject against a copy of the

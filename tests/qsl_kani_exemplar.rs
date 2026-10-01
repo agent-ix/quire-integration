@@ -390,8 +390,10 @@ fn function_application_bundle() -> codegen::KaniArtifactBundle {
 /// SUCCESS check and to hold a mutation control that turns the proof red:
 /// `src/lib.rs` is codegen's generated bundle, whose postcondition oracle
 /// IT-011-SC-03 mutates. The runtime's `operators.rs`, which IT-011-SC-02
-/// mutates, is a helper the oracle calls, not a claimed module: Kani reports
-/// no check inside it.
+/// mutates, is not claimed here: runtime code is claimed by the runtime's own
+/// ADR-011 §2.3 gate, `implies_short_circuit` only selects between its
+/// operands and holds no checkable operation, and the `+` it evaluates is in
+/// a closure defined in the generated bundle.
 const CLAIMED_MODULES: [&str; 1] = ["src/lib.rs"];
 
 /// The canonical path of each claimed module's file in the generated crate
@@ -435,6 +437,26 @@ fn success_census<'m>(
             (module.as_path(), count)
         })
         .collect()
+}
+
+/// The claimed modules of `census` that discharged no SUCCESS check.
+fn unreached<'m>(census: &[(&'m Path, usize)]) -> Vec<&'m Path> {
+    census
+        .iter()
+        .filter(|(_, discharged)| *discharged == 0)
+        .map(|(module, _)| *module)
+        .collect()
+}
+
+/// Fail, naming them, when any claimed module of `census` discharged no
+/// SUCCESS check (ADR-011 §2.3 `unreached`).
+fn assert_every_module_reached(census: &[(&Path, usize)], checks: &[codegen::KaniCheckResult]) {
+    let unreached = unreached(census);
+    assert!(
+        unreached.is_empty(),
+        "claimed modules discharged zero SUCCESS checks (unreached): {unreached:?}\n\
+         census: {census:?}\nchecks: {checks:#?}"
+    );
 }
 
 fn copy_tree(from: &Path, to: &Path) {
@@ -544,17 +566,7 @@ fn healthy_run_discharges_success_checks_in_every_claimed_module() {
     );
     let modules = claimed_module_files(healthy.generated.path());
     let census = success_census(&run.checks, healthy.generated.path(), &modules);
-    let unreached: Vec<&Path> = census
-        .iter()
-        .filter(|(_, discharged)| *discharged == 0)
-        .map(|(module, _)| *module)
-        .collect();
-    assert!(
-        unreached.is_empty(),
-        "claimed modules discharged zero SUCCESS checks (unreached): {unreached:?}\n\
-         census: {census:?}\nchecks: {:#?}",
-        run.checks
-    );
+    assert_every_module_reached(&census, &run.checks);
 }
 
 #[test]
@@ -756,11 +768,30 @@ fn success_census_attributes_checks_by_exact_file() {
         census,
         [(modules[0].as_path(), 1), (modules[1].as_path(), 2)]
     );
+    assert!(unreached(&census).is_empty());
+    assert_every_module_reached(&census, &checks);
 
     // A claimed module no SUCCESS check names is counted zero, and so unreached.
     let census = success_census(&checks[3..], generated.path(), &modules);
     assert_eq!(
         census,
         [(modules[0].as_path(), 0), (modules[1].as_path(), 0)]
+    );
+    assert_eq!(
+        unreached(&census),
+        [modules[0].as_path(), modules[1].as_path()]
+    );
+    let partial = [(modules[0].as_path(), 1), (modules[1].as_path(), 0)];
+    assert_eq!(unreached(&partial), [modules[1].as_path()]);
+
+    // The failure names the unreached module.
+    let failure = std::panic::catch_unwind(|| assert_every_module_reached(&partial, &[]))
+        .expect_err("an unreached claimed module fails the test");
+    let message = failure
+        .downcast_ref::<String>()
+        .expect("the assertion message is formatted");
+    assert!(
+        message.contains(&format!("(unreached): [{:?}]", modules[1])),
+        "{message}"
     );
 }
