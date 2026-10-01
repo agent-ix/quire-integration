@@ -13,7 +13,7 @@ mod support;
 
 use std::{
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Output},
     time::Duration,
 };
@@ -32,28 +32,76 @@ use support::{
     CONFIG_DOMAIN, RUNTIME_GIT_URL,
 };
 
+/// One raw `cargo kani` run over a bundle: its process output, the report
+/// Kani exported for it, and the crate it ran in, kept so that check
+/// locations relative to that crate still resolve.
+struct BundleRun {
+    output: Output,
+    report: Option<Vec<u8>>,
+    generated: GeneratedCrate,
+}
+
+impl BundleRun {
+    fn transcript(&self) -> String {
+        format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&self.output.stdout),
+            String::from_utf8_lossy(&self.output.stderr)
+        )
+    }
+
+    /// codegen's classification of the run, from the report Kani exported.
+    fn classify(&self) -> codegen::ClassifiedRun {
+        codegen::classify_kani_run(
+            self.output.status.success(),
+            self.report.as_deref(),
+            &self.transcript(),
+            None,
+        )
+        .unwrap_or_else(|refusal| panic!("{refusal}\n{}", self.transcript()))
+    }
+}
+
+/// Where Kani writes the run's report, relative to the generated crate.
+const REPORT_FILE: &str = "kani-report.json";
+
 /// Run `bundle` plus `subject` under `cargo kani` with the bundle's own
-/// options. `runtime_patch` replaces `quire-contract-runtime` with a local
-/// copy.
+/// options, exporting Kani's report. `runtime_patch` replaces
+/// `quire-contract-runtime` with a local copy.
 fn execute_kani(
     bundle: &codegen::KaniArtifactBundle,
     subject: &str,
     runtime_patch: Option<&Path>,
-) -> Output {
+) -> BundleRun {
     let graph: codegen::ProofDependencyGraph =
         serde_json::from_str(&bundle.proof_graph.contents).unwrap();
     let generated = kani_crate(&bundle.rust.contents, subject, runtime_patch);
-    Command::new("cargo")
+    let report_path = generated.path().join(REPORT_FILE);
+    let output = Command::new("cargo")
         .arg("kani")
         .args(&graph.options)
+        .args(["-Z", "unstable-options", "--export-json"])
+        .arg(&report_path)
         .env("CARGO_TARGET_DIR", generated.target())
         .current_dir(generated.path())
         .output()
-        .expect("cargo kani executes")
+        .expect("cargo kani executes");
+    let report = match fs::read(&report_path) {
+        Ok(report) => Some(report),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => panic!("cannot read the Kani report {report_path:?}: {error}"),
+    };
+    BundleRun {
+        output,
+        report,
+        generated,
+    }
 }
 
-/// A throwaway crate holding generated Kani `source` followed by `subject`.
-/// `runtime_patch` replaces `quire-contract-runtime` with a local copy.
+/// A throwaway crate whose `src/lib.rs` holds generated Kani `source` and
+/// whose `src/subject.rs` holds `subject`, so a check Kani attributes to
+/// `src/lib.rs` is in the generated code. `runtime_patch` replaces
+/// `quire-contract-runtime` with a local copy.
 fn kani_crate(source: &str, subject: &str, runtime_patch: Option<&Path>) -> GeneratedCrate {
     // quire-contract-runtime's own `#[cfg(kani)]` proof harness imports
     // `crate::exact`, so a `cargo kani` build needs its "exact" feature.
@@ -67,25 +115,16 @@ fn kani_crate(source: &str, subject: &str, runtime_patch: Option<&Path>) -> Gene
             ),
         );
     }
-    generated.write("src/lib.rs", &format!("{source}\n{subject}\n"));
+    generated.write(
+        "src/lib.rs",
+        &format!("{source}\nmod subject;\npub use subject::subject;\n"),
+    );
+    generated.write("src/subject.rs", &format!("{subject}\n"));
     generated.write(
         "build.rs",
         "fn main() { println!(\"cargo:rustc-check-cfg=cfg(kani)\"); }\n",
     );
     generated
-}
-
-fn transcript(output: &Output) -> String {
-    format!(
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-}
-
-/// codegen's classification of one raw `cargo kani` run.
-fn classify(output: &Output) -> codegen::KaniRunOutcome {
-    codegen::classify_kani_run(output.status.success(), &transcript(output))
 }
 
 // ---------------------------------------------------------------------------
@@ -346,39 +385,78 @@ fn function_application_bundle() -> codegen::KaniArtifactBundle {
     )
 }
 
-/// The SUCCESS-check discharge count from Kani's
-/// `** <failed> of <total> failed[ (<n> unreachable)]` summary line.
-/// UNREACHABLE and UNDETERMINED checks are excluded.
-fn discharged_success_checks(output: &str) -> u64 {
-    for line in output.lines() {
-        let Some(rest) = line.trim().strip_prefix("** ") else {
-            continue;
-        };
-        let (counts, qualifier) = match rest.split_once(" (") {
-            Some((counts, qualifier)) => (counts, qualifier.trim_end_matches(')')),
-            None => (rest, ""),
-        };
-        let Some((failed, total)) = counts
-            .strip_suffix(" failed")
-            .and_then(|counts| counts.split_once(" of "))
-        else {
-            continue;
-        };
-        let (Ok(failed), Ok(total)) = (failed.parse::<u64>(), total.parse::<u64>()) else {
-            continue;
-        };
-        let excluded = if qualifier.contains("unreachable") || qualifier.contains("undetermined") {
-            qualifier
-                .split_whitespace()
-                .next()
-                .and_then(|count| count.parse::<u64>().ok())
-                .unwrap_or(0)
-        } else {
-            0
-        };
-        return total.saturating_sub(failed).saturating_sub(excluded);
-    }
-    panic!("Kani transcript has no '** <failed> of <total> failed' summary line:\n{output}");
+/// The modules this exemplar claims, as files of the generated crate.
+/// ADR-011 §2.3 requires each claimed module to discharge at least one
+/// SUCCESS check and to hold a mutation control that turns the proof red:
+/// `src/lib.rs` is codegen's generated bundle, whose postcondition oracle
+/// IT-011-SC-03 mutates. The runtime's `operators.rs`, which IT-011-SC-02
+/// mutates, is not claimed here: runtime code is claimed by the runtime's own
+/// ADR-011 §2.3 gate, `implies_short_circuit` only selects between its
+/// operands and holds no checkable operation, and the `+` it evaluates is in
+/// a closure defined in the generated bundle.
+const CLAIMED_MODULES: [&str; 1] = ["src/lib.rs"];
+
+/// The canonical path of each claimed module's file in the generated crate
+/// at `crate_root`.
+fn claimed_module_files(crate_root: &Path) -> Vec<PathBuf> {
+    CLAIMED_MODULES
+        .iter()
+        .map(|module| {
+            let file = crate_root.join(module);
+            fs::canonicalize(&file)
+                .unwrap_or_else(|error| panic!("claimed module {file:?} does not exist: {error}"))
+        })
+        .collect()
+}
+
+/// The file a Kani check location names, canonicalized. Kani prints a file
+/// in the crate it ran in relative to that crate (`src/lib.rs`) and a file in
+/// a dependency as an absolute path; both resolve against `crate_root`. A
+/// location naming no existing file (Kani's `unknown`) resolves to nothing.
+fn check_file(location: &codegen::KaniCheckLocation, crate_root: &Path) -> Option<PathBuf> {
+    fs::canonicalize(crate_root.join(&location.file)).ok()
+}
+
+/// How many SUCCESS checks each of `modules` discharged: a check is
+/// attributed to a module only when its location names exactly that file.
+/// Every status other than SUCCESS is not counted (ADR-011 §2.3).
+fn success_census<'m>(
+    checks: &[codegen::KaniCheckResult],
+    crate_root: &Path,
+    modules: &'m [PathBuf],
+) -> Vec<(&'m Path, usize)> {
+    let discharged: Vec<PathBuf> = checks
+        .iter()
+        .filter(|check| check.status == codegen::KaniCheckStatus::Success)
+        .filter_map(|check| check_file(&check.location, crate_root))
+        .collect();
+    modules
+        .iter()
+        .map(|module| {
+            let count = discharged.iter().filter(|file| *file == module).count();
+            (module.as_path(), count)
+        })
+        .collect()
+}
+
+/// The claimed modules of `census` that discharged no SUCCESS check.
+fn unreached<'m>(census: &[(&'m Path, usize)]) -> Vec<&'m Path> {
+    census
+        .iter()
+        .filter(|(_, discharged)| *discharged == 0)
+        .map(|(module, _)| *module)
+        .collect()
+}
+
+/// Fail, naming them, when any claimed module of `census` discharged no
+/// SUCCESS check (ADR-011 §2.3 `unreached`).
+fn assert_every_module_reached(census: &[(&Path, usize)], checks: &[codegen::KaniCheckResult]) {
+    let unreached = unreached(census);
+    assert!(
+        unreached.is_empty(),
+        "claimed modules discharged zero SUCCESS checks (unreached): {unreached:?}\n\
+         census: {census:?}\nchecks: {checks:#?}"
+    );
 }
 
 fn copy_tree(from: &Path, to: &Path) {
@@ -471,19 +549,24 @@ fn mutated_runtime_copy(source: &Path) -> tempfile::TempDir {
 }
 
 #[test]
-#[trace("IT-011-SC-01")]
-fn healthy_run_discharges_success_checks() {
+#[trace("IT-011-SC-01", "IT-011-SC-04")]
+fn healthy_run_discharges_success_checks_in_every_claimed_module() {
     let bundle = function_application_bundle();
     let healthy = execute_kani(&bundle, HEALTHY_SUBJECT, None);
-    let output = transcript(&healthy);
     assert!(
-        healthy.status.success(),
-        "function-application proof did not verify:\n{output}"
+        healthy.output.status.success(),
+        "function-application proof did not verify:\n{}",
+        healthy.transcript()
     );
+    let run = healthy.classify();
     assert!(
-        discharged_success_checks(&output) > 0,
-        "the function-application proof discharged zero SUCCESS checks:\n{output}"
+        run.success_checks > 0,
+        "the function-application proof discharged zero SUCCESS checks: {:#?}",
+        run.checks
     );
+    let modules = claimed_module_files(healthy.generated.path());
+    let census = success_census(&run.checks, healthy.generated.path(), &modules);
+    assert_every_module_reached(&census, &run.checks);
 }
 
 #[test]
@@ -499,9 +582,9 @@ fn mutating_the_compiled_postconditions_connective_helper_fails_the_proof() {
     );
     let unmutated = execute_kani(&bundle, HEALTHY_SUBJECT, None);
     assert!(
-        unmutated.status.success(),
+        unmutated.output.status.success(),
         "control run must verify before mutating:\n{}",
-        transcript(&unmutated)
+        unmutated.transcript()
     );
     // The runtime checkout the generated Kani crate resolves, fetched if needed.
     let locator = GeneratedCrate::new("composed-kani", &["exact"], "");
@@ -509,12 +592,12 @@ fn mutating_the_compiled_postconditions_connective_helper_fails_the_proof() {
     let runtime = package_root(&locator.path().join("Cargo.toml"), "quire-contract-runtime");
     let mutated_runtime = mutated_runtime_copy(&runtime);
     let mutated = execute_kani(&bundle, HEALTHY_SUBJECT, Some(mutated_runtime.path()));
-    let outcome = classify(&mutated);
+    let outcome = mutated.classify().outcome;
     assert!(
         matches!(outcome, codegen::KaniRunOutcome::Falsified { .. }),
         "mutating implies_short_circuit did not falsify the proof -- the connective helper is not \
          load-bearing for this exemplar: {outcome:?}\n{}",
-        transcript(&mutated)
+        mutated.transcript()
     );
 }
 
@@ -590,20 +673,20 @@ fn mutating_the_compiled_postconditions_addition_falsifies_the_proof() {
     let bundle = function_application_bundle();
     let unmutated = execute_kani(&bundle, HEALTHY_SUBJECT, None);
     assert!(
-        unmutated.status.success(),
+        unmutated.output.status.success(),
         "control run must verify before mutating:\n{}",
-        transcript(&unmutated)
+        unmutated.transcript()
     );
     let mut mutated_bundle = bundle.clone();
     mutated_bundle.rust.contents = mutate_postcondition_addition(&bundle.rust.contents);
     assert_ne!(mutated_bundle.rust.contents, bundle.rust.contents);
     let mutated = execute_kani(&mutated_bundle, HEALTHY_SUBJECT, None);
-    let outcome = classify(&mutated);
+    let outcome = mutated.classify().outcome;
     let codegen::KaniRunOutcome::Falsified { counterexample } = &outcome else {
         panic!(
             "an `add` returning `left + right + 1` still proves -- the exemplar's arithmetic is \
              not load-bearing: {outcome:?}\n{}",
-            transcript(&mutated)
+            mutated.transcript()
         )
     };
     let graph: codegen::ProofDependencyGraph =
@@ -622,5 +705,93 @@ fn mutating_the_compiled_postconditions_addition_falsifies_the_proof() {
     assert_eq!(
         decoded,
         [("amount_current".to_owned(), WitnessValue::Integer(999))]
+    );
+}
+
+/// A Kani check of class `assertion` at `file` with `status`.
+fn check_at(id: u64, file: &str, status: codegen::KaniCheckStatus) -> codegen::KaniCheckResult {
+    codegen::KaniCheckResult {
+        id,
+        class: codegen::KaniCheckClass::from("assertion".to_owned()),
+        location: codegen::KaniCheckLocation {
+            file: file.to_owned(),
+            line: Some(1),
+        },
+        status,
+    }
+}
+
+/// IT-011-SC-04's attribution rule, without a Kani run: a check is
+/// attributed by its exact file, whether Kani printed it relative or
+/// absolute. A file whose path a claimed module's path is a prefix of, or a
+/// same-named file in another crate, is not attributed, and only SUCCESS
+/// counts.
+#[test]
+#[trace("IT-011-SC-04")]
+fn success_census_attributes_checks_by_exact_file() {
+    use codegen::KaniCheckStatus::{Satisfied, Success, Unreachable};
+
+    let generated = tempfile::tempdir().unwrap();
+    let runtime = tempfile::tempdir().unwrap();
+    let mutated = tempfile::tempdir().unwrap();
+    for root in [generated.path(), runtime.path(), mutated.path()] {
+        fs::create_dir(root.join("src")).unwrap();
+        for file in ["src/lib.rs", "src/lib.rs.orig", "src/operators.rs"] {
+            fs::write(root.join(file), "").unwrap();
+        }
+    }
+    let modules = [
+        fs::canonicalize(generated.path().join("src/lib.rs")).unwrap(),
+        fs::canonicalize(runtime.path().join("src/operators.rs")).unwrap(),
+    ];
+    let absolute = |root: &Path, file: &str| root.join(file).display().to_string();
+
+    let checks = [
+        // Relative: Kani's spelling for the crate it ran in.
+        check_at(1, "src/lib.rs", Success),
+        // Absolute: Kani's spelling for a dependency.
+        check_at(2, &absolute(runtime.path(), "src/operators.rs"), Success),
+        check_at(3, &absolute(runtime.path(), "src/operators.rs"), Success),
+        // `src/lib.rs` is a prefix of `src/lib.rs.orig`.
+        check_at(4, "src/lib.rs.orig", Success),
+        // Same crate-relative path, another crate.
+        check_at(5, &absolute(mutated.path(), "src/operators.rs"), Success),
+        // The generated crate's own `src/operators.rs`, printed relative.
+        check_at(6, "src/operators.rs", Success),
+        check_at(7, "unknown", Success),
+        // Not SUCCESS.
+        check_at(8, "src/lib.rs", Unreachable),
+        check_at(9, &absolute(runtime.path(), "src/operators.rs"), Satisfied),
+    ];
+    let census = success_census(&checks, generated.path(), &modules);
+    assert_eq!(
+        census,
+        [(modules[0].as_path(), 1), (modules[1].as_path(), 2)]
+    );
+    assert!(unreached(&census).is_empty());
+    assert_every_module_reached(&census, &checks);
+
+    // A claimed module no SUCCESS check names is counted zero, and so unreached.
+    let census = success_census(&checks[3..], generated.path(), &modules);
+    assert_eq!(
+        census,
+        [(modules[0].as_path(), 0), (modules[1].as_path(), 0)]
+    );
+    assert_eq!(
+        unreached(&census),
+        [modules[0].as_path(), modules[1].as_path()]
+    );
+    let partial = [(modules[0].as_path(), 1), (modules[1].as_path(), 0)];
+    assert_eq!(unreached(&partial), [modules[1].as_path()]);
+
+    // The failure names the unreached module.
+    let failure = std::panic::catch_unwind(|| assert_every_module_reached(&partial, &[]))
+        .expect_err("an unreached claimed module fails the test");
+    let message = failure
+        .downcast_ref::<String>()
+        .expect("the assertion message is formatted");
+    assert!(
+        message.contains(&format!("(unreached): [{:?}]", modules[1])),
+        "{message}"
     );
 }

@@ -29,7 +29,8 @@ counterexample.
 
 ## Preconditions
 
-`cargo kani` is available locally. The generated crates fetch the
+`cargo kani` is available locally and accepts
+`-Z unstable-options --export-json <file>`. The generated crates fetch the
 `quire-contract-runtime` that codegen's generated manifests name, and the
 mutation control copies that same resolved checkout, located through
 `cargo metadata`. Missing prerequisites fail the test. No hosted workflow is
@@ -46,11 +47,23 @@ ABI derives no subject result.
 
 ## Test Procedure
 
-1. Run the generated Kani bundle with the healthy subject and read the
-   SUCCESS-check discharge count from Kani's `** <failed> of <total> failed`
-   summary, excluding UNREACHABLE and UNDETERMINED checks.
+1. Run the generated Kani bundle with the healthy subject, exporting Kani's
+   report, and read its checks through codegen's `classify_kani_run`: the
+   SUCCESS-check count and each check's status and source location. Only
+   SUCCESS checks count; UNREACHABLE, UNDETERMINED and every other status do
+   not. The generated crate holds the bundle in `src/lib.rs` and the subject in
+   `src/subject.rs`. The claimed modules are `CLAIMED_MODULES`: `src/lib.rs`,
+   the generated bundle. A SUCCESS check is attributed to a claimed module only
+   when its location names exactly that module's file, after resolving a
+   relative location against the generated crate and canonicalizing both
+   paths.
    IT-011-SC-01: the run exits successfully and discharges at least one
    SUCCESS check.
+   IT-011-SC-04: every claimed module is attributed at least one SUCCESS
+   check, and a claimed module attributed none fails the test, which names
+   it. A file whose path only starts with the module's path (for example
+   `src/lib.rs.orig` for `src/lib.rs`), or a file with the same crate-relative
+   path in another crate, is not attributed to it.
 2. Confirm the compiled postcondition calls
    `quire_contract_runtime::operators::implies_short_circuit`, verify the
    unmutated run, then rerun the same bundle and subject against a copy of the
@@ -72,5 +85,6 @@ ABI derives no subject result.
 ## Expected Results
 
 Every run in all three procedures uses real `cargo kani`. A zero discharge
-count, a missing summary line, an unchanged verdict under either mutation, or a
-mutated counterexample other than `amount_current = 999` fails the test.
+count, a claimed module with no SUCCESS check, a report codegen refuses, an
+unchanged verdict under either mutation, or a mutated counterexample other than
+`amount_current = 999` fails the test.
