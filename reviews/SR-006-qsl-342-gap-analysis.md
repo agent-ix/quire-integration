@@ -32,3 +32,9 @@ Bindings: the healthy test maps to IT-011-SC-01 and IT-011-SC-04, which is corre
 ## Verdict
 
 The QSL-342 attribution scope is delivered, apart from one untested failure clause of SC-04. SC-01 to SC-03 stay backed. The fix is a small in-PR test. The PR is mergeable after that.
+
+## Dispositions
+
+| FND | outcome | sha/reason |
+|---|---|---|
+| FND-001 | fixed | e4425e9745f2a2ec53315659841dfee1b3c8c36f (round 1: `unreached` and `assert_every_module_reached` extracted; the census unit test asserts `unreached` on full, zero and partial censuses and catches the panic message naming the unreached module. Reviewer mutants in a throwaway worktree: `filter(\|_\| false)` fails at :780, and `true \|\| unreached.is_empty()` fails at the catch_unwind expect_err; unmutated passes) |

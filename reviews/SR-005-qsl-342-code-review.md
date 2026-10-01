@@ -38,3 +38,10 @@ Gate evidence: the coder's log `qi-342-attrib-ci.log` ends `head=2d4bb1e7… exi
 The Rust is clean. The new panics are test-only and carry messages. There are no integer casts. `success_census` borrows correctly and is O(checks x modules) over small inputs. The lock moved only CG. Path matching is exact and canonical, and it is robust to symlinks and to Kani printing paths relative or absolute. No Kani console text is parsed for a verdict or count. Dropping `operators.rs` is right on ownership grounds. Moving the subject out makes the attribution more precise.
 
 Oracle strength: with one claimed module, which also holds the harness's own assertion, SC-04 is a weak check on its own. It fails only if every SUCCESS check is located outside the generated bundle. A stub oracle that returns `true` would still pass the census. SC-03's mutation is what shows the oracle is load-bearing. This is allowed by ADR-011 §2.3, which attributes by module, and the bundle is one module. It is recorded here, not as a defect. Both findings are low. The PR is mergeable once they and SR-006 FND-001 are fixed in-PR, which is cheap.
+
+## Dispositions
+
+| FND | outcome | sha/reason |
+|---|---|---|
+| FND-001 | fixed | e4425e9745f2a2ec53315659841dfee1b3c8c36f (round 1: the doc now gives ownership by the runtime's own §2.3 gate, the helper holding no checkable operation, and the `+` closure living in the bundle; the census-as-reason clause is gone) |
+| FND-002 | fixed | e4425e9745f2a2ec53315659841dfee1b3c8c36f (round 1: SC-04 now reads "A file whose path only starts with the module's path (for example `src/lib.rs.orig` for `src/lib.rs`)") |
