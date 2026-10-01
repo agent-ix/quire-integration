@@ -51,8 +51,8 @@ repository's own inputs: a `VersionUnchanged`-shaped native postcondition,
 obligation-free integer comparison over the same domain.
 The shared deterministic corpus contains `-1`, `0`, `1000` and `1001`; `-1` and `1001` are
 deliberately outside the model domain. In-domain state pairs include unchanged and changed values.
-The violating Kani subject always returns an in-domain value different from its input so its
-counterexample can be replayed as a valid native invocation. Because VersionUnchanged has no
+The violating Kani subject returns `1000 - version`, an in-domain value that differs from its input
+everywhere except 500, so its counterexample can be replayed as a valid native invocation. Because VersionUnchanged has no
 authored precondition, its Kani adapter uses an explicitly identified, zero-dependency Boolean true
 precondition; this is the exact logical identity for absence of a precondition, not an authored
 source clause or an approximation of unsupported semantics.
