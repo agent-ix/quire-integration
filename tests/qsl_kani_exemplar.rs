@@ -15,10 +15,14 @@ use std::{
     fs,
     path::Path,
     process::{Command, Output},
+    time::Duration,
 };
 
 use ix_trace_rs::trace;
-use qsl_replay::{ProofCategory, TerminalRecord, TerminalValue};
+use qsl_replay::{
+    ByteDigest, DigestDomain, DigestRecord, ProofCategory, ScalarLimits, StageLimits,
+    WitnessSettlement, WitnessValue, MAX_ENCODED_BYTES,
+};
 use quire_contract_codegen as codegen;
 use quire_contract_ir as ir;
 use quire_spec_language::lowering::{lower_for, LoweringLimits, ProjectionTarget};
@@ -38,6 +42,19 @@ fn execute_kani(
 ) -> Output {
     let graph: codegen::ProofDependencyGraph =
         serde_json::from_str(&bundle.proof_graph.contents).unwrap();
+    let generated = kani_crate(&bundle.rust.contents, subject, runtime_patch);
+    Command::new("cargo")
+        .arg("kani")
+        .args(&graph.options)
+        .env("CARGO_TARGET_DIR", generated.target())
+        .current_dir(generated.path())
+        .output()
+        .expect("cargo kani executes")
+}
+
+/// A throwaway crate holding generated Kani `source` followed by `subject`.
+/// `runtime_patch` replaces `quire-contract-runtime` with a local copy.
+fn kani_crate(source: &str, subject: &str, runtime_patch: Option<&Path>) -> GeneratedCrate {
     // quire-contract-runtime's own `#[cfg(kani)]` proof harness imports
     // `crate::exact`, so a `cargo kani` build needs its "exact" feature.
     let generated = GeneratedCrate::new("composed-kani", &["exact"], "");
@@ -50,21 +67,12 @@ fn execute_kani(
             ),
         );
     }
-    generated.write(
-        "src/lib.rs",
-        &format!("{}\n{subject}\n", bundle.rust.contents),
-    );
+    generated.write("src/lib.rs", &format!("{source}\n{subject}\n"));
     generated.write(
         "build.rs",
         "fn main() { println!(\"cargo:rustc-check-cfg=cfg(kani)\"); }\n",
     );
-    Command::new("cargo")
-        .arg("kani")
-        .args(&graph.options)
-        .env("CARGO_TARGET_DIR", generated.target())
-        .current_dir(generated.path())
-        .output()
-        .expect("cargo kani executes")
+    generated
 }
 
 fn transcript(output: &Output) -> String {
@@ -75,30 +83,138 @@ fn transcript(output: &Output) -> String {
     )
 }
 
+/// codegen's classification of one raw `cargo kani` run.
+fn classify(output: &Output) -> codegen::KaniRunOutcome {
+    codegen::classify_kani_run(output.status.success(), &transcript(output))
+}
+
 // ---------------------------------------------------------------------------
-// IT-010-SC-05: the VersionUnchanged-shaped postcondition proves for the identity subject
-// and its counterexample replays through native execution.
+// IT-010-SC-05: the VersionUnchanged postcondition's Kani obligation proves for the identity
+// subject, and the changed subject's counterexample is decoded by codegen and replayed through
+// QSL's `qsl_replay::replay` facade.
 // ---------------------------------------------------------------------------
 
-/// The first `i64` of Kani's printed concrete playback, decoded exactly.
-fn playback_i64(output: &str) -> Option<i64> {
-    let tail = output
-        .split_once("let concrete_vals: Vec<Vec<u8>> = vec![")?
-        .1;
-    let row = tail.split_once("vec![")?.1.split_once(']')?.0;
-    let bytes = row
-        .split(',')
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::parse::<u8>)
-        .collect::<Result<Vec<_>, _>>()
-        .ok()?;
-    Some(i64::from_le_bytes(bytes.try_into().ok()?))
+/// Wall-clock budget for one real Kani run.
+const KANI_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// The changed subject: in-domain, and equal to its input only at 500. The
+/// replay twin mirrors its `1000 - version`.
+const CHANGED_SUBJECT: &str =
+    "/// Changed ConfigVersion subject.\npub fn subject(version_pre: i64) -> i64 { 1000 - version_pre }";
+
+/// The selected function of the QSL replay twin.
+const TWIN_FUNCTION: &str = "version_unchanged";
+
+/// The header of a standalone QSL function unit, selecting the profile
+/// `qsl_replay::call_site` compiles against.
+const TWIN_HEADER: &str = "language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\" version \"1-draft.2\" digest \"sha256:c8c7ae9fbe783286369ecc83f006190f83be4c3c8fc585766617c90f27a25b16\";\n";
+
+/// No proving run carries limits, so the replay is charged against
+/// unlimited stand-ins.
+const UNLIMITED: ScalarLimits = ScalarLimits {
+    integer_bits: u64::MAX,
+    decimal_digits: u64::MAX,
+    scale_expansion: u64::MAX,
+    text_input_bytes: u64::MAX,
+    text_scalars: u64::MAX,
+    normalized_scalars: u64::MAX,
+    unit_edges: u64::MAX,
+    value_occurrences: u64::MAX,
+    work_units: u64::MAX,
+    result_units: u64::MAX,
+};
+
+/// The QSL function `qsl_replay::replay` evaluates for one counterexample:
+/// the VersionUnchanged clause over the subject `post_of` computes, with
+/// the harness argument `argument` as its one parameter. Equality is written
+/// as two `<=`, because QSL's `=` requires both sides to have the same
+/// integer range and `post_of` may widen it.
+fn replay_twin(argument: &str, post_of: &str) -> codegen::ReplayPackage {
+    let source = format!(
+        "{TWIN_HEADER}function {TWIN_FUNCTION} using v({argument}: Int[0, 1000]): Boolean pure {{ {post_of} <= {argument} and {argument} <= {post_of} }}\n"
+    );
+    let s1 = ScalarLimits {
+        text_input_bytes: u64::try_from(MAX_ENCODED_BYTES).unwrap(),
+        ..UNLIMITED
+    };
+    codegen::ReplayPackage::new(codegen::ReplayInputs {
+        source: codegen::LockedSource {
+            authority: "agent-ix".to_owned(),
+            identity: "ix://quire-integration/config-version/replay-twin".to_owned(),
+            namespace: "test".to_owned(),
+            revision: "1".to_owned(),
+            bytes: source.into_bytes(),
+        },
+        dependencies: Vec::new(),
+        function: TWIN_FUNCTION.to_owned(),
+        backend_manifest: DigestRecord::mint(
+            DigestDomain::ToolManifestJcsV1,
+            ByteDigest::of(b"kani").as_bytes(),
+        ),
+        accounting_limits: UNLIMITED,
+        stage_limits: StageLimits {
+            s1,
+            s2: UNLIMITED,
+            s3: UNLIMITED,
+            s4: UNLIMITED,
+        },
+    })
+    .unwrap_or_else(|refusal| panic!("replay twin does not compile: {refusal}"))
+}
+
+/// codegen's one Kani obligation harness for the VersionUnchanged clause.
+fn config_obligation(bound: &ir::BoundPackage) -> codegen::KaniObligationHarness {
+    let clause = bound_clause(bound, config::CLAUSE).identity().clone();
+    let items = [codegen::ObligationItem::BoundClause {
+        package: bound,
+        clause: &clause,
+    }];
+    let outcome = codegen::negotiate_kani_obligations(&codegen::KaniObligationRequest {
+        items: &items,
+        subject_path: "crate::subject",
+        unwind: 2,
+    })
+    .unwrap();
+    let codegen::KaniObligationOutcome::Emitted {
+        records,
+        mut harnesses,
+        ..
+    } = outcome
+    else {
+        panic!("VersionUnchanged obligation was rejected: {outcome:#?}")
+    };
+    assert!(
+        matches!(
+            records.as_slice(),
+            [codegen::ObligationRecord {
+                disposition: codegen::ObligationDisposition::Supported { .. },
+                ..
+            }]
+        ),
+        "VersionUnchanged obligation is not supported: {records:#?}"
+    );
+    assert_eq!(harnesses.len(), 1);
+    harnesses.remove(0)
+}
+
+/// Run `subject` under `harness` through codegen's executor and classifier.
+fn prove(harness: &codegen::KaniObligationHarness, subject: &str) -> codegen::KaniRunOutcome {
+    let installation = codegen::KaniInstallation::discover().expect("cargo-kani is installed");
+    let generated = kani_crate(&harness.rust.contents, subject, None);
+    codegen::execute_kani_obligation(&codegen::KaniExecutionRequest {
+        installation: &installation,
+        harness: harness.into(),
+        crate_directory: generated.path(),
+        target_directory: &generated.target(),
+        timeout: KANI_TIMEOUT,
+    })
+    .unwrap_or_else(|refusal| panic!("{refusal}"))
+    .outcome
 }
 
 #[test]
 #[trace("IT-010-SC-02", "IT-010-SC-05")]
-fn kani_proves_identity_and_counterexample_replays_natively() {
+fn kani_proves_identity_and_counterexample_replays_through_qsl_replay() {
     let models = [support::config_model()];
     let native = support::config_package(&models);
     let projection = lower_for(
@@ -126,74 +242,83 @@ fn kani_proves_identity_and_counterexample_replays_natively() {
         let bounds = binding.integer_bounds.as_ref().unwrap();
         assert_eq!((bounds.minimum, bounds.maximum), (0, 1000));
     }
-    let harness = graph.options[5].clone();
-    assert_eq!(
-        graph.options,
-        [
-            "-Z",
-            "function-contracts",
-            "-Z",
-            "concrete-playback",
-            "--harness",
-            &harness,
-            "--exact",
-            "--unwind",
-            "2",
-            "--solver",
-            "cadical",
-            "--output-format",
-            "regular",
-            "--concrete-playback",
-            "print",
-        ]
-    );
 
-    let healthy = execute_kani(
-        &bundle,
-        "/// Identity ConfigVersion subject.\npub fn subject(version_pre: i64) -> i64 { version_pre }",
-        None,
-    );
-    assert!(
-        healthy.status.success(),
-        "identity proof failed:\n{}",
-        transcript(&healthy)
-    );
-
-    let changed = execute_kani(
-        &bundle,
-        "/// Always-changed, still in-domain ConfigVersion subject.\npub fn subject(version_pre: i64) -> i64 { if version_pre == 1000 { 999 } else { version_pre + 1 } }",
-        None,
-    );
-    assert!(
-        !changed.status.success(),
-        "violating subject unexpectedly proved"
-    );
-    let output = transcript(&changed);
-    let counterexample = playback_i64(&output)
-        .unwrap_or_else(|| panic!("Kani emitted no decodable concrete playback:\n{output}"));
-    assert!(CONFIG_DOMAIN.contains(&counterexample));
-    let post = if counterexample == 1000 {
-        999
-    } else {
-        counterexample + 1
+    let harness = config_obligation(&bound);
+    let identity = &harness.identity;
+    assert_eq!(identity.clause.clause().as_str(), config::CLAUSE);
+    let [argument] = identity.arguments.as_slice() else {
+        panic!("one symbolic pre-state argument: {:#?}", identity.arguments)
     };
-    assert!(CONFIG_DOMAIN.contains(&post));
+    assert_eq!(identity.results.len(), 1);
+    for binding in identity.arguments.iter().chain(&identity.results) {
+        let bounds = binding.integer_bounds.as_ref().unwrap();
+        assert_eq!((bounds.minimum, bounds.maximum), (0, 1000));
+    }
+    assert!(identity
+        .options
+        .windows(2)
+        .any(|pair| pair == ["--concrete-playback", "print"]));
+
     assert_eq!(
-        support::config_native_verdict(&native, &models[0], counterexample, post),
+        prove(
+            &harness,
+            "/// Identity ConfigVersion subject.\npub fn subject(version_pre: i64) -> i64 { version_pre }",
+        ),
+        codegen::KaniRunOutcome::Verified
+    );
+
+    let outcome = prove(&harness, CHANGED_SUBJECT);
+    let codegen::KaniRunOutcome::Falsified { counterexample } = &outcome else {
+        panic!("the changed subject must be falsified: {outcome:?}")
+    };
+    let decoded = codegen::decode_falsification(
+        &identity.harness_symbol,
+        &identity.module_symbol,
+        &identity.arguments,
+        counterexample,
+    )
+    .unwrap_or_else(|failure| panic!("counterexample does not decode: {failure:?}"));
+    let [(name, WitnessValue::Integer(pre))] = decoded.as_slice() else {
+        panic!("one decoded integer: {decoded:?}")
+    };
+    assert_eq!(name, &argument.identifier);
+    assert!(CONFIG_DOMAIN.contains(pre));
+    assert_ne!(*pre, 500, "the changed subject keeps 500 unchanged");
+
+    // QSL evaluates the clause over the changed subject at the decoded input and settles the
+    // same violation Kani reported.
+    let changed_twin = replay_twin(
+        &argument.identifier,
+        &format!("1000 - {}", argument.identifier),
+    );
+    assert_eq!(
+        codegen::replay_counterexample(identity, counterexample, &changed_twin)
+            .expect("QSL settles the replay"),
+        codegen::ReplayVerdict::Reproduced
+    );
+    // Against the identity subject the same counterexample is not reproduced: the verdict is
+    // QSL's evaluation, not a value this test supplies.
+    let identity_twin = replay_twin(&argument.identifier, &argument.identifier);
+    assert_eq!(
+        codegen::replay_counterexample(identity, counterexample, &identity_twin)
+            .expect("QSL settles the replay"),
+        codegen::ReplayVerdict::EvidenceFailure(codegen::EvidenceFailureCause::Verdict {
+            settlement: WitnessSettlement::Inconclusive,
+            category: ProofCategory::Success,
+        })
+    );
+    // The authored clause itself, executed natively over the same pre/post, is false too.
+    assert_eq!(
+        support::config_native_verdict(&native, &models[0], *pre, 1000 - pre),
         Some(false)
     );
-    assert_eq!(playback_i64("let concrete_vals = vec![];"), None);
 }
 
 // ---------------------------------------------------------------------------
 // IT-011: the function-application exemplar `amount < 1000 implies amount + 1
-// <= 1000` -- its claimed module discharges a SUCCESS check, and mutating the
-// connective helper its compiled postcondition calls fails the proof.
+// <= 1000` -- its proof discharges SUCCESS checks, and mutating the connective
+// helper its compiled postcondition calls falsifies the proof.
 // ---------------------------------------------------------------------------
-
-/// The one claimed module for this exemplar's one proposition: the compiled
-/// postcondition oracle Kani discharges checks against.
-const CLAIMED_MODULES: [&str; 1] = ["PopulationRule@7/population_rule"];
 
 /// This clause's ABI derives no subject result: the postcondition is a pure
 /// fact over the input.
@@ -345,33 +470,18 @@ fn mutated_runtime_copy(source: &Path) -> tempfile::TempDir {
 
 #[test]
 #[trace("IT-011-SC-01")]
-fn healthy_run_discharges_a_success_check_for_every_claimed_module() {
+fn healthy_run_discharges_success_checks() {
     let bundle = function_application_bundle();
     let healthy = execute_kani(&bundle, HEALTHY_SUBJECT, None);
     let output = transcript(&healthy);
     assert!(
-        healthy.status.success() && output.contains("VERIFICATION:- SUCCESSFUL"),
+        healthy.status.success(),
         "function-application proof did not verify:\n{output}"
     );
-    let success_checks = u32::try_from(discharged_success_checks(&output)).unwrap();
-    for module in CLAIMED_MODULES {
-        let record = TerminalRecord::new(module, TerminalValue::Proved { success_checks });
-        assert_eq!(
-            record.value().category(),
-            ProofCategory::Success,
-            "claimed module {module}'s discharge count did not read back as success"
-        );
-        let TerminalValue::Proved {
-            success_checks: discharged,
-        } = record.value()
-        else {
-            panic!("record was constructed as Proved")
-        };
-        assert!(
-            discharged > 0,
-            "claimed module {module} discharged zero SUCCESS checks"
-        );
-    }
+    assert!(
+        discharged_success_checks(&output) > 0,
+        "the function-application proof discharged zero SUCCESS checks:\n{output}"
+    );
 }
 
 #[test]
@@ -397,10 +507,11 @@ fn mutating_the_compiled_postconditions_connective_helper_fails_the_proof() {
     let runtime = package_root(&locator.path().join("Cargo.toml"), "quire-contract-runtime");
     let mutated_runtime = mutated_runtime_copy(&runtime);
     let mutated = execute_kani(&bundle, HEALTHY_SUBJECT, Some(mutated_runtime.path()));
-    let output = transcript(&mutated);
+    let outcome = classify(&mutated);
     assert!(
-        !mutated.status.success() && output.contains("VERIFICATION:- FAILED"),
-        "mutating implies_short_circuit did not fail the proof -- the connective helper is not \
-         load-bearing for this exemplar:\n{output}"
+        matches!(outcome, codegen::KaniRunOutcome::Falsified { .. }),
+        "mutating implies_short_circuit did not falsify the proof -- the connective helper is not \
+         load-bearing for this exemplar: {outcome:?}\n{}",
+        transcript(&mutated)
     );
 }

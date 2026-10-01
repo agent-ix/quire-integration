@@ -74,12 +74,15 @@ source clause or an approximation of unsupported semantics.
    IT-010-SC-04: every sampled value is within `0..=1000`, every tagged expectation matches the
    generated oracle and native verdict, framework discards are zero, and the accepted/rejected/
    discarded counts are reported.
-4. Run the generated Kani contract against the identity subject and an always-changed, in-domain
-   subject, with concrete playback enabled.
-   IT-010-SC-05: the identity subject proves, the changed subject fails, the printed counterexample
-   and canonical absent-precondition identity are retained, the printed counterexample is decoded
-   without substituting another value, and replay through `runtime::execute` returns the same false
-   contract verdict.
+4. Run codegen's Kani obligation harness for the postcondition through codegen's executor against
+   the identity subject and a changed, in-domain subject (`1000 - version`), with concrete
+   playback enabled.
+   IT-010-SC-05: codegen classifies the identity run `Verified` and the changed run `Falsified`;
+   codegen's `decode_falsification` decodes the counterexample against the obligation's own
+   argument schema; codegen's `replay_counterexample` replays it through `qsl_replay::replay`
+   against a QSL function mirroring the clause over the changed subject and QSL settles it
+   `Reproduced`, while the same counterexample against the identity mirror is evidence failure;
+   and `runtime::execute` of the authored clause over the decoded pre/post returns false.
 
 ## Expected Results
 
