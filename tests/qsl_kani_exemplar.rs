@@ -534,8 +534,9 @@ impl<'a> syn::visit::Visit<'a> for Additions<'a> {
     }
 }
 
-/// `source` with the one `+` in `fn {POSTCONDITION_ORACLE}` replaced by its
-/// left operand: an `add` that returns its left operand.
+/// `source` with the one `+` in `fn {POSTCONDITION_ORACLE}` returning
+/// `left + right + 1`: `amount_current + 1_i64` becomes
+/// `amount_current + 1_i64 + 1_i64`.
 fn mutate_postcondition_addition(source: &str) -> String {
     let file = syn::parse_file(source).expect("generated Kani source is Rust");
     let function = file
@@ -554,28 +555,35 @@ fn mutate_postcondition_addition(source: &str) -> String {
             additions.0.len()
         )
     };
-    let offsets = |span: proc_macro2::Span| {
-        (
-            byte_offset(source, span.start()),
-            byte_offset(source, span.end()),
-        )
-    };
-    let (start, end) = offsets(syn::spanned::Spanned::span(*addition));
-    let (left_start, left_end) = offsets(syn::spanned::Spanned::span(&*addition.left));
-    format!(
-        "{}{}{}",
-        &source[..start],
-        &source[left_start..left_end],
-        &source[end..]
-    )
+    let end = byte_offset(source, syn::spanned::Spanned::span(*addition).end());
+    format!("{} + 1_i64{}", &source[..end], &source[end..])
 }
 
-/// An `add` that returns its left operand turns the postcondition into
+/// The decode schema of a bundle's symbolic arguments, in the order the
+/// bundle's harness calls `kani::any()`.
+fn bundle_arguments(graph: &codegen::ProofDependencyGraph) -> Vec<codegen::ObligationBinding> {
+    graph
+        .subject_arguments
+        .iter()
+        .map(|binding| codegen::ObligationBinding {
+            identifier: binding.identifier.clone(),
+            role: binding.role,
+            primitive_type: binding.primitive_type,
+            integer_bounds: binding.integer_bounds.clone(),
+            dependencies: vec![binding.dependency.clone()],
+        })
+        .collect()
+}
+
+/// IT-011-SC-03: the mutation control for the exemplar's arithmetic.
+///
+/// The mutant must be non-equivalent: it has to make the claim false. An
+/// equivalent mutant such as dropping the `+ 1` leaves
 /// `amount < 1000 implies amount <= 1000`, which every in-domain `amount`
-/// satisfies. A proof that still verifies under that mutation has not
-/// exercised the arithmetic. Expected to fail until quire-contract-codegen
-/// IR-458 lands: the mutated postcondition is still a valid property over
-/// the domain, so Kani proves it.
+/// satisfies, so Kani proving it is the correct verdict, not a vacuous one.
+/// Here the `+` returns `left + right + 1`, so the rule reads
+/// `amount < 1000 implies amount + 2 <= 1000`, which is false exactly at
+/// `amount = 999`.
 #[test]
 #[trace("IT-011-SC-03")]
 fn mutating_the_compiled_postconditions_addition_falsifies_the_proof() {
@@ -591,10 +599,28 @@ fn mutating_the_compiled_postconditions_addition_falsifies_the_proof() {
     assert_ne!(mutated_bundle.rust.contents, bundle.rust.contents);
     let mutated = execute_kani(&mutated_bundle, HEALTHY_SUBJECT, None);
     let outcome = classify(&mutated);
-    assert!(
-        matches!(outcome, codegen::KaniRunOutcome::Falsified { .. }),
-        "an `add` returning its left operand still proves -- the exemplar's arithmetic is not \
-         load-bearing: {outcome:?}\n{}",
-        transcript(&mutated)
+    let codegen::KaniRunOutcome::Falsified { counterexample } = &outcome else {
+        panic!(
+            "an `add` returning `left + right + 1` still proves -- the exemplar's arithmetic is \
+             not load-bearing: {outcome:?}\n{}",
+            transcript(&mutated)
+        )
+    };
+    let graph: codegen::ProofDependencyGraph =
+        serde_json::from_str(&bundle.proof_graph.contents).unwrap();
+    let harness = graph
+        .options
+        .windows(2)
+        .find_map(|pair| (pair[0] == "--harness").then_some(pair[1].as_str()))
+        .expect("the bundle's options name its harness");
+    let (module, proof) = harness
+        .split_once("::")
+        .expect("the bundle's harness is module-qualified");
+    let decoded =
+        codegen::decode_falsification(proof, module, &bundle_arguments(&graph), counterexample)
+            .unwrap_or_else(|failure| panic!("counterexample does not decode: {failure:?}"));
+    assert_eq!(
+        decoded,
+        [("amount_current".to_owned(), WitnessValue::Integer(999))]
     );
 }
