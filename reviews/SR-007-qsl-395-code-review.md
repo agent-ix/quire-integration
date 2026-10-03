@@ -32,3 +32,11 @@ Ticket: QSL-395 (A3k). PR quire-integration#14. Code review with the Rust lane f
 ## Verdict
 
 Not mergeable yet. The tests have real oracles: SC-02 computes node ids independently, and SC-03 really changes the version. But the PR is locked to a QSL and IR older than QSL-395, and it asserts the lock's version field that QSL-395 deleted. FND-001 must be fixed in this PR. FND-002 and FND-003 are small in-PR test fixes.
+
+## Dispositions
+
+| FND | outcome | sha/reason |
+|---|---|---|
+| FND-001 | fixed | 7e77ab35 (round 1: lock moves to QSL c83be711, IR 75805e2e and CG 7f0d6d08; both `selection.version` asserts are deleted; SC-03's `assert_ne!` on `model_selections` stays as the oracle through the digest. Reviewer re-ran `cargo test --locked --test qsl_model_owner_admission` at 8c7f5bd8: 4/4 pass) |
+| FND-002 | fixed | 7e77ab35 (round 1: `domain_package` sets only `package.version` through serde_json and asserts it reads back) |
+| FND-003 | fixed | 8c7f5bd8 (round 1: asserts `MissingImport` at `/lock/model_selections/0/digest`. 7e77ab35 added the code assert and 8c7f5bd8 corrected the path. `MissingImport` with cause `MissingSelection` is IR's own branch in `admit_document` when no document is supplied under the selected digest, which is the scenario the test builds. IR's mismatch path, `StaleDependency`/`ByteDigestMismatch`, needs a document under the selected digest with other bytes. That is a different scenario and is not in IT-012-SC-01) |
