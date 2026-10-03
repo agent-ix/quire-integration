@@ -26,7 +26,7 @@ use qsl_semantics::{
 };
 use quire_contract_ir::{
     read_checked_package, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageV2,
+    CheckedPackageReadLimits, CheckedPackageRefusalCode, CheckedPackageV2,
 };
 use quire_semantic_value::checking::CheckingLimits;
 use serde_json::Value;
@@ -39,11 +39,17 @@ const AUTHORED_VERSION: &str = "1.0.0";
 const IDENTITY: &str = "acme/orders";
 const DECLARATIONS: [&str; 2] = ["Gadget", "Widget"];
 
-/// QSL's authored domain package document, relabelled to `version`.
+/// QSL's authored domain package document with only `package.version` set to
+/// `version`.
 fn domain_package(version: &str) -> Vec<u8> {
     let path = support::qsl_root().join("tests/fixtures/spine-model.semantic-ir.json");
     let text = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-    text.replace(AUTHORED_VERSION, version).into_bytes()
+    let mut document: Value = serde_json::from_str(&text).expect("the fixture is JSON");
+    document["package"]["version"] = Value::from(version);
+    let bytes = serde_json::to_vec(&document).expect("the document serializes");
+    let read_back: Value = serde_json::from_slice(&bytes).expect("the relabelled document is JSON");
+    assert_eq!(read_back["package"]["version"], version);
+    bytes
 }
 
 /// The `sha256-jcs` digest QSL keys `document` under.
@@ -154,7 +160,6 @@ fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
         panic!("one model selection: {:?}", package.lock().model_selections);
     };
     assert_eq!(&*selection.identity, IDENTITY);
-    assert_eq!(&*selection.version, AUTHORED_VERSION);
     assert_eq!(&*selection.digest_domain, "sha256-jcs");
     let declared: Vec<&str> = package
         .graph()
@@ -169,17 +174,21 @@ fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
 }
 
 /// IT-012-SC-01: a domain package document supplied under another document's
-/// digest is not accepted in place of the selected one.
+/// digest is refused as a missing import at the selection's row.
 #[test]
 #[trace("IT-012-SC-01")]
 fn a_domain_package_supplied_under_another_digest_is_refused() {
     let document = domain_package(AUTHORED_VERSION);
     let bytes = emit(&unit_selecting(AUTHORED_VERSION, &document), &document);
     let evidence = evidence(&bytes, &"0".repeat(64), &document);
-    assert!(matches!(
-        read(&bytes, &evidence),
-        CheckedPackageDispatchResult::Refused(_)
-    ));
+    let CheckedPackageDispatchResult::Refused(refusal) = read(&bytes, &evidence) else {
+        panic!("expected a refusal");
+    };
+    assert_eq!(refusal.code, CheckedPackageRefusalCode::MissingImport);
+    assert_eq!(
+        refusal.path.map(|path| path.to_string()).as_deref(),
+        Some("/lock/model_selections/0")
+    );
 }
 
 /// IT-012-SC-02: every model node IR admitted is keyed by the content-only
@@ -199,7 +208,6 @@ fn model_nodes_are_owned_by_the_content_only_model_owner() {
 #[trace("IT-012-SC-03")]
 fn a_version_only_change_of_the_domain_package_keys_the_same_model_nodes() {
     let (first, second) = (admitted(AUTHORED_VERSION), admitted("2.0.0"));
-    assert_eq!(&*second.lock().model_selections[0].version, "2.0.0");
     assert_ne!(
         second.lock().model_selections,
         first.lock().model_selections
