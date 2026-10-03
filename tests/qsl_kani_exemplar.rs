@@ -146,7 +146,8 @@ const TWIN_FUNCTION: &str = "version_unchanged";
 
 /// The header of a standalone QSL function unit, selecting the profile
 /// `qsl_replay::call_site` compiles against.
-const TWIN_HEADER: &str = "language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n";
+const TWIN_HEADER: &str =
+    "language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n";
 
 /// No proving run carries limits, so the replay is charged against
 /// unlimited stand-ins.
