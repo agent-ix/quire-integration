@@ -20,8 +20,8 @@ use std::{
 
 use ix_trace_rs::trace;
 use qsl_replay::{
-    ByteDigest, DigestDomain, DigestRecord, ProofCategory, ScalarLimits, StageLimits,
-    WitnessSettlement, WitnessValue, MAX_ENCODED_BYTES,
+    ByteDigest, Category, DigestDomain, DigestRecord, ScalarLimits, StageLimits, WitnessSettlement,
+    WitnessValue, MAX_ENCODED_BYTES,
 };
 use quire_contract_codegen as codegen;
 use quire_contract_ir as ir;
@@ -146,7 +146,8 @@ const TWIN_FUNCTION: &str = "version_unchanged";
 
 /// The header of a standalone QSL function unit, selecting the profile
 /// `qsl_replay::call_site` compiles against.
-const TWIN_HEADER: &str = "language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\" version \"1-draft.2\" digest \"sha256:c8c7ae9fbe783286369ecc83f006190f83be4c3c8fc585766617c90f27a25b16\";\n";
+const TWIN_HEADER: &str =
+    "language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n";
 
 /// No proving run carries limits, so the replay is charged against
 /// unlimited stand-ins.
@@ -313,8 +314,8 @@ fn kani_proves_identity_and_counterexample_replays_through_qsl_replay() {
         panic!("the changed subject must be falsified: {outcome:?}")
     };
     let decoded = codegen::decode_falsification(
-        &identity.harness_symbol,
-        &identity.module_symbol,
+        identity.harness_symbol.as_str(),
+        identity.module_symbol.as_str(),
         &identity.arguments,
         counterexample,
     )
@@ -345,7 +346,7 @@ fn kani_proves_identity_and_counterexample_replays_through_qsl_replay() {
             .expect("QSL settles the replay"),
         codegen::ReplayVerdict::EvidenceFailure(codegen::EvidenceFailureCause::Verdict {
             settlement: WitnessSettlement::Inconclusive,
-            category: ProofCategory::Success,
+            category: Category::Success,
         })
     );
     // The authored clause itself, executed natively over the same pre/post, is false too.

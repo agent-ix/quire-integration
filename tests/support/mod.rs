@@ -667,13 +667,12 @@ pub const PROPTEST_DEPENDENCY: &str =
 pub const RUNTIME_GIT_URL: &str = "https://github.com/agent-ix/quire-contract-runtime";
 
 /// A single-crate workspace manifest that builds generated code against the
-/// runtime revision codegen generates for. `dependencies` are extra
+/// runtime source codegen's own generated manifests name. `dependencies` are extra
 /// `[dependencies]` lines; `runtime_features` are enabled on
 /// `quire-contract-runtime`.
 pub fn runtime_manifest(name: &str, runtime_features: &[&str], dependencies: &str) -> String {
     format!(
-        "[package]\nname = \"{name}\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[dependencies]\nquire-contract-runtime = {{ git = \"{RUNTIME_GIT_URL}\", rev = \"{}\", features = {runtime_features:?} }}\n{dependencies}\n[workspace]\n",
-        codegen::RUNTIME_REVISION,
+        "[package]\nname = \"{name}\"\nversion = \"0.0.0\"\nedition = \"2021\"\npublish = false\n\n[dependencies]\nquire-contract-runtime = {{ git = \"{RUNTIME_GIT_URL}\", branch = \"main\", features = {runtime_features:?} }}\n{dependencies}\n[workspace]\n",
     )
 }
 
