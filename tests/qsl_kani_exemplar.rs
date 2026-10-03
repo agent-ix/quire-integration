@@ -20,8 +20,8 @@ use std::{
 
 use ix_trace_rs::trace;
 use qsl_replay::{
-    ByteDigest, DigestDomain, DigestRecord, ProofCategory, ScalarLimits, StageLimits,
-    WitnessSettlement, WitnessValue, MAX_ENCODED_BYTES,
+    ByteDigest, Category, DigestDomain, DigestRecord, ScalarLimits, StageLimits, WitnessSettlement,
+    WitnessValue, MAX_ENCODED_BYTES,
 };
 use quire_contract_codegen as codegen;
 use quire_contract_ir as ir;
@@ -313,8 +313,8 @@ fn kani_proves_identity_and_counterexample_replays_through_qsl_replay() {
         panic!("the changed subject must be falsified: {outcome:?}")
     };
     let decoded = codegen::decode_falsification(
-        &identity.harness_symbol,
-        &identity.module_symbol,
+        identity.harness_symbol.as_str(),
+        identity.module_symbol.as_str(),
         &identity.arguments,
         counterexample,
     )
@@ -345,7 +345,7 @@ fn kani_proves_identity_and_counterexample_replays_through_qsl_replay() {
             .expect("QSL settles the replay"),
         codegen::ReplayVerdict::EvidenceFailure(codegen::EvidenceFailureCause::Verdict {
             settlement: WitnessSettlement::Inconclusive,
-            category: ProofCategory::Success,
+            category: Category::Success,
         })
     );
     // The authored clause itself, executed natively over the same pre/post, is false too.

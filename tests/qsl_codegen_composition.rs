@@ -315,7 +315,7 @@ fn actual_command_exports_selected_bytes_and_backend_generates_numeric_oracle() 
     write_job(directory.path(), &unsupported, &models[0], None);
     let error = command::lower_for(&directory.path().join("compile.json"), TARGET)
         .expect_err("an unsupported clause exports nothing");
-    assert_eq!(error.exit_code(), 21);
+    assert_eq!(error.category().exit_code(), 21);
     let error = error.value().unwrap();
     assert_eq!(error["code"], "unsupported_projection");
     assert_eq!(error["details"]["profile"], "integer-ir/v1");
@@ -329,7 +329,7 @@ fn actual_command_exports_selected_bytes_and_backend_generates_numeric_oracle() 
     write_job(directory.path(), &later, &models[0], None);
     let error = command::lower_for(&directory.path().join("compile.json"), TARGET)
         .expect_err("a later unsupported clause exports nothing");
-    assert_eq!(error.exit_code(), 21);
+    assert_eq!(error.category().exit_code(), 21);
     let error = error.value().unwrap();
     assert_eq!(error["code"], "unsupported_projection");
     assert_eq!(error["details"]["clause"]["clause"], "other_rule");
