@@ -174,7 +174,7 @@ fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
 }
 
 /// IT-012-SC-01: a domain package document supplied under another document's
-/// digest is refused as a missing import at the selection's row.
+/// digest is refused as a missing import at the selection's digest.
 #[test]
 #[trace("IT-012-SC-01")]
 fn a_domain_package_supplied_under_another_digest_is_refused() {
@@ -187,7 +187,7 @@ fn a_domain_package_supplied_under_another_digest_is_refused() {
     assert_eq!(refusal.code, CheckedPackageRefusalCode::MissingImport);
     assert_eq!(
         refusal.path.map(|path| path.to_string()).as_deref(),
-        Some("/lock/model_selections/0")
+        Some("/lock/model_selections/0/digest")
     );
 }
 
