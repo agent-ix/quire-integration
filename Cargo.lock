@@ -207,9 +207,9 @@ checksum = "175812e0be2bccb6abe50bb8d566126198344f707e304f45c648fd8f2cc0365e"
 
 [[package]]
 name = "cc"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f360145194ee8e21db5ee7f3fcd4fe52210864c75c985dae33218202c8bbe040"
+checksum = "f74872d07caf508b30a21f6836e7d7016a2eaf7d9ff4f48deaa58cd8a0407630"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -905,15 +905,15 @@ dependencies = [
 
 [[package]]
 name = "lazy_static"
-version = "1.5.0"
+version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "libc"
-version = "0.2.189"
+version = "0.2.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
 
 [[package]]
 name = "libyaml-rs"
@@ -1215,12 +1215,12 @@ dependencies = [
 [[package]]
 name = "qsl-attrs"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 
 [[package]]
 name = "qsl-cst"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "logos",
  "qsl-attrs",
@@ -1231,7 +1231,7 @@ dependencies = [
 [[package]]
 name = "qsl-eval"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "qsl-attrs",
  "qsl-foundation",
@@ -1247,7 +1247,7 @@ dependencies = [
 [[package]]
 name = "qsl-forms"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "qsl-cst",
  "qsl-foundation",
@@ -1258,7 +1258,7 @@ dependencies = [
 [[package]]
 name = "qsl-foundation"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "qsl-attrs",
  "quire-exact",
@@ -1270,7 +1270,7 @@ dependencies = [
 [[package]]
 name = "qsl-package"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "qsl-attrs",
  "qsl-foundation",
@@ -1286,7 +1286,7 @@ dependencies = [
 [[package]]
 name = "qsl-replay"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "qsl-attrs",
  "qsl-cst",
@@ -1305,7 +1305,7 @@ dependencies = [
 [[package]]
 name = "qsl-semantics"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "agent-ix-extraction-frontend",
  "agent-ix-semantic-ir",
@@ -1315,7 +1315,6 @@ dependencies = [
  "quire-canonical",
  "quire-exact",
  "quire-semantic-value",
- "quire-specification-qualification",
  "quire-walk",
  "serde",
  "serde_json",
@@ -1326,11 +1325,12 @@ dependencies = [
 [[package]]
 name = "quire-canonical"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/quire-canonical?branch=main#59fe4f06370fbdbd8de4fa446ad78f3974926252"
+source = "git+https://github.com/agent-ix/quire-canonical?branch=main#b4bb97a5fe0a946e9d980e6466c7ecf95c6e62f1"
 dependencies = [
  "quire-canonical-derive",
  "ryu-js",
  "serde",
+ "serde_json",
  "sha2",
  "thiserror",
 ]
@@ -1338,7 +1338,7 @@ dependencies = [
 [[package]]
 name = "quire-canonical-derive"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/quire-canonical?branch=main#59fe4f06370fbdbd8de4fa446ad78f3974926252"
+source = "git+https://github.com/agent-ix/quire-canonical?branch=main#b4bb97a5fe0a946e9d980e6466c7ecf95c6e62f1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1348,7 +1348,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-codegen"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#68ca78c2fbbb876da958b145040e24131a79b9f7"
+source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#5adfd3c1ac12d7524cd8ace73a69ffdde54cf3ff"
 dependencies = [
  "qsl-replay",
  "quire-contract-ir",
@@ -1363,7 +1363,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-ir"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#ebea67821976a7e695d88cb42503e636a05b44a7"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#cbcd790a8fc9d07c83c7c7f6238023ed85fa0bad"
 dependencies = [
  "quire-contract-model",
  "serde",
@@ -1374,7 +1374,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-model"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#ebea67821976a7e695d88cb42503e636a05b44a7"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#cbcd790a8fc9d07c83c7c7f6238023ed85fa0bad"
 dependencies = [
  "jsonschema 0.17.1",
  "quire-canonical",
@@ -1402,7 +1402,7 @@ dependencies = [
 [[package]]
 name = "quire-exact"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "num-bigint",
  "num-integer",
@@ -1458,7 +1458,7 @@ dependencies = [
 [[package]]
 name = "quire-semantic-value"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "quire-canonical",
  "quire-exact",
@@ -1469,7 +1469,7 @@ dependencies = [
 [[package]]
 name = "quire-spec-language"
 version = "0.2.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 dependencies = [
  "logos",
  "num-bigint",
@@ -1494,14 +1494,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "quire-specification-qualification"
-version = "0.0.0"
-source = "git+https://github.com/agent-ix/quire-specification?branch=main#b1da9c84396e776411ccd1474e549f54fbdd4c2e"
-
-[[package]]
 name = "quire-verification-contracts"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-verification-contracts?branch=main#ead78f3f1bea336e2cb230a2ed1b98fa10a913e1"
+source = "git+https://github.com/agent-ix/quire-verification-contracts?branch=main#ec4563ff33e03135ac4d0d9500cc53b0a956ecb6"
 dependencies = [
  "chrono",
  "jsonschema 0.55.1",
@@ -1518,7 +1513,7 @@ dependencies = [
 [[package]]
 name = "quire-walk"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#fbf69cb9cda2d0190a09814a66c6040bd5924248"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8244dd2b4a63b312ca36a8f254cdc096590eb9b9"
 
 [[package]]
 name = "quote"
@@ -2184,9 +2179,9 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "1.26.1"
+version = "1.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ef6dac1e96601b4fb3acccccff2139741fcb757cb9a36089bf5be91cfb285ce"
+checksum = "97277d36b9c3ace13e58fa6e753f8b0bbbf302a18dd193240d70f9e29681059a"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
