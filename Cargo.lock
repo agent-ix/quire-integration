@@ -1348,10 +1348,11 @@ dependencies = [
 [[package]]
 name = "quire-contract-codegen"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#b75e1acf10f80e03eb75c2306890e914b839ba60"
+source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#68ca78c2fbbb876da958b145040e24131a79b9f7"
 dependencies = [
  "qsl-replay",
  "quire-contract-ir",
+ "quire-contract-model",
  "quire-contract-runtime",
  "rustix",
  "serde",
@@ -1389,11 +1390,12 @@ dependencies = [
 [[package]]
 name = "quire-contract-runtime"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#ccc722bd56c64b264070a30a14020efd0bf4a0f4"
+source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#e88c0680ef8ae4c24a28db836a6654c171b5598f"
 dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "quire-exact",
  "unicode-normalization",
 ]
 
