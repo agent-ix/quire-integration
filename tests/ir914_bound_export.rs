@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use ix_trace_rs::trace;
 use qsl_foundation::source::provenance::OccurrenceKey;
-use qsl_foundation::{BackendId, SourceIdentity};
+use qsl_foundation::SourceIdentity;
 use qsl_package::{BoundItem, CheckedPackage, ExportRefusal};
 use qsl_replay::spine::{CheckedUnit, EmittedUnit, SpineLimits};
 use qsl_route::routing::Disposition;
@@ -114,10 +114,8 @@ impl Upstream for ExportVector {
 #[test]
 #[trace("FR-010-AC-4", "FR-001-AC-17", "TC-017")]
 fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
-    let root = DefinitionLock::pinned()
-        .entry(CatalogRole::Root)
-        .identity
-        .clone();
+    let lock = DefinitionLock::pinned();
+    let root = lock.entry(CatalogRole::Root).identity;
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
          function a using v(x: Int[0, 9]): Int[-9, 0] pure {{ -x }}\n\
