@@ -15,9 +15,9 @@ use qsl_route::routing::Disposition;
 use qsl_route::{Candidate, ManifestDigest};
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_contract_codegen::{
-    BackendDescriptor, BackendKind, BackendProviderEnvelope, ContractRequestPosition,
-    EnvelopeRefusal, GenerationContexts, ItemSettlement, RoutedGeneration, RoutedGenerationError,
-    RoutedGenerationItem,
+    BackendDescriptor, BackendKind, BackendProviderEnvelope, ContractItemSettlement,
+    ContractNegotiationError, ContractRequestPosition, GenerationContexts, RoutedGeneration,
+    RoutedGenerationError, RoutedGenerationItem,
 };
 use quire_contract_ir::{
     CheckedPackageDispatchResult, CheckedPackageEvidence, CheckedPackageReadLimits,
@@ -90,10 +90,12 @@ impl Upstream for ExportVector {
 
     fn negotiate(
         &self,
+        package: &ContractPackageV1,
+        positions: &[ContractRequestPosition],
         envelope: &BackendProviderEnvelope,
-    ) -> Result<Vec<ItemSettlement>, EnvelopeRefusal> {
+    ) -> Result<Vec<ContractItemSettlement>, Box<ContractNegotiationError>> {
         *self.envelope.borrow_mut() = Some(envelope.clone());
-        QslCg.negotiate(envelope)
+        QslCg.negotiate(package, positions, envelope)
     }
 
     fn route<'d>(&self, dispositions: &'d [Disposition]) -> Vec<Option<&'d Candidate>> {
@@ -171,15 +173,32 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
             .collect::<Vec<_>>(),
         [0, 2]
     );
+    assert_eq!(
+        driven
+            .settlements
+            .iter()
+            .map(|item| item
+                .backend
+                .as_ref()
+                .expect("bound item settles")
+                .request_index)
+            .collect::<Vec<_>>(),
+        [0, 2]
+    );
     assert_eq!(driven.item_refusals.len(), 1);
     assert_eq!(driven.item_refusals[0].request_index, 1);
     assert_eq!(
         driven.item_refusals[0].occurrence,
         *driven.request_items[1].occurrence()
     );
-    assert!(driven
-        .generation
-        .items
-        .iter()
-        .all(|item| item.request_index != 1));
+    assert_eq!(
+        driven
+            .generation
+            .items
+            .iter()
+            .map(|item| item.request_index)
+            .collect::<Vec<_>>(),
+        [0, 2],
+        "both bound siblings generate and the refused item does not"
+    );
 }
