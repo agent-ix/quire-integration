@@ -4,8 +4,11 @@
 //! QSL-compiled fixture has no attachable abstraction relation. The test
 //! checks that the driver preserves the exact typed refusal it receives.
 
+mod support;
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::fs;
 use std::num::NonZeroU64;
 use std::time::Duration;
 
@@ -19,6 +22,7 @@ use qsl_route::routing::Disposition;
 use qsl_route::{Candidate, ManifestDigest};
 use qsl_semantics::check::AbstractionKey;
 use qsl_semantics::family::FamilyOutcome;
+use qsl_semantics::model::intake::package_input;
 use qsl_semantics::model::key::DeclarationKey;
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_contract_codegen::{
@@ -41,6 +45,48 @@ use quire_exact::{Cancel, Integer, Meter, Outcome, ScalarLimits as QslScalarLimi
 struct ExportVector {
     envelope: RefCell<Option<BackendProviderEnvelope>>,
     positions: RefCell<Option<Vec<ContractRequestPosition>>>,
+    mode: ExportMode,
+    export_calls: RefCell<usize>,
+    export_results: RefCell<Vec<Result<BoundItem, ExportRefusal>>>,
+}
+
+#[derive(Clone, Copy)]
+enum ExportMode {
+    Injected,
+    Natural,
+    ForceRelation,
+}
+
+impl ExportVector {
+    fn observed(mode: ExportMode) -> Self {
+        Self {
+            envelope: RefCell::new(None),
+            positions: RefCell::new(None),
+            mode,
+            export_calls: RefCell::new(0),
+            export_results: RefCell::new(Vec::new()),
+        }
+    }
+
+    fn natural() -> Self {
+        Self::observed(ExportMode::Natural)
+    }
+
+    fn force_relation() -> Self {
+        Self::observed(ExportMode::ForceRelation)
+    }
+
+    fn export_calls(&self) -> usize {
+        *self.export_calls.borrow()
+    }
+
+    fn export_results(&self) -> Vec<Result<BoundItem, ExportRefusal>> {
+        self.export_results.borrow().clone()
+    }
+
+    fn envelope(&self) -> BackendProviderEnvelope {
+        self.envelope.borrow().clone().expect("CG negotiated")
+    }
 }
 
 fn unbound_fixture(item: &OccurrenceKey) -> ExportRefusal {
@@ -58,30 +104,43 @@ fn unbound_fixture(item: &OccurrenceKey) -> ExportRefusal {
 }
 
 impl Upstream for ExportVector {
-    fn has_abstraction_relation(&self, _package: &CheckedPackage) -> bool {
-        true
+    fn has_abstraction_relation(&self, package: &CheckedPackage) -> bool {
+        match self.mode {
+            ExportMode::Injected | ExportMode::ForceRelation => true,
+            ExportMode::Natural => QslCg.has_abstraction_relation(package),
+        }
     }
 
     fn export_bindings(
         &self,
-        _package: &CheckedPackage,
+        package: &CheckedPackage,
         items: &[OccurrenceKey],
     ) -> Result<Vec<Result<BoundItem, ExportRefusal>>, ExportRefusal> {
-        assert_eq!(items.len(), 3);
-        Ok(items
-            .iter()
-            .enumerate()
-            .map(|(index, item)| {
-                if index == 1 {
-                    Err(unbound_fixture(item))
-                } else {
-                    Ok(BoundItem {
-                        item: item.clone(),
-                        bindings: Vec::new(),
+        *self.export_calls.borrow_mut() += 1;
+        let results = match self.mode {
+            ExportMode::Natural | ExportMode::ForceRelation => {
+                qsl_package::export_bindings(package, items)
+            }
+            ExportMode::Injected => {
+                assert_eq!(items.len(), 3);
+                items
+                    .iter()
+                    .enumerate()
+                    .map(|(index, item)| {
+                        if index == 1 {
+                            Err(unbound_fixture(item))
+                        } else {
+                            Ok(BoundItem {
+                                item: item.clone(),
+                                bindings: Vec::new(),
+                            })
+                        }
                     })
-                }
-            })
-            .collect())
+                    .collect()
+            }
+        };
+        *self.export_results.borrow_mut() = results.clone();
+        Ok(results)
     }
 
     fn compile(
@@ -146,22 +205,8 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
          function b using v(y: Int[0, 9]): Int[-9, 0] pure {{ -y }}\n\
          function c using v(z: Int[0, 9]): Int[-9, 0] pure {{ -z }}\n"
     );
-    let registry = build_registry(&[ProviderManifest {
-        identity: "kani".to_owned(),
-        manifest_digest: ManifestDigest::from_digest([7; 32]),
-        advertises: vec![(
-            Some("value-validity".to_owned()),
-            Some("bounded".to_owned()),
-        )],
-        domains: Some(vec!["integer".to_owned()]),
-        bounds: None,
-        wire: None,
-    }])
-    .expect("the Kani provider registers");
-    let export = ExportVector {
-        envelope: RefCell::new(None),
-        positions: RefCell::new(None),
-    };
+    let registry = kani_registry();
+    let export = ExportVector::observed(ExportMode::Injected);
     let driven = drive(
         &export,
         CompileInput {
@@ -242,14 +287,8 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     );
 }
 
-fn drive_integer_step() -> Driven {
-    let lock = DefinitionLock::pinned();
-    let root = lock.entry(CatalogRole::Root).identity;
-    let source = format!(
-        "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
-         function step using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n"
-    );
-    let registry = build_registry(&[ProviderManifest {
+fn kani_registry() -> quire_driver::AdmittedRegistry {
+    build_registry(&[ProviderManifest {
         identity: "kani".to_owned(),
         manifest_digest: ManifestDigest::from_digest([7; 32]),
         advertises: vec![(
@@ -260,7 +299,145 @@ fn drive_integer_step() -> Driven {
         bounds: None,
         wire: None,
     }])
-    .expect("the Kani provider registers");
+    .expect("Kani provider registers")
+}
+
+fn generation_input() -> GenerationInput<'static> {
+    GenerationInput {
+        kani: Some(KaniInput {
+            ceilings: quire_contract_codegen::ProofCeilings {
+                memory_bytes: NonZeroU64::new(64 * 1024 * 1024).expect("positive ceiling"),
+                wall_clock: Duration::from_secs(30),
+            },
+            subject_path: "crate::subject",
+            unwind: 1,
+        }),
+        scalar_execution: None,
+    }
+}
+
+fn compile_input<'a>(
+    source: &'a str,
+    packages: &'a BTreeMap<[u8; 32], Vec<u8>>,
+) -> CompileInput<'a> {
+    CompileInput {
+        source: SourceIdentity::new("agent-ix", "ir914-export-observation", "fixture", "1"),
+        path: "ir914.native",
+        bytes: source.as_bytes(),
+        packages,
+        limits: SpineLimits::default(),
+        cancel: Cancel::new(),
+    }
+}
+
+fn integer_siblings_source() -> String {
+    let root = DefinitionLock::pinned().entry(CatalogRole::Root).identity;
+    format!(
+        "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
+         function a using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n\
+         function b using v(y: Int[0, 9]): Int[1, 10] pure {{ y + 1 }}\n\
+         function c using v(z: Int[0, 9]): Int[1, 10] pure {{ z + 1 }}\n"
+    )
+}
+
+fn mixed_model_source() -> (String, BTreeMap<[u8; 32], Vec<u8>>) {
+    let root = support::qsl_root().join("tests/fixtures");
+    let path = root.join("spine-model.semantic-ir.json");
+    let document = fs::read(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
+    let packages = package_input([document.as_slice()]);
+    let source_path = root.join("spine-model.native");
+    let selected_source =
+        fs::read_to_string(&source_path).unwrap_or_else(|error| panic!("{source_path:?}: {error}"));
+    let selection = selected_source
+        .split_once("function keep")
+        .expect("QSL fixture contains its model selection")
+        .0;
+    let source = format!(
+        "{selection}\
+         function a using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n\
+         function b using v(y: M::Widget): Integer pure {{ deref(y).code + 1 }}\n\
+         function c using v(z: Int[0, 9]): Int[1, 10] pure {{ z + 1 }}\n"
+    );
+    (source, packages)
+}
+
+#[test]
+#[trace("IT-013-SC-07")]
+fn relationless_production_flow_skips_export_and_sends_every_item_to_codegen() {
+    let source = integer_siblings_source();
+    let registry = kani_registry();
+    let upstream = ExportVector::natural();
+    let driven = drive(
+        &upstream,
+        compile_input(&source, &BTreeMap::new()),
+        &registry,
+        None,
+        generation_input(),
+    )
+    .expect("relationless production flow completes");
+    assert!(!QslCg.has_abstraction_relation(driven.package().package()));
+    assert_eq!(upstream.export_calls(), 0);
+    assert!(driven.item_refusals.is_empty());
+    assert_eq!(driven.request_items.len(), 3);
+    assert_eq!(upstream.envelope().items.len(), 3);
+    assert_eq!(driven.generation().items.len(), 3);
+}
+
+#[test]
+#[trace("IT-013-SC-08")]
+fn real_qsl_export_refusal_is_withheld_before_codegen() {
+    let (source, packages) = mixed_model_source();
+    let registry = kani_registry();
+    let upstream = ExportVector::force_relation();
+    let driven = drive(
+        &upstream,
+        compile_input(&source, &packages),
+        &registry,
+        None,
+        generation_input(),
+    )
+    .expect("real per-item QSL export refusal leaves siblings running");
+    assert!(!QslCg.has_abstraction_relation(driven.package().package()));
+    assert_eq!(upstream.export_calls(), 1);
+    let results = upstream.export_results();
+    assert_eq!(
+        results.len(),
+        3,
+        "QSL export results: {results:?}; driver items: {:?}",
+        driven.request_items
+    );
+    assert!(results[0].is_ok());
+    assert!(
+        matches!(&results[1], Err(ExportRefusal::Unbound { elements, .. }) if !elements.is_empty()),
+        "{results:?}"
+    );
+    assert!(results[2].is_ok());
+    assert_eq!(upstream.envelope().items.len(), 2);
+    assert_eq!(driven.item_refusals.len(), 1);
+    assert_eq!(driven.item_refusals[0].request_index, 1);
+    assert_eq!(
+        driven.item_refusals[0].refusal,
+        results[1].as_ref().unwrap_err().clone()
+    );
+    assert_eq!(
+        driven
+            .generation()
+            .items
+            .iter()
+            .map(|item| item.request_index)
+            .collect::<Vec<_>>(),
+        [0, 2]
+    );
+}
+
+fn drive_integer_step() -> Driven {
+    let lock = DefinitionLock::pinned();
+    let root = lock.entry(CatalogRole::Root).identity;
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
+         function step using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n"
+    );
+    let registry = kani_registry();
     drive(
         &QslCg,
         CompileInput {

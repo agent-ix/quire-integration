@@ -28,12 +28,15 @@ QSL-emitted V2 bytes → contract IR admission → codegen derivation.
 
 ## Preconditions
 
-The driver fixture injects the binding-export result because this QSL-compiled
-unit has no attachable abstraction relation. All other QSL, IR, driver and
-codegen operations use their public production APIs. The injected `Unbound`
-refusal names one unbound model element, matching QSL's nonempty refusal
-shape. This fixture checks transport of the typed refusal and makes no claim
-to exercise QSL's relation binding.
+The original partition fixture injects the binding-export result because its
+QSL-compiled unit has no abstraction relation. The additional natural-path
+fixture observes the production `QslCg` decision and checks that export is
+skipped. The additional model fixture forces the driver's relation seam and
+delegates to QSL's real `export_bindings`: QSL returns an `Unbound` refusal
+for a model-field expression and `Ok` for its scalar siblings. QSL's compiler
+does not emit an authored abstraction relation for this fixture, so the forced
+relation test verifies real export and downstream composition at the seam,
+not production relation authoring.
 
 ## Inputs
 
@@ -51,8 +54,8 @@ addition and Boolean negation operations.
    IT-013-SC-02: the claim is IR-confirmed and generated with a nonempty
    source map and checked bounds.
 3. Derive a scalar claim for the admitted Boolean negation node.
-   IT-013-SC-03: codegen returns its typed `OperationNotDerivable` refusal for
-   that node. This control makes no Boolean generation or proof claim.
+   IT-013-SC-03: codegen generates the IR-confirmed Boolean negation claim
+   with a nonempty source map. This control makes no Boolean proof claim.
 4. Drive an unbound QSL-compiled integer addition through the production
    `QslCg` path with a Kani generation context.
    IT-013-SC-04: codegen returns one supported Kani record with a retained
@@ -66,11 +69,26 @@ addition and Boolean negation operations.
    `Subtract`, keeping the checked QSL source and generated identity.
    IT-013-SC-06: real Kani returns `Falsified` with a counterexample on the
    generated soundness assertion, rather than a compilation refusal.
+7. Drive three scalar requirement items through the natural `QslCg` relation
+   decision while observing export calls.
+   IT-013-SC-07: a package without an abstraction relation skips
+   `export_bindings`; every item reaches codegen and no item is refused.
+8. Drive a checked package containing two scalar items and a model-field
+   expression through the relation seam. Delegate the export to QSL's public
+   `export_bindings` function and then to the production driver and codegen.
+   IT-013-SC-08: QSL itself returns the model item's typed `Unbound` refusal;
+   the driver retains that exact refusal and original index, withholds the
+   refused item from codegen and generates both `Ok` siblings.
 
 ## Expected Results
 
 An export-refused item never enters the codegen envelope or generated item
-list, and the next bound item's driver index remains 2. The V2 controls keep
-their generated and refused results distinct. The routed integer scalar
+list, and the next bound item's driver index remains 2. The V2 controls
+generate distinct integer and Boolean scalar claims. The routed integer scalar
 proves and produces the same concrete value as QSL native evaluation, while
 an arithmetic mutation falsifies that proof.
+
+The former IT-010-SC-02 `integer-ir/v1` command-export path is retired by
+design. SC-07 and SC-08 restore the V2 `export_bindings` → driver → CG
+composition check. A source-authored abstraction relation remains untested;
+SC-08 forces the seam because this checked fixture emits no relation.

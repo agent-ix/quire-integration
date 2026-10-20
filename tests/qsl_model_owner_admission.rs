@@ -274,20 +274,24 @@ fn v2_checked_integer_operation_generates_a_cg_scalar_claim() {
 
 #[test]
 #[trace("IT-013-SC-03")]
-fn v2_checked_boolean_operation_gets_a_typed_cg_refusal() {
+fn v2_checked_boolean_operation_generates_a_cg_scalar_claim() {
     let package = admitted(AUTHORED_VERSION);
     let node_ids = operation_nodes(&package, "quire.op.boolean.not");
     assert!(package
         .source_map()
         .iter()
         .any(|entry| entry.node_id == node_ids[0] && !entry.regions.is_empty()));
-    let derived = quire_contract_codegen::derive_exact_scalar_items(&package, &node_ids);
-    assert!(matches!(
-        derived.as_slice(),
-        [Err(quire_contract_codegen::ExactScalarRefusal::NoDerivableClaim {
-            reason: quire_contract_codegen::ClaimDerivationRefusal::OperationNotDerivable {
-                operation_identity,
-            },
-        })] if operation_identity == "quire.op.boolean.not"
-    ));
+    let claims = generated_scalar_claims(&package, "quire.op.boolean.not");
+    let [claim] = claims.as_slice() else {
+        panic!("one generated Boolean claim: {claims:?}");
+    };
+    assert_eq!(claim.operation.identity, "quire.op.boolean.not");
+    assert_eq!(
+        claim.operation.provenance,
+        quire_contract_codegen::OperationProvenance::IrConfirmed
+    );
+    let quire_contract_codegen::ClaimDisposition::Generated(generated) = &claim.result else {
+        panic!("the admitted Boolean node generates: {:?}", claim.result);
+    };
+    assert!(!generated.source_map.is_empty());
 }

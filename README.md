@@ -26,13 +26,16 @@ on this crate, so a disagreement between stages shows up here and nowhere else.
 ## What the tests exercise
 
 The tests are the product. They use the locked producer and consumer APIs.
-The IR-914 export partition test injects one export refusal while using real
-QSL compilation and CG negotiation and generation.
+The IR-914 export tests cover the natural relationless skip and a real QSL
+`export_bindings` result passed through driver and CG. The original partition
+control also injects one refusal to test exact driver transport. The real
+export test forces the driver's relation seam because its checked source does
+not author an abstraction relation.
 
 | Test file | Path it exercises | What must hold |
 | --- | --- | --- |
-| `tests/ir914_bound_export.rs` | QSL compilation and the driver send two bound items and withhold one refused item from CG; a separate scalar path runs real Kani | Original request indices and occurrences survive settlement and generation; the integer proof verifies and its arithmetic mutant falsifies |
-| `tests/qsl_model_owner_admission.rs` | A QSL unit emitted as `checked-package/v2` bytes, read by contract IR and passed to CG's scalar claim API | Model ownership stays content based; integer addition produces a checked CG claim; Boolean negation retains a typed refusal |
+| `tests/ir914_bound_export.rs` | QSL compilation, the driver's relationless skip and real per-item binding export, CG generation, and a separate real Kani scalar path | The skip sends every item to CG; a real QSL refusal is withheld with its original index; the integer proof verifies and its arithmetic mutant falsifies |
+| `tests/qsl_model_owner_admission.rs` | A QSL unit emitted as `checked-package/v2` bytes, read by contract IR and passed to CG's scalar claim API | Model ownership stays content based; integer addition and Boolean negation produce checked CG claims |
 | `tests/integration.rs` | The placeholder library | It links |
 
 The plain-language test descriptions are in `spec/integration/`, one file per

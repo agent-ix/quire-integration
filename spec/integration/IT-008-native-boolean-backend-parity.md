@@ -15,12 +15,11 @@ relationships:
 The V1 QSL projection inputs used by the former composition test were removed
 from the locked QSL API. Its test binary was retired; IT-008-SC-01 through
 IT-008-SC-04 have no current integration test and remain unmet. IT-013-SC-03
-records a typed V2 Boolean-generation refusal, not Boolean parity or LLVM
-activation. The procedure below preserves the intended integration behavior
-for a future V2 path; it is not an available path in this cohort.
-The owning codegen matrix marks V2 Boolean generation (FR-014-AC-35 through
-FR-014-AC-37) and composed consequent-probe activation (FR-004-AC-16 through
-FR-004-AC-24 and FR-014-AC-36) as planned. These obligations remain open.
+generates one V2 Boolean negation claim, but does not establish Boolean parity
+or LLVM activation. The procedure below preserves the intended integration
+behavior for a future V2 path; it is not an available path in this cohort.
+Composed consequent-probe activation (FR-004-AC-16 through FR-004-AC-24)
+remains open.
 
 ## Objective
 

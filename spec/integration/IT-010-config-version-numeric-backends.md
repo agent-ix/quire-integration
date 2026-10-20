@@ -22,17 +22,21 @@ relationships:
 
 ## Current Status
 
-The V1 `lowering::lower_for` and command export inputs used by the former
-composition and proof tests were removed from the locked QSL API. Both test
-binaries were retired. IT-010-SC-02 has only a partial V2 scalar-claim
-control in IT-013-SC-02. IT-013-SC-04 and SC-05 additionally retain and prove
+The V1 `lowering::lower_for` and `integer-ir/v1` command export inputs were
+retired by design; QSL does not expose those APIs in the current cohort. The
+V2 replacement is `qsl_package::export_bindings` → driver → CG, exercised by
+IT-013-SC-07 and SC-08. This restores the command-export composition check,
+including a real QSL per-item refusal at the driver seam, but it does not
+restore the former ConfigVersion numeric/backend procedure. IT-010-SC-02 has
+only a partial V2 scalar-claim control in IT-013-SC-02. IT-013-SC-04 and SC-05 additionally retain and prove
 one V2 integer scalar harness and compare its native result with QSL; they do
 not exercise the ConfigVersion clauses. IT-010-SC-03 through IT-010-SC-05
 have no current test. This document retains the desired ConfigVersion
 integration behavior, not a claim that the historical procedure remains
 executable.
-QSL owns a replacement for the retired command-export input. Its requirement
-owner is being identified; no command-export coverage is claimed here.
+The authored-relation production path remains untested: the current SC-08
+fixture forces `has_abstraction_relation` at the seam because compilation
+emits no relation, then calls QSL's actual export function.
 
 ## Objective
 
