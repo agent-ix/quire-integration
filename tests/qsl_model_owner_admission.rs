@@ -217,3 +217,12 @@ fn a_version_only_change_of_the_domain_package_keys_the_same_model_nodes() {
     assert_eq!(model_node_ids(&second), model_node_ids(&first));
     assert_eq!(model_node_ids(&second).len(), DECLARATIONS.len());
 }
+
+#[test]
+#[trace("IT-010-SC-02")]
+fn v2_checked_integer_operation_generates_a_cg_scalar_claim() {
+    let package = admitted(AUTHORED_VERSION);
+    let claims = generated_scalar_claims(&package, "quire.op.integer.add");
+    assert_eq!(claims.len(), 1);
+    assert_eq!(claims[0].operation.identity, "quire.op.integer.add");
+}
