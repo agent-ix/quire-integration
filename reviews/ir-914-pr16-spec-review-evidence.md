@@ -38,3 +38,9 @@ IT-013-SC-06 (examined): real Kani returns `Falsified` with a counterexample on 
 | ID | Severity | Summary | Refs |
 | --- | --- | --- | --- |
 | FND-001 | medium | IT-013-SC-05 and SC-06 are ignored by `make ci`, and no committed command or Make target runs them; a passing documented gate can leave both proof obligations unexecuted. | tests/ir914_bound_export.rs:340,425; Makefile:64 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | make ci now depends on make kani, whose recipe runs both ignored proof and mutation tests. |

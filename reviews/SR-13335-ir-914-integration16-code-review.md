@@ -100,9 +100,18 @@ Permission denied`), so whether that harness verifies was not measured.
 | FND-005 | fixed | The two narrow V2 tests now trace to IT-013-SC-02 and IT-013-SC-03; IT-008/010 remain marked unmet. |
 | FND-006 | fixed | The refusal fixture has a nonempty unbound element and the test asserts exact retained equality. |
 | FND-007 | fixed | The partition test now uses the local IT-013 scenario tag. |
+| FND-001 | still-open | Driver #86 is still OPEN, and Cargo.toml still selects its feature branch rather than main. |
+| FND-008 | fixed | README now describes the separate scalar Kani proof and mutation, and the Boolean test only as typed negation refusal. |
+| FND-009 | still-open | The new README tool-requirements row lists exact Kani and CBMC versions; CLAUDE.md forbids new prose tool/version pins. |
 
 ## New findings (disposition pass 1)
 
 | ID | Severity | Summary | Refs |
 | --- | --- | --- | --- |
 | FND-008 | low | README still says the deleted direct integer Kani request test retains a typed refusal; the current test was removed and the production path returns a supported harness. | README.md:35 |
+
+## New findings (disposition pass 2)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-009 | low | README introduces exact Kani and CBMC version numbers in prose, contrary to this repository's CLAUDE.md prohibition on new version and tool pins outside authoritative configuration. | README.md:89; CLAUDE.md:5-13 |

@@ -80,6 +80,8 @@ mutation checks kill three partition mutants (SR-13335).
 | FND-002 | fixed | IT-013 adds a production supported harness, real Kani proof and arithmetic mutation; old function-application and exact module census remain explicitly unmet. |
 | FND-003 | still-open | The four restoration items remain only in IR-914 comment e48b14b2; no dedicated Linear issues or dependency edges were filed. |
 | FND-004 | fixed | The new proof test compiles and executes the routed scalar oracle and compares the result with QSL; ConfigVersion remains expressly unmet. |
+| FND-003 | still-open | CG planned criteria are now named in IT-008 and IT-011, but no dedicated owner tickets or dependency edges were filed for the four retired coverage items; IT-010 still says the QSL command-export requirement owner is unidentified. |
+| FND-005 | fixed | The new make kani target executes the two ignored real-Kani tests, and make ci depends on kani. |
 
 ## New findings (disposition pass 1)
 

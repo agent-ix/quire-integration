@@ -38,3 +38,9 @@ IT-013-SC-06 (examined): real Kani returns `Falsified` with a counterexample on 
 | ID | Severity | Summary | Refs |
 | --- | --- | --- | --- |
 | FND-001 | high | IT-013 declares `verifies` QSL FR-307, but the test replaces `export_bindings` with an injected Ok/Err vector and never checks QSL’s binding export; use a non-verifying relationship or a separate real-export test. | spec/integration/IT-013-bound-export-and-v2-codegen.md:6-7 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | IT-013 now references QSL FR-307 without claiming to verify its export behavior. |

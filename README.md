@@ -85,8 +85,8 @@ dispatch a hosted run.
 
 | Needed by | Tool |
 | --- | --- |
-| all tests | Rust 1.98 (`rust-toolchain.toml`) |
-| `make kani` and `make ci` | Kani 0.68 and CBMC 6.11 |
+| all tests | Rust toolchain selected by `rust-toolchain.toml` |
+| `make kani` and `make ci` | Installed Kani and CBMC |
 
 ## The Quire ecosystem
 
