@@ -103,6 +103,7 @@ Permission denied`), so whether that harness verifies was not measured.
 | FND-001 | still-open | Driver #86 is still OPEN, and Cargo.toml still selects its feature branch rather than main. |
 | FND-008 | fixed | README now describes the separate scalar Kani proof and mutation, and the Boolean test only as typed negation refusal. |
 | FND-009 | still-open | The new README tool-requirements row lists exact Kani and CBMC versions; CLAUDE.md forbids new prose tool/version pins. |
+| FND-009 | fixed | README now names the selected Rust toolchain and installed Kani/CBMC without exact version numbers. |
 
 ## New findings (disposition pass 1)
 
