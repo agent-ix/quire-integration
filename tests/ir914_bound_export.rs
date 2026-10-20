@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! IR-914: a QSL export refusal is withheld while bound siblings reach CG.
+//! The injected refusal has an empty element list because this QSL-compiled
+//! fixture has no attachable abstraction relation. The test checks that the
+//! driver preserves the exact typed refusal it receives.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -16,8 +19,8 @@ use qsl_route::{Candidate, ManifestDigest};
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_contract_codegen::{
     BackendDescriptor, BackendKind, BackendProviderEnvelope, ContractItemSettlement,
-    ContractNegotiationError, ContractRequestPosition, GenerationContexts, RoutedGeneration,
-    RoutedGenerationError, RoutedGenerationItem,
+    ContractNegotiationError, ContractRequestPosition, GenerationContexts, KindOutput,
+    ObligationDisposition, RoutedGeneration, RoutedGenerationError, RoutedGenerationItem,
 };
 use quire_contract_ir::{
     CheckedPackageDispatchResult, CheckedPackageEvidence, CheckedPackageReadLimits,
@@ -31,6 +34,7 @@ use quire_exact::Cancel;
 
 struct ExportVector {
     envelope: RefCell<Option<BackendProviderEnvelope>>,
+    positions: RefCell<Option<Vec<ContractRequestPosition>>>,
 }
 
 impl Upstream for ExportVector {
@@ -95,6 +99,7 @@ impl Upstream for ExportVector {
         envelope: &BackendProviderEnvelope,
     ) -> Result<Vec<ContractItemSettlement>, Box<ContractNegotiationError>> {
         *self.envelope.borrow_mut() = Some(envelope.clone());
+        *self.positions.borrow_mut() = Some(positions.to_vec());
         QslCg.negotiate(package, positions, envelope)
     }
 
@@ -114,7 +119,7 @@ impl Upstream for ExportVector {
 }
 
 #[test]
-#[trace("FR-010-AC-4", "FR-001-AC-17", "TC-017")]
+#[trace("IT-013-SC-01")]
 fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     let lock = DefinitionLock::pinned();
     let root = lock.entry(CatalogRole::Root).identity;
@@ -138,6 +143,7 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     .expect("the Kani provider registers");
     let export = ExportVector {
         envelope: RefCell::new(None),
+        positions: RefCell::new(None),
     };
     let driven = drive(
         &export,
@@ -165,6 +171,17 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     .expect("a per-item export refusal does not refuse the run");
     let envelope = export.envelope.borrow();
     assert_eq!(envelope.as_ref().expect("CG negotiated").items.len(), 2);
+    let positions = export.positions.borrow();
+    let positions = positions.as_ref().expect("CG received request positions");
+    let driver_roles = positions
+        .iter()
+        .filter_map(|position| match position {
+            ContractRequestPosition::DriverItem { .. } => Some("bound"),
+            ContractRequestPosition::Excluded { .. } => Some("excluded"),
+            ContractRequestPosition::ContextRoot { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(driver_roles, ["bound", "excluded", "bound"]);
     assert_eq!(
         driven
             .settlements
@@ -188,6 +205,13 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     assert_eq!(driven.item_refusals.len(), 1);
     assert_eq!(driven.item_refusals[0].request_index, 1);
     assert_eq!(
+        driven.item_refusals[0].refusal,
+        ExportRefusal::Unbound {
+            item: driven.request_items[1].occurrence().clone(),
+            elements: Vec::new(),
+        }
+    );
+    assert_eq!(
         driven.item_refusals[0].occurrence,
         *driven.request_items[1].occurrence()
     );
@@ -200,5 +224,66 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
             .collect::<Vec<_>>(),
         [0, 2],
         "both bound siblings generate and the refused item does not"
+    );
+}
+
+#[test]
+#[trace("IT-013-SC-04")]
+fn qsl_integer_addition_reaches_a_supported_kani_harness() {
+    let lock = DefinitionLock::pinned();
+    let root = lock.entry(CatalogRole::Root).identity;
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
+         function step using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n"
+    );
+    let registry = build_registry(&[ProviderManifest {
+        identity: "kani".to_owned(),
+        manifest_digest: ManifestDigest::from_digest([7; 32]),
+        advertises: vec![(
+            Some("value-validity".to_owned()),
+            Some("bounded".to_owned()),
+        )],
+        domains: Some(vec!["integer".to_owned()]),
+        bounds: None,
+        wire: None,
+    }])
+    .expect("the Kani provider registers");
+    let driven = drive(
+        &QslCg,
+        CompileInput {
+            source: SourceIdentity::new("agent-ix", "it013-kani", "git", "1"),
+            path: "it013.native",
+            bytes: source.as_bytes(),
+            packages: &BTreeMap::new(),
+            limits: SpineLimits::default(),
+            cancel: Cancel::new(),
+        },
+        &registry,
+        None,
+        GenerationInput {
+            kani: Some(KaniInput {
+                ceilings: quire_contract_codegen::ProofCeilings {
+                    memory_bytes: NonZeroU64::new(64 * 1024 * 1024).expect("positive ceiling"),
+                    wall_clock: Duration::from_secs(30),
+                },
+                subject_path: "crate::subject",
+                unwind: 1,
+            }),
+        },
+    )
+    .expect("integer addition drives");
+    let [item] = driven.generation.items.as_slice() else {
+        panic!("one generated Kani item: {:?}", driven.generation.items);
+    };
+    let KindOutput::Kani { record, harness } = &item.output else {
+        panic!("expected Kani output, got {:?}", item.output);
+    };
+    assert!(matches!(
+        record.disposition,
+        ObligationDisposition::Supported { .. }
+    ));
+    assert!(
+        harness.is_some(),
+        "supported item retains the scalar harness"
     );
 }
