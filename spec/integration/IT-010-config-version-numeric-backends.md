@@ -31,6 +31,8 @@ not exercise the ConfigVersion clauses. IT-010-SC-03 through IT-010-SC-05
 have no current test. This document retains the desired ConfigVersion
 integration behavior, not a claim that the historical procedure remains
 executable.
+QSL owns a replacement for the retired command-export input. Its requirement
+owner is being identified; no command-export coverage is claimed here.
 
 ## Objective
 

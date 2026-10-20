@@ -4,7 +4,7 @@ title: "Compose bound QSL exports with V2 codegen"
 type: IT
 relationships:
   - target: ix://agent-ix/quire-spec-language/FR-307
-    type: verifies
+    type: references
   - target: ix://agent-ix/quire-driver/FR-010
     type: verifies
   - target: ix://agent-ix/quire-contract-codegen/FR-039

@@ -23,6 +23,9 @@ falsified arithmetic mutant (IT-013-SC-06). Those narrower scalar controls
 do not restore this scenario's function-application postcondition,
 counterexample replay, or exact per-module SUCCESS census. The procedure
 below retains that desired behavior while V2 tests are restored.
+The codegen matrix marks V2 inline-clause proof generation
+(FR-015-AC-40) as planned. Its Boolean implication mutation remains an open
+proof obligation beyond IT-013's scalar arithmetic mutation.
 
 ## Objective
 

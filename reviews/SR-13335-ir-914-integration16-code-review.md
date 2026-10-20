@@ -91,4 +91,18 @@ Permission denied`), so whether that harness verifies was not measured.
 
 ## Dispositions
 
-No disposition rounds yet. Rows are appended here (FND | outcome | reason) after each fix round.
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | still-open | Driver #86 remains open, and Cargo.toml still selects its feature branch instead of main. |
+| FND-002 | fixed | The hand-assembled integer Kani refusal test is deleted; production `drive(&QslCg)` is covered by a supported-harness test. |
+| FND-003 | fixed | The author-written SR-010 artifact was removed from the PR. |
+| FND-004 | fixed | The new scalar proof test executes the generated oracle and compares its native result with QSL step(4). |
+| FND-005 | fixed | The two narrow V2 tests now trace to IT-013-SC-02 and IT-013-SC-03; IT-008/010 remain marked unmet. |
+| FND-006 | fixed | The refusal fixture has a nonempty unbound element and the test asserts exact retained equality. |
+| FND-007 | fixed | The partition test now uses the local IT-013 scenario tag. |
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-008 | low | README still says the deleted direct integer Kani request test retains a typed refusal; the current test was removed and the production path returns a supported harness. | README.md:35 |

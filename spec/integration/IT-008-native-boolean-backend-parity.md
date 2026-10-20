@@ -18,6 +18,9 @@ IT-008-SC-04 have no current integration test and remain unmet. IT-013-SC-03
 records a typed V2 Boolean-generation refusal, not Boolean parity or LLVM
 activation. The procedure below preserves the intended integration behavior
 for a future V2 path; it is not an available path in this cohort.
+The owning codegen matrix marks V2 Boolean generation (FR-014-AC-35 through
+FR-014-AC-37) and composed consequent-probe activation (FR-004-AC-16 through
+FR-004-AC-24 and FR-014-AC-36) as planned. These obligations remain open.
 
 ## Objective
 

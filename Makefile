@@ -11,11 +11,12 @@ help:
 	@echo "  make fmt-check        - Verify formatting (CI gate)"
 	@echo "  make lint             - Clippy with -D warnings"
 	@echo "  make test             - cargo test"
+	@echo "  make kani             - Run real Kani proof and mutation integration tests"
 	@echo "  make build            - Release build"
 	@echo "  make clean            - cargo clean"
 	@echo "  make deny             - cargo deny check licenses"
 	@echo "  make audit-unsafe     - Enforce // SAFETY: comments on unsafe blocks"
-	@echo "  make ci               - All CI gates locally (fmt-check + lint + test + deny + audit-unsafe)"
+	@echo "  make ci               - All CI gates locally (fmt-check + lint + test + kani + deny + audit-unsafe)"
 
 # =============================================================================
 # Format / Lint / Test
@@ -36,6 +37,10 @@ lint:
 .PHONY: test
 test:
 	$(CARGO) test
+
+.PHONY: kani
+kani:
+	$(CARGO) test --locked --test ir914_bound_export -- --ignored --test-threads=1
 
 .PHONY: build
 build:
@@ -66,4 +71,4 @@ audit-unsafe:
 # =============================================================================
 
 .PHONY: ci
-ci: fmt-check lint test deny audit-unsafe
+ci: fmt-check lint test kani deny audit-unsafe

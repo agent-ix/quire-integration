@@ -74,4 +74,15 @@ mutation checks kill three partition mutants (SR-13335).
 
 ## Dispositions
 
-No disposition rounds yet. Rows are appended here (FND | outcome | reason) after each fix round.
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | IT-008, IT-010 and IT-011 now mark the retired V1 procedures and all historical scenarios unmet. |
+| FND-002 | fixed | IT-013 adds a production supported harness, real Kani proof and arithmetic mutation; old function-application and exact module census remain explicitly unmet. |
+| FND-003 | still-open | The four restoration items remain only in IR-914 comment e48b14b2; no dedicated Linear issues or dependency edges were filed. |
+| FND-004 | fixed | The new proof test compiles and executes the routed scalar oracle and compares the result with QSL; ConfigVersion remains expressly unmet. |
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-005 | medium | IT-013-SC-05 and SC-06 are ignored by `make ci`; there is no committed real-Kani target or command to make their verification repeatable. | tests/ir914_bound_export.rs:340,425; Makefile:64 |

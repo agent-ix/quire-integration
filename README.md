@@ -31,8 +31,8 @@ QSL compilation and CG negotiation and generation.
 
 | Test file | Path it exercises | What must hold |
 | --- | --- | --- |
-| `tests/ir914_bound_export.rs` | QSL compilation and the driver send two bound items and withhold one refused item from CG | Original request indices and occurrences survive settlement and generation |
-| `tests/qsl_model_owner_admission.rs` | A QSL unit emitted as `checked-package/v2` bytes, read by contract IR and passed to CG's scalar claim API | Model ownership stays content based; integer addition produces a checked CG claim; Boolean negation and the direct Kani request retain typed refusals |
+| `tests/ir914_bound_export.rs` | QSL compilation and the driver send two bound items and withhold one refused item from CG; a separate scalar path runs real Kani | Original request indices and occurrences survive settlement and generation; the integer proof verifies and its arithmetic mutant falsifies |
+| `tests/qsl_model_owner_admission.rs` | A QSL unit emitted as `checked-package/v2` bytes, read by contract IR and passed to CG's scalar claim API | Model ownership stays content based; integer addition produces a checked CG claim; Boolean negation retains a typed refusal |
 | `tests/integration.rs` | The placeholder library | It links |
 
 The plain-language test descriptions are in `spec/integration/`, one file per
@@ -86,6 +86,7 @@ dispatch a hosted run.
 | Needed by | Tool |
 | --- | --- |
 | all tests | Rust 1.98 (`rust-toolchain.toml`) |
+| `make kani` and `make ci` | Kani 0.68 and CBMC 6.11 |
 
 ## The Quire ecosystem
 
@@ -106,6 +107,7 @@ repositories are listed in the table above.
 make fmt-check   # rustfmt
 make lint        # clippy, warnings are errors
 make test        # cargo test
+make kani        # real Kani proof and mutation
 make build       # release build
 make deny        # licence check
 make audit-unsafe

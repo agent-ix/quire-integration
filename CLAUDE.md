@@ -19,14 +19,16 @@ make fmt            # format with rustfmt
 make fmt-check      # verify formatting (CI gate)
 make lint           # clippy with -D warnings
 make test           # cargo test
+make kani           # real Kani proof and mutation tests
 make build          # release build
 make clean          # cargo clean
 make deny           # cargo deny check licenses
 make audit-unsafe   # check that every unsafe block has a // SAFETY: comment
-make ci             # fmt-check + lint + test + deny + audit-unsafe
+make ci             # fmt-check + lint + test + kani + deny + audit-unsafe
 ```
 
-`make test` runs the composed QSL, contract IR, driver and codegen tests.
+`make test` runs the composed QSL, contract IR, driver and codegen tests. The
+real Kani proof and mutation controls run under `make kani` and `make ci`.
 
 All checks are local. This repository intentionally has no hosted workflow, and
 `publish = false` is part of its bootstrap contract.
