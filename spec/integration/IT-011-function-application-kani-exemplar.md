@@ -3,10 +3,6 @@ id: IT-011
 title: "Discharge and mutate the function-application Kani exemplar"
 type: IT
 relationships:
-  - target: ix://agent-ix/quire-spec-language/FR-069
-    type: verifies
-  - target: ix://agent-ix/quire-spec-language/FR-033
-    type: verifies
   - target: ix://agent-ix/quire-contract-codegen/FR-014
     type: references
   - target: ix://agent-ix/quire-contract-codegen/FR-015
