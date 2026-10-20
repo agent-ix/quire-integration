@@ -54,7 +54,8 @@ addition and Boolean negation operations.
 4. Drive an unbound QSL-compiled integer addition through the production
    `QslCg` path with a Kani generation context.
    IT-013-SC-04: codegen returns one supported Kani record with a retained
-   scalar harness. The test makes no proof verdict claim until Kani runs.
+   scalar harness, and QSL's checked-package call of `step(4)` completes with
+   the integer 5. The test makes no proof verdict claim until Kani runs.
 
 ## Expected Results
 

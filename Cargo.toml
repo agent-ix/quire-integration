@@ -22,6 +22,7 @@ quire-spec-language = { git = "https://github.com/agent-ix/quire-spec-language",
 qsl-foundation = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-replay = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-cst = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
+qsl-eval = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-forms = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-route = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }

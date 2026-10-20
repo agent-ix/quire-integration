@@ -10,12 +10,14 @@ use std::num::NonZeroU64;
 use std::time::Duration;
 
 use ix_trace_rs::trace;
+use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_foundation::source::provenance::OccurrenceKey;
 use qsl_foundation::SourceIdentity;
 use qsl_package::{BoundItem, CheckedPackage, ExportRefusal};
 use qsl_replay::spine::{CheckedUnit, EmittedUnit, SpineLimits};
 use qsl_route::routing::Disposition;
 use qsl_route::{Candidate, ManifestDigest};
+use qsl_semantics::family::FamilyOutcome;
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_contract_codegen::{
     BackendDescriptor, BackendKind, BackendProviderEnvelope, ContractItemSettlement,
@@ -30,7 +32,7 @@ use quire_driver::{
     build_registry, drive, CompileInput, DriverRefusal, GenerationInput, KaniInput,
     ProviderManifest, QslCg, Upstream,
 };
-use quire_exact::Cancel;
+use quire_exact::{Cancel, Integer, Meter, Outcome, ScalarLimits, Value};
 
 struct ExportVector {
     envelope: RefCell<Option<BackendProviderEnvelope>>,
@@ -286,4 +288,32 @@ fn qsl_integer_addition_reaches_a_supported_kani_harness() {
         harness.is_some(),
         "supported item retains the scalar harness"
     );
+
+    let qsl_limits = ScalarLimits {
+        integer_bits: 64,
+        decimal_digits: 20,
+        scale_expansion: 20,
+        text_input_bytes: 1024,
+        text_scalars: 1024,
+        normalized_scalars: 1024,
+        unit_edges: 100,
+        value_occurrences: 100,
+        work_units: 1000,
+        result_units: 1000,
+    };
+    let native = driven
+        .package
+        .package()
+        .call(
+            &QualifiedName::unqualified("step".to_owned()).expect("checked function name"),
+            vec![Value::Integer(Integer::from(4_i64))],
+            &qsl_semantics::model::object_environment::ObjectEnvironment::default(),
+            &mut Meter::new(qsl_limits),
+        )
+        .expect("QSL evaluates the checked function");
+    assert!(matches!(
+        native.outcome,
+        FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(value)))
+            if value == Integer::from(5_i64)
+    ));
 }
