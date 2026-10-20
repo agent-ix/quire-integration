@@ -14,7 +14,7 @@ use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_foundation::source::provenance::OccurrenceKey;
 use qsl_foundation::SourceIdentity;
 use qsl_package::{BoundItem, CheckedPackage, ExportRefusal, UnboundElement};
-use qsl_replay::spine::{CheckedUnit, EmittedUnit, SpineLimits};
+use qsl_replay::spine::{AdmittedModels, CheckedUnit, EmittedUnit, SpineLimits};
 use qsl_route::routing::Disposition;
 use qsl_route::{Candidate, ManifestDigest};
 use qsl_semantics::check::AbstractionKey;
@@ -92,7 +92,7 @@ impl Upstream for ExportVector {
         packages: &BTreeMap<[u8; 32], Vec<u8>>,
         limits: SpineLimits,
         cancel: &Cancel,
-    ) -> Result<(CheckedUnit, EmittedUnit), DriverRefusal> {
+    ) -> Result<(CheckedUnit, AdmittedModels, EmittedUnit), DriverRefusal> {
         QslCg.compile(source, path, bytes, packages, limits, cancel)
     }
 
@@ -183,6 +183,7 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
                 subject_path: "crate::subject",
                 unwind: 1,
             }),
+            scalar_execution: None,
         },
     )
     .expect("a per-item export refusal does not refuse the run");
@@ -231,7 +232,7 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     );
     assert_eq!(
         driven
-            .generation
+            .generation()
             .items
             .iter()
             .map(|item| item.request_index)
@@ -282,6 +283,7 @@ fn drive_integer_step() -> Driven {
                 subject_path: "crate::subject",
                 unwind: 4,
             }),
+            scalar_execution: None,
         },
     )
     .expect("integer addition drives")
@@ -291,8 +293,8 @@ fn drive_integer_step() -> Driven {
 #[trace("IT-013-SC-04")]
 fn qsl_integer_addition_reaches_a_supported_kani_harness() {
     let driven = drive_integer_step();
-    let [item] = driven.generation.items.as_slice() else {
-        panic!("one generated Kani item: {:?}", driven.generation.items);
+    let [item] = driven.generation().items.as_slice() else {
+        panic!("one generated Kani item: {:?}", driven.generation().items);
     };
     let KindOutput::Kani { record, harness } = &item.output else {
         panic!("expected Kani output, got {:?}", item.output);
@@ -319,7 +321,7 @@ fn qsl_integer_addition_reaches_a_supported_kani_harness() {
         result_units: 1000,
     };
     let native = driven
-        .package
+        .package()
         .package()
         .call(
             &QualifiedName::unqualified("step".to_owned()).expect("checked function name"),
@@ -340,8 +342,8 @@ fn qsl_integer_addition_reaches_a_supported_kani_harness() {
 #[ignore = "real Kani lane: run serially after the normal integration gate"]
 fn qsl_integer_addition_proves_and_matches_native_execution() {
     let driven = drive_integer_step();
-    let [item] = driven.generation.items.as_slice() else {
-        panic!("one generated Kani item: {:?}", driven.generation.items);
+    let [item] = driven.generation().items.as_slice() else {
+        panic!("one generated Kani item: {:?}", driven.generation().items);
     };
     let KindOutput::Kani {
         harness: Some(harness),
@@ -351,7 +353,7 @@ fn qsl_integer_addition_proves_and_matches_native_execution() {
         panic!("expected retained Kani harness, got {:?}", item.output);
     };
     let artifacts = driven
-        .generation
+        .generation()
         .oracle_artifacts
         .as_ref()
         .expect("the routed call generated an oracle crate");
@@ -374,7 +376,7 @@ fn qsl_integer_addition_proves_and_matches_native_execution() {
     let receipt = execute_kani_scalar_native(&KaniScalarNativeRequest {
         cancel: &cancel,
         installation: &installation,
-        harness,
+        harness: harness.as_ref(),
         oracle_artifacts: artifacts,
         operands: &operands,
         scalar_limits: limits,
@@ -387,7 +389,7 @@ fn qsl_integer_addition_proves_and_matches_native_execution() {
     );
     assert!(receipt.proof_evidence().success_checks > 0);
     let qsl = driven
-        .package
+        .package()
         .package()
         .call(
             &QualifiedName::unqualified("step".to_owned()).expect("checked function name"),
@@ -425,8 +427,8 @@ fn qsl_integer_addition_proves_and_matches_native_execution() {
 #[ignore = "real Kani lane: run serially after the normal integration gate"]
 fn qsl_integer_addition_mutant_falsifies_the_generated_scalar_proof() {
     let driven = drive_integer_step();
-    let [item] = driven.generation.items.as_slice() else {
-        panic!("one generated Kani item: {:?}", driven.generation.items);
+    let [item] = driven.generation().items.as_slice() else {
+        panic!("one generated Kani item: {:?}", driven.generation().items);
     };
     let KindOutput::Kani {
         harness: Some(harness),
@@ -436,7 +438,7 @@ fn qsl_integer_addition_mutant_falsifies_the_generated_scalar_proof() {
         panic!("expected retained Kani harness, got {:?}", item.output);
     };
     let manifest = driven
-        .generation
+        .generation()
         .oracle_artifacts
         .as_ref()
         .expect("the routed call generated an oracle crate")
