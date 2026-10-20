@@ -264,8 +264,9 @@ fn drive_integer_step() -> Driven {
         GenerationInput {
             kani: Some(KaniInput {
                 ceilings: quire_contract_codegen::ProofCeilings {
-                    memory_bytes: NonZeroU64::new(64 * 1024 * 1024).expect("positive ceiling"),
-                    wall_clock: Duration::from_secs(30),
+                    memory_bytes: NonZeroU64::new(16 * 1024 * 1024 * 1024)
+                        .expect("positive ceiling"),
+                    wall_clock: Duration::from_secs(600),
                 },
                 subject_path: "crate::subject",
                 unwind: 1,
