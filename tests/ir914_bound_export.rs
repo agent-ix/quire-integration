@@ -269,7 +269,7 @@ fn drive_integer_step() -> Driven {
                     wall_clock: Duration::from_secs(600),
                 },
                 subject_path: "crate::subject",
-                unwind: 1,
+                unwind: 4,
             }),
         },
     )
@@ -369,7 +369,7 @@ fn qsl_integer_addition_proves_and_matches_native_execution() {
         scalar_limits: limits,
         target_directory: &target,
     })
-    .expect("generated scalar proves and executes natively");
+    .unwrap_or_else(|error| panic!("generated scalar proof/native run: {:?}", error.class()));
     assert_eq!(
         receipt.proof_evidence().outcome,
         quire_contract_codegen::KaniRunOutcome::Verified
