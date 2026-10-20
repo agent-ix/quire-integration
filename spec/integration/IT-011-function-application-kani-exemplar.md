@@ -12,6 +12,15 @@ relationships:
 ---
 # IT-011: Discharge and mutate the function-application Kani exemplar
 
+## Current Status
+
+The V1 projection input for the former Kani exemplar was removed from the
+locked QSL API, and its test binary was retired. IT-011-SC-01 through
+IT-011-SC-04 have no current integration test. V2 integer addition can
+produce a supported scalar harness (IT-013-SC-04); that generation result is
+not a real Kani proof, mutation result or check census. The procedure below
+retains the desired proof behavior while V2 tests are restored.
+
 ## Objective
 
 Show that the Kani proof codegen generates for a QSL function-application
@@ -46,6 +55,9 @@ its subject consumes the input and produces no result, because the clause's
 ABI derives no subject result.
 
 ## Test Procedure
+
+The following was the V1 procedure. It is not current verification evidence
+for the four scenarios until equivalent V2 tests run real Kani.
 
 1. Run the generated Kani bundle with the healthy subject, exporting Kani's
    report, and read its checks through codegen's `classify_kani_run`: the
