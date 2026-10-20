@@ -62,10 +62,15 @@ addition and Boolean negation operations.
    invoke its staged native scalar operation with operand 4.
    IT-013-SC-05: the proof verdict is `Verified`, and the native integer
    result equals the checked QSL `step(4)` result of 5.
+6. Replace exactly the generated harness's integer `Add` operation with
+   `Subtract`, keeping the checked QSL source and generated identity.
+   IT-013-SC-06: real Kani returns `Falsified` with a counterexample on the
+   generated soundness assertion, rather than a compilation refusal.
 
 ## Expected Results
 
 An export-refused item never enters the codegen envelope or generated item
 list, and the next bound item's driver index remains 2. The V2 controls keep
 their generated and refused results distinct. The routed integer scalar
-proves and produces the same concrete value as QSL native evaluation.
+proves and produces the same concrete value as QSL native evaluation, while
+an arithmetic mutation falsifies that proof.

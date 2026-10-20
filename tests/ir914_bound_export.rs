@@ -20,9 +20,10 @@ use qsl_route::{Candidate, ManifestDigest};
 use qsl_semantics::family::FamilyOutcome;
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_contract_codegen::{
-    execute_kani_scalar_native, BackendDescriptor, BackendKind, BackendProviderEnvelope,
-    ContractItemSettlement, ContractNegotiationError, ContractRequestPosition, GenerationContexts,
-    KaniInstallation, KaniScalarNativeRequest, KindOutput, ObligationDisposition, RoutedGeneration,
+    execute_kani_obligation, execute_kani_scalar_native, BackendDescriptor, BackendKind,
+    BackendProviderEnvelope, ContractItemSettlement, ContractNegotiationError,
+    ContractRequestPosition, GenerationContexts, KaniExecutionRequest, KaniInstallation,
+    KaniRunOutcome, KaniScalarNativeRequest, KindOutput, ObligationDisposition, RoutedGeneration,
     RoutedGenerationError, RoutedGenerationItem, ScalarLimits,
 };
 use quire_contract_ir::{
@@ -407,4 +408,71 @@ fn qsl_integer_addition_proves_and_matches_native_execution() {
         .completed()
         .expect("staged native oracle completes");
     assert_eq!(native_value.to_string(), qsl_value.to_string());
+}
+
+#[test]
+#[trace("IT-013-SC-06")]
+#[ignore = "real Kani lane: run serially after the normal integration gate"]
+fn qsl_integer_addition_mutant_falsifies_the_generated_scalar_proof() {
+    let driven = drive_integer_step();
+    let [item] = driven.generation.items.as_slice() else {
+        panic!("one generated Kani item: {:?}", driven.generation.items);
+    };
+    let KindOutput::Kani {
+        harness: Some(harness),
+        ..
+    } = &item.output
+    else {
+        panic!("expected retained Kani harness, got {:?}", item.output);
+    };
+    let manifest = driven
+        .generation
+        .oracle_artifacts
+        .as_ref()
+        .expect("the routed call generated an oracle crate")
+        .iter()
+        .find(|artifact| artifact.path == "Cargo.toml")
+        .expect("the oracle crate includes Cargo.toml");
+    let add_call = "rt::IntegerArithmetic::Add(left, right)";
+    assert_eq!(harness.rust.contents.matches(add_call).count(), 1);
+    let mut mutant = harness.as_ref().clone();
+    mutant.rust.contents = mutant
+        .rust
+        .contents
+        .replace(add_call, "rt::IntegerArithmetic::Subtract(left, right)");
+
+    let scratch = tempfile::Builder::new()
+        .prefix("it013-mutated-scalar-")
+        .tempdir_in(env!("CARGO_TARGET_TMPDIR"))
+        .expect("temporary Kani crate");
+    std::fs::create_dir_all(scratch.path().join("src")).expect("crate source directory");
+    std::fs::write(scratch.path().join("Cargo.toml"), &manifest.contents).expect("crate manifest");
+    std::fs::write(scratch.path().join("src/lib.rs"), &mutant.rust.contents)
+        .expect("mutated harness source");
+    std::fs::write(
+        scratch.path().join("build.rs"),
+        "fn main() { println!(\"cargo:rustc-check-cfg=cfg(kani)\"); }\n",
+    )
+    .expect("Kani cfg declaration");
+    let installation = KaniInstallation::discover().expect("cargo-kani is installed");
+    let cancel = Cancel::new();
+    let evidence = execute_kani_obligation(&KaniExecutionRequest {
+        cancel: &cancel,
+        installation: &installation,
+        harness: (&mutant).into(),
+        crate_directory: scratch.path(),
+        target_directory: &scratch.path().join("target"),
+        home_directory: None,
+    })
+    .unwrap_or_else(|refusal| panic!("mutated Kani run: {refusal}"));
+    let KaniRunOutcome::Falsified { counterexample } = &evidence.outcome else {
+        panic!(
+            "mutated arithmetic must falsify, got {:?}",
+            evidence.outcome
+        );
+    };
+    assert!(counterexample.contains(mutant.identity.harness_symbol.as_str()));
+    assert!(counterexample.contains("Check for `assertion`"));
+    assert!(counterexample
+        .contains("the oracle must complete with exactly the native quire.op.integer.add result"));
 }
