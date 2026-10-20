@@ -110,7 +110,9 @@ fn evidence(bytes: &[u8], digest: &str, document: &[u8]) -> CheckedPackageEviden
     for feature in wire["lock"]["required_features"].as_array().unwrap() {
         evidence.support_feature(feature.as_str().unwrap());
     }
-    evidence.insert_domain_package_document(digest, document);
+    evidence
+        .insert_domain_package_document(digest, document)
+        .expect("the domain document is valid evidence");
     evidence
 }
 

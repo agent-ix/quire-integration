@@ -7,9 +7,11 @@
 
 use std::{
     fs,
+    num::NonZeroU64,
     path::{Path, PathBuf},
     process::{Command, Output},
     sync::OnceLock,
+    time::Duration,
 };
 
 use qsl_foundation::{Source, SourceIdentity};
@@ -645,6 +647,10 @@ pub fn absent_precondition_kani_bundle(
     assert!(precondition.dependencies().is_empty());
     let precondition_clause = ir::ClauseId::new(precondition_clause).unwrap();
     codegen::generate_kani_bundle(&codegen::KaniRequest {
+        ceilings: codegen::ProofCeilings {
+            memory_bytes: NonZeroU64::new(4 * 1024 * 1024 * 1024).unwrap(),
+            wall_clock: Duration::from_secs(300),
+        },
         requirement: clause.identity().requirement(),
         precondition_clause: &precondition_clause,
         postcondition_clause: clause.identity().clause(),
