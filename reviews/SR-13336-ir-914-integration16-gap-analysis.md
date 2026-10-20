@@ -82,6 +82,7 @@ mutation checks kill three partition mutants (SR-13335).
 | FND-004 | fixed | The new proof test compiles and executes the routed scalar oracle and compares the result with QSL; ConfigVersion remains expressly unmet. |
 | FND-003 | still-open | CG planned criteria are now named in IT-008 and IT-011, but no dedicated owner tickets or dependency edges were filed for the four retired coverage items; IT-010 still says the QSL command-export requirement owner is unidentified. |
 | FND-005 | fixed | The new make kani target executes the two ignored real-Kani tests, and make ci depends on kani. |
+| FND-003 | still-open | The driver-main update changes Cargo resolution and test call sites only. The deleted tests' Boolean Kani, QSL command-export, and composed activation coverage still have no dedicated restoration tickets or dependency edges at this PR head. CG #467 has since merged V2 Boolean oracle generation, but this integration lock remains at CG `8b42a747`, and that upstream merge does not restore the deleted integration coverage. IR-914 comment `e48b14b2` records the gaps; the requested follow-up ownership is still outstanding. |
 
 ## New findings (disposition pass 1)
 

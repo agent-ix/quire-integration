@@ -104,6 +104,7 @@ Permission denied`), so whether that harness verifies was not measured.
 | FND-008 | fixed | README now describes the separate scalar Kani proof and mutation, and the Boolean test only as typed negation refusal. |
 | FND-009 | still-open | The new README tool-requirements row lists exact Kani and CBMC versions; CLAUDE.md forbids new prose tool/version pins. |
 | FND-009 | fixed | README now names the selected Rust toolchain and installed Kani/CBMC without exact version numbers. |
+| FND-001 | fixed | Driver PR #86 merged as `eb473fa670d446e122cfe71cebd366f6bebd7ed3`; this PR now selects driver `branch = "main"`, and its lock resolves that merge commit. The merged driver's added `AdmittedModels` compile result and private `Driven` fields are handled by test-only call-site changes; the focused test and full `make ci` passed at `8fb372a8`. |
 
 ## New findings (disposition pass 1)
 
