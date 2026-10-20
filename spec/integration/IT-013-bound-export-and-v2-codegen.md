@@ -55,10 +55,15 @@ addition and Boolean negation operations.
    `QslCg` path with a Kani generation context.
    IT-013-SC-04: codegen returns one supported Kani record with a retained
    scalar harness, and QSL's checked-package call of `step(4)` completes with
-   the integer 5. The test makes no proof verdict claim until Kani runs.
+   the integer 5.
+5. Run the retained harness and oracle package under installed Kani, then
+   invoke its staged native scalar operation with operand 4.
+   IT-013-SC-05: the proof verdict is `Verified`, and the native integer
+   result equals the checked QSL `step(4)` result of 5.
 
 ## Expected Results
 
 An export-refused item never enters the codegen envelope or generated item
 list, and the next bound item's driver index remains 2. The V2 controls keep
-their generated and refused results distinct.
+their generated and refused results distinct. The routed integer scalar
+proves and produces the same concrete value as QSL native evaluation.

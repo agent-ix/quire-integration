@@ -20,19 +20,20 @@ use qsl_route::{Candidate, ManifestDigest};
 use qsl_semantics::family::FamilyOutcome;
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_contract_codegen::{
-    BackendDescriptor, BackendKind, BackendProviderEnvelope, ContractItemSettlement,
-    ContractNegotiationError, ContractRequestPosition, GenerationContexts, KindOutput,
-    ObligationDisposition, RoutedGeneration, RoutedGenerationError, RoutedGenerationItem,
+    execute_kani_scalar_native, BackendDescriptor, BackendKind, BackendProviderEnvelope,
+    ContractItemSettlement, ContractNegotiationError, ContractRequestPosition, GenerationContexts,
+    KaniInstallation, KaniScalarNativeRequest, KindOutput, ObligationDisposition, RoutedGeneration,
+    RoutedGenerationError, RoutedGenerationItem, ScalarLimits,
 };
 use quire_contract_ir::{
     CheckedPackageDispatchResult, CheckedPackageEvidence, CheckedPackageReadLimits,
     ContractPackageV1,
 };
 use quire_driver::{
-    build_registry, drive, CompileInput, DriverRefusal, GenerationInput, KaniInput,
+    build_registry, drive, CompileInput, Driven, DriverRefusal, GenerationInput, KaniInput,
     ProviderManifest, QslCg, Upstream,
 };
-use quire_exact::{Cancel, Integer, Meter, Outcome, ScalarLimits, Value};
+use quire_exact::{Cancel, Integer, Meter, Outcome, ScalarLimits as QslScalarLimits, Value};
 
 struct ExportVector {
     envelope: RefCell<Option<BackendProviderEnvelope>>,
@@ -229,9 +230,7 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     );
 }
 
-#[test]
-#[trace("IT-013-SC-04")]
-fn qsl_integer_addition_reaches_a_supported_kani_harness() {
+fn drive_integer_step() -> Driven {
     let lock = DefinitionLock::pinned();
     let root = lock.entry(CatalogRole::Root).identity;
     let source = format!(
@@ -250,7 +249,7 @@ fn qsl_integer_addition_reaches_a_supported_kani_harness() {
         wire: None,
     }])
     .expect("the Kani provider registers");
-    let driven = drive(
+    drive(
         &QslCg,
         CompileInput {
             source: SourceIdentity::new("agent-ix", "it013-kani", "git", "1"),
@@ -273,7 +272,13 @@ fn qsl_integer_addition_reaches_a_supported_kani_harness() {
             }),
         },
     )
-    .expect("integer addition drives");
+    .expect("integer addition drives")
+}
+
+#[test]
+#[trace("IT-013-SC-04")]
+fn qsl_integer_addition_reaches_a_supported_kani_harness() {
+    let driven = drive_integer_step();
     let [item] = driven.generation.items.as_slice() else {
         panic!("one generated Kani item: {:?}", driven.generation.items);
     };
@@ -289,7 +294,7 @@ fn qsl_integer_addition_reaches_a_supported_kani_harness() {
         "supported item retains the scalar harness"
     );
 
-    let qsl_limits = ScalarLimits {
+    let qsl_limits = QslScalarLimits {
         integer_bits: 64,
         decimal_digits: 20,
         scale_expansion: 20,
@@ -316,4 +321,89 @@ fn qsl_integer_addition_reaches_a_supported_kani_harness() {
         FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(value)))
             if value == Integer::from(5_i64)
     ));
+}
+
+#[test]
+#[trace("IT-013-SC-05")]
+#[ignore = "real Kani lane: run serially after the normal integration gate"]
+fn qsl_integer_addition_proves_and_matches_native_execution() {
+    let driven = drive_integer_step();
+    let [item] = driven.generation.items.as_slice() else {
+        panic!("one generated Kani item: {:?}", driven.generation.items);
+    };
+    let KindOutput::Kani {
+        harness: Some(harness),
+        ..
+    } = &item.output
+    else {
+        panic!("expected retained Kani harness, got {:?}", item.output);
+    };
+    let artifacts = driven
+        .generation
+        .oracle_artifacts
+        .as_ref()
+        .expect("the routed call generated an oracle crate");
+    let limits = ScalarLimits {
+        integer_bits: 64,
+        decimal_digits: 20,
+        scale_expansion: 20,
+        text_input_bytes: 1024,
+        text_scalars: 1024,
+        normalized_scalars: 1024,
+        unit_edges: 100,
+        value_occurrences: 100,
+        work_units: 1000,
+        result_units: 1000,
+    };
+    let installation = KaniInstallation::discover().expect("cargo-kani is installed");
+    let cancel = Cancel::new();
+    let operands = [4_i64, 1_i64];
+    let target = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("it013-kani");
+    let receipt = execute_kani_scalar_native(&KaniScalarNativeRequest {
+        cancel: &cancel,
+        installation: &installation,
+        harness,
+        oracle_artifacts: artifacts,
+        operands: &operands,
+        scalar_limits: limits,
+        target_directory: &target,
+    })
+    .expect("generated scalar proves and executes natively");
+    assert_eq!(
+        receipt.proof_evidence().outcome,
+        quire_contract_codegen::KaniRunOutcome::Verified
+    );
+    assert!(receipt.proof_evidence().success_checks > 0);
+    let qsl = driven
+        .package
+        .package()
+        .call(
+            &QualifiedName::unqualified("step".to_owned()).expect("checked function name"),
+            vec![Value::Integer(Integer::from(4_i64))],
+            &qsl_semantics::model::object_environment::ObjectEnvironment::default(),
+            &mut Meter::new(QslScalarLimits {
+                integer_bits: limits.integer_bits,
+                decimal_digits: limits.decimal_digits,
+                scale_expansion: limits.scale_expansion,
+                text_input_bytes: limits.text_input_bytes,
+                text_scalars: limits.text_scalars,
+                normalized_scalars: limits.normalized_scalars,
+                unit_edges: limits.unit_edges,
+                value_occurrences: limits.value_occurrences,
+                work_units: limits.work_units,
+                result_units: limits.result_units,
+            }),
+        )
+        .expect("QSL evaluates the checked function");
+    let FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(qsl_value))) = qsl.outcome
+    else {
+        panic!("QSL must complete integer addition");
+    };
+    assert_eq!(qsl_value, Integer::from(5_i64));
+    let native_value = receipt
+        .native_outcome()
+        .clone()
+        .completed()
+        .expect("staged native oracle completes");
+    assert_eq!(native_value.to_string(), qsl_value.to_string());
 }
