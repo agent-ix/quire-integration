@@ -1,16 +1,12 @@
 # quire-integration
 
-quire-integration is the cross-repository integration test crate for Quire, a
-toolchain that writes a system's rules in a formal language, checks them, and
-turns them into generated code and proofs. Each stage lives in its own
-repository and tests itself in isolation. Two stages can pass their own tests
-and still disagree about the bytes passed between them.
+quire-integration is the cross-repository integration test crate for the Quire
+toolchain. It checks that the stages, each in its own repository, agree on the
+bytes they pass to each other.
 
-The crate pins the stages to exact commits in one `Cargo.lock`, so every stage
-resolves to a single copy. Its tests take a rule through QSL, contract IR and
-the code generator, then compile and execute the result and compare it with
-QSL's own runtime. Maintainers of the stage repositories use it to find
-disagreements between stages.
+It pins every stage to an exact commit in one `Cargo.lock`. Its tests take a
+rule through QSL, Contract IR and the code generator, compile and run the
+result, and compare it with QSL's own evaluator.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">
