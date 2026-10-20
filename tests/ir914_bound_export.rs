@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! IR-914: a QSL export refusal is withheld while bound siblings reach CG.
-//! The injected refusal has an empty element list because this QSL-compiled
-//! fixture has no attachable abstraction relation. The test checks that the
-//! driver preserves the exact typed refusal it receives.
+//! The injected refusal names one unbound model element because this
+//! QSL-compiled fixture has no attachable abstraction relation. The test
+//! checks that the driver preserves the exact typed refusal it receives.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -13,11 +13,13 @@ use ix_trace_rs::trace;
 use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_foundation::source::provenance::OccurrenceKey;
 use qsl_foundation::SourceIdentity;
-use qsl_package::{BoundItem, CheckedPackage, ExportRefusal};
+use qsl_package::{BoundItem, CheckedPackage, ExportRefusal, UnboundElement};
 use qsl_replay::spine::{CheckedUnit, EmittedUnit, SpineLimits};
 use qsl_route::routing::Disposition;
 use qsl_route::{Candidate, ManifestDigest};
+use qsl_semantics::check::AbstractionKey;
 use qsl_semantics::family::FamilyOutcome;
+use qsl_semantics::model::key::DeclarationKey;
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_contract_codegen::{
     execute_kani_obligation, execute_kani_scalar_native, BackendDescriptor, BackendKind,
@@ -41,6 +43,20 @@ struct ExportVector {
     positions: RefCell<Option<Vec<ContractRequestPosition>>>,
 }
 
+fn unbound_fixture(item: &OccurrenceKey) -> ExportRefusal {
+    let key = AbstractionKey::Object(DeclarationKey {
+        package: "it013/domain".to_owned(),
+        node: "missing-object".to_owned(),
+    });
+    ExportRefusal::Unbound {
+        item: item.clone(),
+        elements: vec![UnboundElement {
+            package: key.package().to_owned(),
+            key,
+        }],
+    }
+}
+
 impl Upstream for ExportVector {
     fn has_abstraction_relation(&self, _package: &CheckedPackage) -> bool {
         true
@@ -57,10 +73,7 @@ impl Upstream for ExportVector {
             .enumerate()
             .map(|(index, item)| {
                 if index == 1 {
-                    Err(ExportRefusal::Unbound {
-                        item: item.clone(),
-                        elements: Vec::new(),
-                    })
+                    Err(unbound_fixture(item))
                 } else {
                     Ok(BoundItem {
                         item: item.clone(),
@@ -210,10 +223,7 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     assert_eq!(driven.item_refusals[0].request_index, 1);
     assert_eq!(
         driven.item_refusals[0].refusal,
-        ExportRefusal::Unbound {
-            item: driven.request_items[1].occurrence().clone(),
-            elements: Vec::new(),
-        }
+        unbound_fixture(driven.request_items[1].occurrence())
     );
     assert_eq!(
         driven.item_refusals[0].occurrence,

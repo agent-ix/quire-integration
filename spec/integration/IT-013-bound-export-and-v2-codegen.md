@@ -31,9 +31,9 @@ QSL-emitted V2 bytes → contract IR admission → codegen derivation.
 The driver fixture injects the binding-export result because this QSL-compiled
 unit has no attachable abstraction relation. All other QSL, IR, driver and
 codegen operations use their public production APIs. The injected `Unbound`
-refusal has an empty element list; QSL's own export only emits `Unbound` when
-at least one element is unbound, so this fixture checks transport of the
-typed refusal and makes no claim to exercise QSL's relation binding.
+refusal names one unbound model element, matching QSL's nonempty refusal
+shape. This fixture checks transport of the typed refusal and makes no claim
+to exercise QSL's relation binding.
 
 ## Inputs
 
