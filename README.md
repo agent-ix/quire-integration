@@ -22,8 +22,8 @@ states which paths each test composes.
 
 ## Tests
 
-Each test file uses the locked producer and consumer APIs. The tests exercise
-the paths listed below.
+The composition tests use the locked producer and consumer APIs. The table
+lists the path each test exercises.
 The IR-914 export tests cover the natural relationless skip and a real QSL
 `export_bindings` result passed through driver and CG. The original partition
 control also injects one refusal to test exact driver transport. The real
