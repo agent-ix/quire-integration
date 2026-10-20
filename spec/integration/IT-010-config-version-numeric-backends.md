@@ -20,6 +20,24 @@ relationships:
 ---
 # IT-010: Execute ConfigVersion through numeric verification backends
 
+## Current Status
+
+The V1 `lowering::lower_for` and `integer-ir/v1` command export inputs were
+retired by design; QSL does not expose those APIs in the current cohort. The
+V2 replacement is `qsl_package::export_bindings` → driver → CG, exercised by
+IT-013-SC-07 and SC-08. This restores the command-export composition check,
+including a real QSL per-item refusal at the driver seam, but it does not
+restore the former ConfigVersion numeric/backend procedure. IT-010-SC-02 has
+only a partial V2 scalar-claim control in IT-013-SC-02. IT-013-SC-04 and SC-05 additionally retain and prove
+one V2 integer scalar harness and compare its native result with QSL; they do
+not exercise the ConfigVersion clauses. IT-010-SC-03 through IT-010-SC-05
+have no current test. This document retains the desired ConfigVersion
+integration behavior, not a claim that the historical procedure remains
+executable.
+The authored-relation production path remains untested: the current SC-08
+fixture forces `has_abstraction_relation` at the seam because compilation
+emits no relation, then calls QSL's actual export function.
+
 ## Objective
 
 Verify the first complete numeric formal-specification path using actual checked native source,
@@ -58,6 +76,9 @@ precondition; this is the exact logical identity for absence of a precondition, 
 source clause or an approximation of unsupported semantics.
 
 ## Test Procedure
+
+The following was the V1 procedure. Its scenario statements remain unmet on
+the current cohort until replacement tests exercise equivalent V2 inputs.
 
 1. Compile the ConfigVersion postcondition and plain-integer native programs, lower them through their
    explicit targets and pass the emitted bytes through the public strict IR reader to codegen.
@@ -114,5 +135,7 @@ dispatch hosted CI.
 
 IT-010 verifies the state-scalar runtime workflow over the ConfigVersion model and both
 numeric/state lowering requirements
-against the separately owned codegen contracts. Each `IT-010-SC-NN` token binds to a real Rust test
-assertion in `tests/qsl_codegen_composition.rs` or `tests/qsl_kani_exemplar.rs`.
+against the separately owned codegen contracts. The two former Rust test
+binaries were retired when their V1 input API disappeared. None of the
+`IT-010-SC-NN` scenarios currently has a complete test; IT-013-SC-02 tests
+only the narrower V2 integer claim.

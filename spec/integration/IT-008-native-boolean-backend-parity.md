@@ -10,6 +10,17 @@ relationships:
 ---
 # IT-008: Execute native Boolean projections through the existing backend
 
+## Current Status
+
+The V1 QSL projection inputs used by the former composition test were removed
+from the locked QSL API. Its test binary was retired; IT-008-SC-01 through
+IT-008-SC-04 have no current integration test and remain unmet. IT-013-SC-03
+generates one V2 Boolean negation claim, but does not establish Boolean parity
+or LLVM activation. The procedure below preserves the intended integration
+behavior for a future V2 path; it is not an available path in this cohort.
+Composed consequent-probe activation (FR-004-AC-16 through FR-004-AC-24)
+remains open.
+
 ## Objective
 
 Expose frontend/backend truth or implication-activation drift on actual compiled
@@ -36,6 +47,9 @@ small Boolean fixture containing nested implication, conjunction, disjunction
 and negation. Use independently specified truth and activation expectations.
 
 ## Test Procedure
+
+The following was the V1 procedure. It cannot execute against the current
+locked QSL API and supplies no passing evidence for the scenarios below.
 
 1. Produce and lower the actual checked native package, including through QSL's
    `lower` command path, which exports exactly the lowered bytes.

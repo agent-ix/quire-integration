@@ -4,13 +4,14 @@ quire-integration is the cross-repository integration test crate for the Quire
 toolchain. It checks that the stages, each in its own repository, agree on the
 bytes they pass to each other.
 
-It pins every stage to an exact commit in one `Cargo.lock`. Its tests take a
-rule through QSL, Contract IR and the code generator, compile and run the
-result, and compare it with QSL's own evaluator.
+It pins every stage to an exact commit in one `Cargo.lock`. Its tests admit
+checked QSL packages through Contract IR, pass supported scalar operations to
+the code generator, and exercise real proof and native paths. The table below
+states which paths each test composes.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">
-  <img alt="The integration tests take a QSL source and its domain model through QSL's compiler into a checked package, read it with contract IR and feed it to the code generator, then compile and run what was generated. QSL's own runtime evaluates the same input, and the test passes only when the two verdicts agree." src="docs/images/hero-light.svg">
+  <img alt="Diagram of the intended full composition chain from a QSL source through contract IR, code generation, and native execution. The current test scope is listed below." src="docs/images/hero-light.svg">
 </picture>
 
 > **Status: prerelease, private repository.** The library crate is a
@@ -21,14 +22,18 @@ result, and compare it with QSL's own evaluator.
 
 ## Tests
 
-Each test file drives real producer bytes through real consumers. None mocks a
-neighboring stage.
+The composition tests use the locked producer and consumer APIs. The table
+lists the path each test exercises.
+The IR-914 export tests cover the natural relationless skip and a real QSL
+`export_bindings` result passed through driver and CG. The original partition
+control also injects one refusal to test exact driver transport. The real
+export test forces the driver's relation seam because its checked source does
+not author an abstraction relation.
 
 | Test file | Path it exercises | What must hold |
 | --- | --- | --- |
-| `tests/qsl_codegen_composition.rs` | QSL source and model, lowered to IR bytes, read by contract IR, handed to the code generator; generated Rust and property-test strategies are compiled and run | Native verdicts, independently specified expectations and generated code agree on a complete small population; generated clause activation matches native source events; property strategies run in-domain with no discards |
-| `tests/qsl_kani_exemplar.rs` | The same path, ending in a real `cargo kani` run over the generated bundle | The proof discharges real checks in every generated module; mutating the generated logic turns the proof into a failure; a falsified run's counterexample replays through QSL |
-| `tests/qsl_model_owner_admission.rs` | A QSL unit that selects a domain-package model, emitted as `checked-package/v2` bytes and read by contract IR | The package is admitted, a document supplied under another digest is refused, and model nodes are keyed by content only, so a version-only change keeps every node id |
+| `tests/ir914_bound_export.rs` | QSL compilation, the driver's relationless skip and real per-item binding export, CG generation, and a separate real Kani scalar path | The skip sends every item to CG; a real QSL refusal is withheld with its original index; the integer proof verifies and its arithmetic mutant falsifies |
+| `tests/qsl_model_owner_admission.rs` | A QSL unit emitted as `checked-package/v2` bytes, read by contract IR and passed to CG's scalar claim API | Model ownership stays content based; integer addition and Boolean negation produce checked CG claims |
 | `tests/integration.rs` | The placeholder library | It links |
 
 The plain-language test descriptions are in `spec/integration/`, one file per
@@ -76,13 +81,12 @@ commit the new `Cargo.lock` together with a passing test run.
 
 ## Requirements
 
-The tests fail when a tool is missing and never dispatch a hosted run.
+The tests fail when a required tool is missing and never dispatch a hosted run.
 
 | Needed by | Tool |
 | --- | --- |
-| all tests | Rust 1.98 (`rust-toolchain.toml`) |
-| code-generation tests | Rust with its LLVM tools, and `cargo-llvm-cov` |
-| proof tests | `cargo kani`, with `-Z unstable-options --export-json` support |
+| all tests | Rust toolchain selected by `rust-toolchain.toml` |
+| `make kani` and `make ci` | Installed Kani and CBMC |
 
 ## Quire ecosystem
 
@@ -103,7 +107,8 @@ repositories are listed in the version lock section.
 ```bash
 make fmt-check   # rustfmt
 make lint        # clippy, warnings are errors
-make test        # cargo test (needs the tools above)
+make test        # cargo test
+make kani        # real Kani proof and mutation
 make build       # release build
 make deny        # licence check
 make audit-unsafe
