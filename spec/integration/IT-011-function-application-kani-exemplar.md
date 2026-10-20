@@ -17,9 +17,12 @@ relationships:
 The V1 projection input for the former Kani exemplar was removed from the
 locked QSL API, and its test binary was retired. IT-011-SC-01 through
 IT-011-SC-04 have no current integration test. V2 integer addition can
-produce a supported scalar harness (IT-013-SC-04); that generation result is
-not a real Kani proof, mutation result or check census. The procedure below
-retains the desired proof behavior while V2 tests are restored.
+produce a supported scalar harness (IT-013-SC-04), a real verified Kani run
+with successful checks and a matching native result (IT-013-SC-05), and a
+falsified arithmetic mutant (IT-013-SC-06). Those narrower scalar controls
+do not restore this scenario's function-application postcondition,
+counterexample replay, or exact per-module SUCCESS census. The procedure
+below retains that desired behavior while V2 tests are restored.
 
 ## Objective
 

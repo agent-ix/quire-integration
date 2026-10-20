@@ -25,9 +25,12 @@ relationships:
 The V1 `lowering::lower_for` and command export inputs used by the former
 composition and proof tests were removed from the locked QSL API. Both test
 binaries were retired. IT-010-SC-02 has only a partial V2 scalar-claim
-control in IT-013-SC-02; IT-010-SC-03 through IT-010-SC-05 have no current
-test. This document retains the desired ConfigVersion integration behavior,
-not a claim that the historical procedure remains executable.
+control in IT-013-SC-02. IT-013-SC-04 and SC-05 additionally retain and prove
+one V2 integer scalar harness and compare its native result with QSL; they do
+not exercise the ConfigVersion clauses. IT-010-SC-03 through IT-010-SC-05
+have no current test. This document retains the desired ConfigVersion
+integration behavior, not a claim that the historical procedure remains
+executable.
 
 ## Objective
 

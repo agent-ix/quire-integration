@@ -457,6 +457,11 @@ fn qsl_integer_addition_mutant_falsifies_the_generated_scalar_proof() {
         .expect("temporary Kani crate");
     std::fs::create_dir_all(scratch.path().join("src")).expect("crate source directory");
     std::fs::write(scratch.path().join("Cargo.toml"), &manifest.contents).expect("crate manifest");
+    std::fs::copy(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.lock"),
+        scratch.path().join("Cargo.lock"),
+    )
+    .expect("use this integration cohort's resolved dependency lock");
     std::fs::write(scratch.path().join("src/lib.rs"), &mutant.rust.contents)
         .expect("mutated harness source");
     std::fs::write(
@@ -477,8 +482,8 @@ fn qsl_integer_addition_mutant_falsifies_the_generated_scalar_proof() {
     .unwrap_or_else(|refusal| panic!("mutated Kani run: {refusal}"));
     let KaniRunOutcome::Falsified { counterexample } = &evidence.outcome else {
         panic!(
-            "mutated arithmetic must falsify, got {:?}",
-            evidence.outcome
+            "mutated arithmetic must falsify, got {:?}; failure {:?}; diagnostics {:?}",
+            evidence.outcome, evidence.failure_cause, evidence.diagnostics
         );
     };
     assert!(counterexample.contains(mutant.identity.harness_symbol.as_str()));
