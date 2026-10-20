@@ -7,11 +7,9 @@
 //! `tests/fixtures/spine-model.semantic-ir.json`; that file is read from the
 //! `quire-spec-language` checkout Cargo resolved, never copied here.
 
-// Shared with the other composed tests; this binary uses only `qsl_root`.
-#[allow(dead_code)]
 mod support;
 
-use std::{collections::BTreeSet, fs};
+use std::{collections::BTreeSet, fs, num::NonZeroU64, time::Duration};
 
 use ix_trace_rs::trace;
 use qsl_foundation::SourceIdentity;
@@ -26,7 +24,8 @@ use qsl_semantics::{
 };
 use quire_contract_ir::{
     read_checked_package, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageRefusalCode, CheckedPackageV2,
+    CheckedPackageReadLimits, CheckedPackageRefusalCode, CheckedPackageV2, ContractDependencies,
+    ContractPackageReadResult, ContractPackageWireV1,
 };
 use quire_semantic_value::checking::CheckingLimits;
 use serde_json::Value;
@@ -69,7 +68,9 @@ fn unit_selecting(version: &str, document: &[u8]) -> String {
          profile v = \"quire.value.complete/v1\";\n\
          model M = \"{IDENTITY}\" version \"{version}\" digest \"sha256-jcs:{}\";\n\
          function keep using v(g: M::Gadget): M::Gadget pure {{ g }}\n\
-         function held using v(w: Reference<M::Widget>): Boolean pure {{ true }}\n",
+         function held using v(w: Reference<M::Widget>): Boolean pure {{ true }}\n\
+         function step using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n\
+         function invert using v(flag: Boolean): Boolean pure {{ not flag }}\n",
         document_digest(document)
     )
 }
@@ -152,6 +153,42 @@ fn model_node_ids(package: &CheckedPackageV2) -> BTreeSet<String> {
         .collect()
 }
 
+fn operation_nodes(
+    package: &CheckedPackageV2,
+    operation: &str,
+) -> Vec<quire_contract_ir::CheckedNodeId> {
+    let node_ids = package
+        .graph()
+        .nodes
+        .iter()
+        .filter(|node| {
+            node.body
+                .get("operation")
+                .and_then(|operation| operation.get("identity"))
+                .and_then(Value::as_str)
+                == Some(operation)
+        })
+        .map(|node| node.node_id.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(node_ids.len(), 1, "one checked {operation} node");
+    node_ids
+}
+
+fn generated_scalar_claims(
+    package: &CheckedPackageV2,
+    operation: &str,
+) -> Vec<quire_contract_codegen::ExactScalarClaim> {
+    let node_ids = operation_nodes(package, operation);
+    let derived = quire_contract_codegen::derive_exact_scalar_items(package, &node_ids);
+    let [item] = derived.as_slice() else {
+        panic!("one derived scalar item");
+    };
+    let item = item.clone().expect("checked operation has a scalar plan");
+    let generated = quire_contract_codegen::generate_exact_scalar_oracles(package, &[item])
+        .expect("CG renders the checked scalar operation");
+    generated.claim_map.items
+}
+
 /// IT-012-SC-01: IR's v2 reader admits the package QSL emitted for a unit
 /// that selects a domain-package model, and the lock names that selection.
 #[test]
@@ -225,4 +262,101 @@ fn v2_checked_integer_operation_generates_a_cg_scalar_claim() {
     let claims = generated_scalar_claims(&package, "quire.op.integer.add");
     assert_eq!(claims.len(), 1);
     assert_eq!(claims[0].operation.identity, "quire.op.integer.add");
+    assert_eq!(
+        claims[0].operation.provenance,
+        quire_contract_codegen::OperationProvenance::IrConfirmed
+    );
+    let quire_contract_codegen::ClaimDisposition::Generated(generated) = &claims[0].result else {
+        panic!("integer addition did not generate")
+    };
+    assert!(!generated.source_map.is_empty());
+    assert!(!generated.checked_bounds.is_empty());
+}
+
+#[test]
+#[trace("IT-008-SC-01")]
+fn v2_checked_boolean_operation_gets_a_typed_cg_refusal() {
+    let package = admitted(AUTHORED_VERSION);
+    let node_ids = operation_nodes(&package, "quire.op.boolean.not");
+    assert!(package
+        .source_map()
+        .iter()
+        .any(|entry| entry.node_id == node_ids[0] && !entry.regions.is_empty()));
+    let derived = quire_contract_codegen::derive_exact_scalar_items(&package, &node_ids);
+    assert!(matches!(
+        derived.as_slice(),
+        [Err(quire_contract_codegen::ExactScalarRefusal::NoDerivableClaim {
+            reason: quire_contract_codegen::ClaimDerivationRefusal::OperationNotDerivable {
+                operation_identity,
+            },
+        })] if operation_identity == "quire.op.boolean.not"
+    ));
+}
+
+#[test]
+#[trace("IT-010-SC-02")]
+fn v2_checked_integer_operation_reports_kani_rendering_refusal() {
+    use quire_contract_codegen::{
+        negotiate_kani_obligations, routed_contract_lowering_profile,
+        ContractDriverResultSelection, KaniObligationOutcome, KaniObligationRequest,
+        ObligationDisposition, ObligationItem, ProofCeilings, UnsupportedObligation,
+    };
+
+    let package = admitted(AUTHORED_VERSION);
+    let node_ids = operation_nodes(&package, "quire.op.integer.add");
+    let [item] = quire_contract_codegen::derive_exact_scalar_items(&package, &node_ids)
+        .try_into()
+        .expect("one derived claim");
+    let oracles = quire_contract_codegen::generate_exact_scalar_oracles(
+        &package,
+        &[item.expect("integer addition derives")],
+    )
+    .expect("CG renders the checked operation");
+    let lowering = package.lower(&node_ids, &routed_contract_lowering_profile());
+    let contract = match ContractPackageWireV1::read(
+        lowering
+            .package
+            .canonical_bytes()
+            .expect("CG package bytes"),
+        CheckedPackageReadLimits::bounded(),
+        &ContractDependencies::new(),
+    ) {
+        ContractPackageReadResult::Admitted(package) => package,
+        other => panic!("CG package refused: {other:?}"),
+    };
+    let selection = ContractDriverResultSelection::NotApplicable;
+    let items = [ObligationItem::ScalarClaim {
+        package: &contract,
+        claim_map: &oracles.claim_map,
+        node_id: &node_ids[0],
+        claim_index: 0,
+        result_selection: &selection,
+    }];
+    let outcome = negotiate_kani_obligations(&KaniObligationRequest {
+        ceilings: ProofCeilings {
+            memory_bytes: NonZeroU64::new(64 * 1024 * 1024).expect("positive ceiling"),
+            wall_clock: Duration::from_secs(30),
+        },
+        items: &items,
+        subject_path: "crate::subject",
+        unwind: 1,
+    })
+    .expect("Kani request is valid");
+    let KaniObligationOutcome::Emitted {
+        records,
+        scalar_harnesses,
+        ..
+    } = outcome
+    else {
+        panic!("Kani scalar request was rejected: {outcome:?}")
+    };
+    assert!(
+        matches!(records.as_slice(), [record]
+        if matches!(&record.disposition,
+            ObligationDisposition::Unsupported {
+                reason: UnsupportedObligation::OperationNotRendered { operation_identity, .. }
+            } if operation_identity == "quire.op.integer.add")),
+        "{records:?}"
+    );
+    assert!(scalar_harnesses.is_empty());
 }

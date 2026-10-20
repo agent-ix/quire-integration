@@ -1513,7 +1513,6 @@ name = "quire-integration"
 version = "0.1.0"
 dependencies = [
  "ix-trace-rs",
- "proc-macro2",
  "qsl-cst",
  "qsl-forms",
  "qsl-foundation",
@@ -1530,8 +1529,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "syn 2.0.119",
- "tempfile",
 ]
 
 [[package]]

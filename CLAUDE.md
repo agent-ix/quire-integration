@@ -26,8 +26,7 @@ make audit-unsafe   # check that every unsafe block has a // SAFETY: comment
 make ci             # fmt-check + lint + test + deny + audit-unsafe
 ```
 
-`make test` runs the composed QSL/codegen tests, which need `cargo kani` and
-`cargo llvm-cov` on `PATH`; a missing tool fails the test.
+`make test` runs the composed QSL, contract IR, driver and codegen tests.
 
 All checks are local. This repository intentionally has no hosted workflow, and
 `publish = false` is part of its bootstrap contract.
@@ -44,9 +43,9 @@ All checks are local. This repository intentionally has no hosted workflow, and
 ```
 src/lib.rs             # crate root
 tests/integration.rs   # end-to-end tests
-tests/qsl_codegen_composition.rs  # QSL -> contract IR -> codegen, compiled and executed (IT-008, IT-010)
-tests/qsl_kani_exemplar.rs        # real `cargo kani` runs over codegen Kani bundles (IT-010, IT-011)
-tests/support/         # shared setup over QSL's public API
+tests/ir914_bound_export.rs       # QSL -> driver -> CG, with one export refusal (IR-914)
+tests/qsl_model_owner_admission.rs # QSL checked-package/v2 -> IR -> CG (IT-012, IT-008, IT-010)
+tests/support/         # QSL fixture lookup through Cargo metadata
 benches/               # criterion benchmarks (opt-in; add criterion to dev-deps)
 spec/                  # requirements artifacts (from /spec-create-spec)
 scripts/               # local tooling

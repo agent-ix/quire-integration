@@ -32,13 +32,9 @@ quire-contract-codegen = { git = "https://github.com/agent-ix/quire-contract-cod
 quire-driver = { git = "https://github.com/agent-ix/quire-driver", branch = "code/ir-914-bound-only-cg-request" }
 quire-exact = { git = "https://github.com/agent-ix/quire-exact", branch = "main" }
 ix-trace-rs = { git = "https://github.com/agent-ix/ix-trace-rs", branch = "main" }
-# `span-locations` lets the Kani mutation control splice one function body by position.
-proc-macro2 = { version = "1", features = ["span-locations"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-syn = { version = "2", features = ["full", "visit"] }
-tempfile = "3"
 
 [profile.release]
 lto = "thin"
