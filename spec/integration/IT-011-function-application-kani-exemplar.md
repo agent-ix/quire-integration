@@ -50,16 +50,20 @@ test. No hosted workflow is dispatched.
 ## Inputs
 
 Author the function-application postcondition
-`amount < 1000 implies amount + 1 <= 1000` in QSL, with a declared finite
-integer domain for `amount` that includes an input where the implication is
-true. Obtain the exact admitted `CheckedPackageV2` from QSL's source-facing
+`amount < 1000 implies amount + 1 <= 1000` in QSL for an operation with one
+parameter `amount: Int[0, 1000]`. Both occurrences of `amount` read that
+operation parameter, not a state field or a subject-produced post-state value.
+Obtain the exact admitted `CheckedPackageV2` from QSL's source-facing
 facade during the test. The test identifies its `postcondition`
 `state`/`state_clause` node and uses that node's identity for both the FR-014
 oracle and FR-015 harness; if QSL does not emit and admit this shape, SC-02 is
-not satisfied. The harness takes its symbolic inputs and their inclusive
-bounds from that admitted package, not from a caller-supplied range. Selection
-and subject binding follow FR-015's V2 clause contract; this scenario does not
-define a new field accessor, subject ABI or QSL package format.
+not satisfied. Under FR-015-AC-39, the harness draws `amount` once within its
+declared inclusive domain and passes that exact value to the compiled subject;
+it draws no post-state value. Both condition reads, the oracle and the
+independent native expectation use that same value. The bound comes from the
+admitted package, not from a caller-supplied range. Selection and subject
+binding follow FR-015's V2 clause contract; this scenario does not define a
+state-field accessor, subject ABI or QSL package format.
 
 ## Test Procedure
 
@@ -70,9 +74,12 @@ define a new field accessor, subject ABI or QSL package format.
    for byte and that the compiled postcondition calls
    `quire_contract_runtime::operators::implies_short_circuit`. Independently
    of the runtime helper and oracle, the harness checks the implication's
-   native Boolean expectation over the same symbolic antecedent and
-   consequent. A helper result and oracle result agreeing with each other
-   cannot alone satisfy this check.
+   native Boolean expectation `!left || right`, where
+   `left = amount < 1000` and `right = amount + 1 <= 1000`, using the same
+   drawn `amount` passed to the compiled subject and oracle. Neither this
+   expectation nor the oracle calls the runtime implication helper. A helper
+   result and oracle result agreeing with each other cannot alone satisfy
+   this check.
 2. Run installed Kani on the healthy generated proof. Require a successful
    execution, a `Verified` classification and a satisfied non-vacuity cover.
    Keep the QSL source, admitted clause identity, oracle, harness and proof
