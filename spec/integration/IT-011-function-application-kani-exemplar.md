@@ -7,6 +7,8 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-spec-language/FR-033
     type: verifies
+  - target: ix://agent-ix/quire-contract-codegen/FR-014
+    type: references
   - target: ix://agent-ix/quire-contract-codegen/FR-015
     type: references
 ---
@@ -14,95 +16,105 @@ relationships:
 
 ## Current Status
 
-The V1 projection input for the former Kani exemplar was removed from the
-locked QSL API, and its test binary was retired. IT-011-SC-01 through
-IT-011-SC-04 have no current integration test. V2 integer addition can
-produce a supported scalar harness (IT-013-SC-04), a real verified Kani run
-with successful checks and a matching native result (IT-013-SC-05), and a
-falsified arithmetic mutant (IT-013-SC-06). Those narrower scalar controls
-do not restore this scenario's function-application postcondition,
-counterexample replay, or exact per-module SUCCESS census. The procedure
-below retains that desired behavior while V2 tests are restored.
-The codegen matrix marks V2 inline-clause proof generation
-(FR-015-AC-40) as planned. Its Boolean implication mutation remains an open
-proof obligation beyond IT-013's scalar arithmetic mutation.
+The former V1 projection input and its test binary were retired when the locked
+QSL API removed that input. IT-011-SC-01 through IT-011-SC-04 have no current
+integration test. IT-013's V2 scalar addition proof and mutant, and CG's V2
+scalar Boolean implication control (FR-015-AC-118), do not prove a QSL-authored
+function-application postcondition through a clause-identified oracle and
+harness. IT-011-SC-02 is the first V2 restoration slice. SC-01, SC-03 and
+SC-04 remain planned and require their own live checks before they count as
+verification evidence.
 
 ## Objective
 
-Show that the Kani proof codegen generates for a QSL function-application
-clause discharges real SUCCESS checks, and that the
-generated module's own logic is load-bearing: a mutation inside it turns a
-verified proof into a failed one.
+Show that a QSL-authored function-application postcondition admits a V2 clause
+claim and that the generated Kani proof depends on the authoritative runtime's
+Boolean implication helper. A healthy run must verify; changing only that
+helper's parsed body to return false must falsify the same claim.
 
 ## Target Integration
 
-Native parse/link/check/package → `lowering::lower_for` with `integer-ir/v1` →
-contract IR reader → quire-contract-codegen `generate_kani_bundle` → real
-`cargo kani` over the bundle and a hand-written subject → codegen's
-`classify_kani_run` → codegen's `decode_falsification` for a falsified run's
-counterexample.
+QSL source → native parse/link/check/package → admitted `CheckedPackageV2` →
+clause-identified FR-014 Boolean oracle (FR-014-AC-38) → FR-015 V2 clause
+harness (FR-015-AC-40) → installed Kani → codegen's run classification and
+counterexample playback. The clause node, not a referenced condition node,
+identifies the claim and the generated oracle.
 
 ## Preconditions
 
-`cargo kani` is available locally and accepts
-`-Z unstable-options --export-json <file>`. The generated crates fetch the
-`quire-contract-runtime` that codegen's generated manifests name, and the
-mutation control copies that same resolved checkout, located through
-`cargo metadata`. Missing prerequisites fail the test. No hosted workflow is
-dispatched.
+Installed Kani runs both proof executions and exports reports that codegen can
+classify. The test obtains the authoritative `quire-contract-runtime` source
+through the resolved dependency, and performs the mutation in an isolated
+checkout of that source. The generated proof resolves the same runtime source
+with only the parsed helper body changed in the mutant run. No runtime source,
+binary, schema or fixture is copied into this repository. Missing Kani,
+admission, helper-call, helper-body, report or playback prerequisites fail the
+test. No hosted workflow is dispatched.
 
 ## Inputs
 
-The invariant `amount < 1000 implies amount + 1 <= 1000` over one scalar state
-value `amount: 0..1000`, bound to `PopulationRule@7/population_rule`: a
-function application applying `+` and a comparison directly to a value. Its
-Kani adapter uses the canonical zero-dependency Boolean true precondition, and
-its subject consumes the input and produces no result, because the clause's
-ABI derives no subject result.
+Author the function-application postcondition
+`amount < 1000 implies amount + 1 <= 1000` in QSL, with a declared finite
+integer domain for `amount` that includes an input where the implication is
+true. Obtain the exact admitted `CheckedPackageV2` from QSL's source-facing
+facade during the test. The test identifies its `postcondition`
+`state`/`state_clause` node and uses that node's identity for both the FR-014
+oracle and FR-015 harness; if QSL does not emit and admit this shape, SC-02 is
+not satisfied. The harness takes its symbolic inputs and their inclusive
+bounds from that admitted package, not from a caller-supplied range. Selection
+and subject binding follow FR-015's V2 clause contract; this scenario does not
+define a new field accessor, subject ABI or QSL package format.
 
 ## Test Procedure
 
-The following was the V1 procedure. It is not current verification evidence
-for the four scenarios until equivalent V2 tests run real Kani.
+1. Generate the clause-identified oracle and V2 clause harness from the
+   QSL-authored admitted package. Record the QSL source, admitted clause node
+   identity, oracle claim identity and harness claim identity in the test
+   evidence. Confirm that the harness embeds the FR-014 oracle function byte
+   for byte and that the compiled postcondition calls
+   `quire_contract_runtime::operators::implies_short_circuit`. Independently
+   of the runtime helper and oracle, the harness checks the implication's
+   native Boolean expectation over the same symbolic antecedent and
+   consequent. A helper result and oracle result agreeing with each other
+   cannot alone satisfy this check.
+2. Run installed Kani on the healthy generated proof. Require a successful
+   execution, a `Verified` classification and a satisfied non-vacuity cover.
+   Keep the QSL source, admitted clause identity, oracle, harness and proof
+   subject fixed for the mutation run.
+3. In the isolated checkout of the authoritative runtime source, parse the
+   `implies_short_circuit` function and replace only its body with a return of
+   false, ignoring its parameters. Require exactly the intended helper body
+   and compiled postcondition call to be found; an absent or ambiguous match
+   fails the control. Run the same generated claim with installed Kani against
+   that changed runtime. Require codegen to classify it `Falsified` and decode
+   a concrete playback within the admitted input domain. Replay the concrete
+   operands against the independent native implication: it is true while the
+   mutated helper returns false. The test fails if source, clause identity,
+   oracle, harness, subject, native expectation or any runtime code outside
+   that one parsed body changes between the runs.
 
-1. Run the generated Kani bundle with the healthy subject, exporting Kani's
-   report, and read its checks through codegen's `classify_kani_run`: the
-   SUCCESS-check count and each check's status and source location. Only
-   SUCCESS checks count; UNREACHABLE, UNDETERMINED and every other status do
-   not. The generated crate holds the bundle in `src/lib.rs` and the subject in
-   `src/subject.rs`. The claimed modules are `CLAIMED_MODULES`: `src/lib.rs`,
-   the generated bundle. A SUCCESS check is attributed to a claimed module only
-   when its location names exactly that module's file, after resolving a
-   relative location against the generated crate and canonicalizing both
-   paths.
-   IT-011-SC-01: the run exits successfully and discharges at least one
-   SUCCESS check.
-   IT-011-SC-04: every claimed module is attributed at least one SUCCESS
-   check, and a claimed module attributed none fails the test, which names
-   it. A file whose path only starts with the module's path (for example
-   `src/lib.rs.orig` for `src/lib.rs`), or a file with the same crate-relative
-   path in another crate, is not attributed to it.
-2. Confirm the compiled postcondition calls
-   `quire_contract_runtime::operators::implies_short_circuit`, verify the
-   unmutated run, then rerun the same bundle and subject against a copy of the
-   runtime in which the parsed `fn implies_short_circuit` has its body replaced
-   by `R::from(false)`, ignoring its parameters.
-   IT-011-SC-02: the unmutated run exits successfully and codegen's
-   `classify_kani_run` classifies the mutated run `Falsified`; the mutation
-   control fails if the function is not found.
-3. Rerun the same bundle and subject with the one `+` in the compiled
-   postcondition oracle returning `left + right + 1`, so the rule reads
-   `amount < 1000 implies amount + 2 <= 1000`. The mutant is non-equivalent:
-   it is false at `amount = 999`. An equivalent mutant (dropping the `+ 1`)
-   leaves a rule every in-domain value satisfies, so a proof of it is correct.
-   IT-011-SC-03: the unmutated run exits successfully, codegen's
-   `classify_kani_run` classifies the mutated run `Falsified`, and codegen's
-   `decode_falsification` reads the counterexample as `amount_current = 999`;
-   the mutation control fails if the oracle does not contain exactly one `+`.
+IT-011-SC-02: all three steps pass. A generation-time Boolean, a missing real
+Kani run, a verdict without a satisfied healthy cover, a refused report, a
+counterexample outside the admitted domain or a mutation that leaves the
+claim verified does not satisfy the scenario. The test carries
+`#[trace("IT-011-SC-02")]`.
+
+## Remaining Planned Scenarios
+
+- IT-011-SC-01: require a healthy real-Kani run with at least one discharged
+  SUCCESS check. This is not inferred from the SC-02 `Verified` verdict alone.
+- IT-011-SC-03: mutate the clause's arithmetic `+` to a non-equivalent
+  `left + right + 1`, require `Falsified` and decode the in-domain
+  `amount_current = 999` playback. This is separate from the runtime-helper
+  mutation of SC-02 and remains unverified.
+- IT-011-SC-04: attribute at least one SUCCESS check to every claimed generated
+  module by exact canonical file identity. A path prefix or the same relative
+  path in another crate does not count. This remains unverified.
 
 ## Expected Results
 
-Every run in all three procedures uses real `cargo kani`. A zero discharge
-count, a claimed module with no SUCCESS check, a report codegen refuses, an
-unchanged verdict under either mutation, or a mutated counterexample other than
-`amount_current = 999` fails the test.
+For SC-02, the healthy clause proof is `Verified` with its cover satisfied;
+the runtime-helper-body mutant is `Falsified` with concrete in-domain playback
+whose native implication is true. The same QSL source, admitted clause claim,
+oracle, harness and subject serve both runs. None of SC-01, SC-03 or SC-04 is
+claimed complete by this result.
