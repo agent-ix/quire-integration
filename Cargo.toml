@@ -30,7 +30,7 @@ qsl-semantics = { git = "https://github.com/agent-ix/quire-spec-language", branc
 quire-semantic-value = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
 quire-contract-codegen = { git = "https://github.com/agent-ix/quire-contract-codegen", branch = "main" }
-quire-driver = { git = "https://github.com/agent-ix/quire-driver", branch = "code/ir-914-bound-only-cg-request" }
+quire-driver = { git = "https://github.com/agent-ix/quire-driver", branch = "main" }
 quire-exact = { git = "https://github.com/agent-ix/quire-exact", branch = "main" }
 ix-trace-rs = { git = "https://github.com/agent-ix/ix-trace-rs", branch = "main" }
 serde = { version = "1", features = ["derive"] }

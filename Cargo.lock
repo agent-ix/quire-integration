@@ -1478,7 +1478,7 @@ dependencies = [
 [[package]]
 name = "quire-driver"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-driver?branch=code%2Fir-914-bound-only-cg-request#e2ba5df3b2ec91aaf5cb085d2d69486a1b70131a"
+source = "git+https://github.com/agent-ix/quire-driver?branch=main#eb473fa670d446e122cfe71cebd366f6bebd7ed3"
 dependencies = [
  "qsl-foundation",
  "qsl-package",
