@@ -9,6 +9,8 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-contract-codegen/FR-039
     type: verifies
+  - target: ix://agent-ix/quire-contract-codegen/FR-017
+    type: verifies
 ---
 # IT-013: Compose bound QSL exports with V2 codegen
 
