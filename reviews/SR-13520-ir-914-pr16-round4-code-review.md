@@ -37,3 +37,16 @@ Ticket: IR-914. Non-author review of exact PR head 8d82d557df27fd669b3d6ae06bd6d
 | ID | Severity | Summary | Refs |
 | --- | --- | --- | --- |
 | FND-001 | low | No findings (placeholder) | - |
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-002 | low | README says each test file uses locked producer and consumer APIs, but the listed `tests/integration.rs` imports only the local placeholder `hello` and checks that its greeting is nonempty. Scope the sentence to the composition tests. | README.md:24-25; tests/integration.rs:1-6 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-002 | still-open | README merge resolution at 14f7a9f says every test file uses locked producer and consumer APIs, but tests/integration.rs tests only the local placeholder hello function. Scope the sentence to the composition tests. |
+| FND-002 | fixed | Exact head e30dad3 changes only README.md:24-25 to scope the locked producer/consumer API claim to composition tests and describe the table without claiming that tests/integration.rs uses those APIs. Diff check passes and the source/spec/config remain as reviewed. |
