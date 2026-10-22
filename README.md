@@ -122,3 +122,5 @@ Contributions need a signed Contributor License Agreement; see
 licensed under `AGPL-3.0-or-later`; see [LICENSE](LICENSE),
 [LICENSE-DECISION.md](LICENSE-DECISION.md) and
 [CONTENT_RIGHTS.md](CONTENT_RIGHTS.md).
+
+<!-- STD-30 language-boundary canary: inert README change. -->
