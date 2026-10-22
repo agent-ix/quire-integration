@@ -111,7 +111,7 @@ make test        # cargo test
 make kani        # real Kani proof and mutation
 make build       # release build
 make deny        # licence check
-make audit-unsafe
+make audit-unsafe # Clippy unsafe-block documentation gate
 make ci          # all of the gates
 ```
 

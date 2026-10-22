@@ -37,4 +37,5 @@ version they ran.
 - Do not copy source material, fixtures, or schemas whose distribution rights are
   unresolved. Follow `CONTENT_RIGHTS.md` before the first commit and every import.
 - Run `make fmt-check`, `make lint`, `make test`, `make build`, `make deny`, and
-  `make audit-unsafe` before requesting review.
+  `make audit-unsafe` before requesting review. The unsafe audit uses the
+  Cargo Clippy lint through `make lint`.

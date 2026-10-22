@@ -15,7 +15,7 @@ help:
 	@echo "  make build            - Release build"
 	@echo "  make clean            - cargo clean"
 	@echo "  make deny             - cargo deny check licenses"
-	@echo "  make audit-unsafe     - Enforce // SAFETY: comments on unsafe blocks"
+	@echo "  make audit-unsafe     - Enforce unsafe-block documentation through Clippy"
 	@echo "  make ci               - All CI gates locally (fmt-check + lint + test + kani + deny + audit-unsafe)"
 
 # =============================================================================
@@ -63,8 +63,7 @@ cargo-audit:
 	$(CARGO) audit
 
 .PHONY: audit-unsafe
-audit-unsafe:
-	bash scripts/check_unsafe_comments.sh
+audit-unsafe: lint
 
 # =============================================================================
 # Composite
