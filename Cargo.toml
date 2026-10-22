@@ -9,6 +9,9 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/agent-ix/quire-integration"
 publish = false
 
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
+
 [lib]
 name = "quire_integration"
 path = "src/lib.rs"

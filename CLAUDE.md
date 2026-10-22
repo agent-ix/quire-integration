@@ -23,7 +23,7 @@ make kani           # real Kani proof and mutation tests
 make build          # release build
 make clean          # cargo clean
 make deny           # cargo deny check licenses
-make audit-unsafe   # check that every unsafe block has a // SAFETY: comment
+make audit-unsafe   # check unsafe-block documentation through Clippy
 make ci             # fmt-check + lint + test + kani + deny + audit-unsafe
 ```
 
@@ -36,7 +36,7 @@ All checks are local. This repository intentionally has no hosted workflow, and
 ## Safety scaffolding
 
 - `deny.toml` allow-lists licenses and denies unknown registries/git sources
-- `scripts/check_unsafe_comments.sh` runs locally via `make audit-unsafe`. Every `unsafe {` block must have a `// SAFETY:` comment within the 3 preceding lines.
+- The `undocumented_unsafe_blocks` Clippy lint runs through `make lint`; `make audit-unsafe` is its named alias.
 - `rustfmt.toml` uses 100-char width and `StdExternalCrate` import grouping. Local checks fail on drift.
 - `rust-toolchain.toml` selects Rust 1.98.1 (the floor quire-spec-language and quire-contract-codegen require) + rustfmt + clippy + llvm-tools.
 
