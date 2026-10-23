@@ -36,20 +36,28 @@ fn composed_dependency_cohort_has_one_shared_type_identity() {
             .collect()
     };
 
-    for name in [
-        "quire-semantic-value",
-        "quire-contract-model",
-        "quire-contract-ir",
-        "quire-contract-codegen",
-        "quire-contract-runtime",
-        "quire-spec-language",
-        "qsl-foundation",
-        "qsl-replay",
-        "quire-verification-contracts",
+    for (name, repository) in [
+        ("quire-semantic-value", "quire-semantic-value"),
+        ("quire-contract-model", "quire-contract-ir"),
+        ("quire-contract-ir", "quire-contract-ir"),
+        ("quire-contract-codegen", "quire-contract-codegen"),
+        ("quire-contract-runtime", "quire-contract-runtime"),
+        ("quire-spec-language", "quire-spec-language"),
+        ("qsl-foundation", "quire-spec-language"),
+        ("qsl-replay", "quire-spec-language"),
+        (
+            "quire-verification-contracts",
+            "quire-verification-contracts",
+        ),
     ] {
         let members = sources(name);
         assert_eq!(members.len(), 1, "{name} must have one package identity");
-        assert!(members[0].is_some(), "{name} must have a locked source");
+        assert!(
+            members[0].is_some_and(|source| {
+                source.starts_with(&format!("git+https://github.com/agent-ix/{repository}?"))
+            }),
+            "{name} must come from {repository}"
+        );
     }
 
     for (repository, expected_names) in [

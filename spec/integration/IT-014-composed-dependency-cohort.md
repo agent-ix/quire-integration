@@ -24,6 +24,14 @@ Cargo metadata reads the integration manifest with `--locked`.
 
 The repository's committed `Cargo.toml` and `Cargo.lock`.
 
+The named shared type packages are `quire-semantic-value`,
+`quire-contract-model`, `quire-contract-ir`, `quire-contract-codegen`,
+`quire-contract-runtime`, `quire-spec-language`, `qsl-foundation`,
+`qsl-replay` and `quire-verification-contracts`. The first-party Git repository
+for each is the same as its package name, except `quire-contract-model` and
+`quire-contract-ir` both come from `quire-contract-ir`, and `qsl-foundation`
+and `qsl-replay` both come from `quire-spec-language`.
+
 ## Test Procedure
 
 1. Resolve the locked dependency graph with Cargo metadata.
