@@ -8,8 +8,8 @@
 
 ## Unsafe
 
-- Every `unsafe {` block must have a `// SAFETY: <reason>` comment within the 3 lines above it.
-- `make audit-unsafe` enforces this. CI runs the same check.
+- Every `unsafe {` block must have a `// SAFETY: <reason>` comment explaining its invariant.
+- The Cargo Clippy `undocumented_unsafe_blocks` lint enforces this through `make lint`; `make audit-unsafe` invokes that gate.
 
 ## Dependencies
 
