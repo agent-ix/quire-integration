@@ -7,7 +7,7 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-spec-language/FR-280
     type: references
-  - target: ix://agent-ix/quire-contract-codegen/FR-331
+  - target: ix://agent-ix/quire-specification/FR-331
     type: references
 ---
 # IT-015: Negotiate each profile layer's witness item over the real backends
