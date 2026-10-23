@@ -3,9 +3,11 @@
 
 use std::{collections::BTreeSet, path::Path, process::Command};
 
+use ix_trace_rs::trace;
 use serde_json::Value;
 
 #[test]
+#[trace("IT-014-SC-01")]
 fn composed_dependency_cohort_has_one_shared_type_identity() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
     let output = Command::new(env!("CARGO"))
@@ -26,11 +28,11 @@ fn composed_dependency_cohort_has_one_shared_type_identity() {
     );
     let metadata: Value = serde_json::from_slice(&output.stdout).expect("cargo metadata JSON");
     let packages = metadata["packages"].as_array().expect("package list");
-    let sources = |name: &str| -> BTreeSet<&str> {
+    let sources = |name: &str| -> Vec<Option<&str>> {
         packages
             .iter()
             .filter(|package| package["name"].as_str() == Some(name))
-            .filter_map(|package| package["source"].as_str())
+            .map(|package| package["source"].as_str())
             .collect()
     };
 
@@ -45,10 +47,32 @@ fn composed_dependency_cohort_has_one_shared_type_identity() {
         "qsl-replay",
         "quire-verification-contracts",
     ] {
-        assert_eq!(sources(name).len(), 1, "{name} must have one source");
+        let members = sources(name);
+        assert_eq!(members.len(), 1, "{name} must have one package identity");
+        assert!(members[0].is_some(), "{name} must have a locked source");
     }
 
-    for repository in ["filament-core-data", "quire-rs"] {
+    for (repository, expected_names) in [
+        (
+            "filament-core-data",
+            &[
+                "agent-ix-extraction-frontend",
+                "agent-ix-semantic-ir",
+                "agent-ix-semantic-schema",
+            ][..],
+        ),
+        ("quire-rs", &["quire-rs", "quire-rust-extraction"][..]),
+    ] {
+        for name in expected_names {
+            let members = sources(name);
+            assert_eq!(members.len(), 1, "{name} must have one package identity");
+            assert!(
+                members[0].is_some_and(|source| {
+                    source.starts_with(&format!("git+https://github.com/agent-ix/{repository}?"))
+                }),
+                "{name} must come from {repository}"
+            );
+        }
         let revisions = packages
             .iter()
             .filter_map(|package| package["source"].as_str())
