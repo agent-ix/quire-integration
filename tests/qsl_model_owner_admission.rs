@@ -24,7 +24,7 @@ use qsl_semantics::{
 };
 use quire_contract_ir::{
     read_checked_package, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageRefusalCode, CheckedPackageV2,
+    CheckedPackageReadLimits, CheckedPackageRefusalCode, CheckedPackageV2, CheckedTerm,
 };
 use quire_semantic_value::checking::CheckingLimits;
 use serde_json::Value;
@@ -161,11 +161,14 @@ fn operation_nodes(
         .nodes
         .iter()
         .filter(|node| {
-            node.body
-                .get("operation")
-                .and_then(|operation| operation.get("identity"))
-                .and_then(Value::as_str)
-                == Some(operation)
+            let Some(CheckedTerm::Application {
+                operation: descriptor,
+                ..
+            }) = package.term(&node.node_id)
+            else {
+                return false;
+            };
+            descriptor.get("identity").and_then(Value::as_str) == Some(operation)
         })
         .map(|node| node.node_id.clone())
         .collect::<Vec<_>>();
