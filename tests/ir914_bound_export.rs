@@ -406,18 +406,79 @@ fn real_qsl_export_refusal_is_withheld_before_codegen() {
         "QSL export results: {results:?}; driver items: {:?}",
         driven.request_items
     );
-    assert!(results[0].is_ok());
-    assert!(
-        matches!(&results[1], Err(ExportRefusal::Unbound { elements, .. }) if !elements.is_empty()),
-        "{results:?}"
+    // FR-075 orders requests by occurrence key, not function source position.
+    // Identify the model-reading item from the admitted fixture, independently
+    // of the export result and the driver's refusal partition.
+    let graph = driven.package().package().graph();
+    let ordered_keys = graph.requirements().keys().cloned().collect::<Vec<_>>();
+    assert_eq!(
+        driven
+            .request_items
+            .iter()
+            .map(|item| item.occurrence().clone())
+            .collect::<Vec<_>>(),
+        ordered_keys
     );
-    assert!(results[2].is_ok());
+    let widget = AbstractionKey::Object(DeclarationKey {
+        package: "acme/orders".to_owned(),
+        node: "ix://acme/orders/Widget".to_owned(),
+    });
+    let referenced_elements = ordered_keys
+        .iter()
+        .map(|key| {
+            graph
+                .item_elements(key)
+                .expect("the occurrence names an admitted requirement")
+                .expect("the fixture's referenced declarations are admitted")
+        })
+        .collect::<Vec<_>>();
+    let widget_indices = referenced_elements
+        .iter()
+        .enumerate()
+        .filter_map(|(index, elements)| elements.contains(&widget).then_some(index))
+        .collect::<Vec<_>>();
+    assert_eq!(widget_indices.len(), 1, "exactly function b reads Widget");
+    let refused_index = widget_indices[0];
+    assert_eq!(
+        referenced_elements[refused_index]
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>(),
+        [widget.clone()]
+    );
+    let expected_refusal = ExportRefusal::Unbound {
+        item: ordered_keys[refused_index].clone(),
+        elements: vec![UnboundElement {
+            package: "acme/orders".to_owned(),
+            key: widget,
+        }],
+    };
+    assert_eq!(results[refused_index], Err(expected_refusal.clone()));
+    let healthy_indices = (0..ordered_keys.len())
+        .filter(|index| *index != refused_index)
+        .collect::<Vec<_>>();
+    assert_eq!(healthy_indices.len(), 2);
+    for index in &healthy_indices {
+        assert!(referenced_elements[*index].is_empty());
+        assert_eq!(
+            results[*index],
+            Ok(BoundItem {
+                item: ordered_keys[*index].clone(),
+                bindings: Vec::new(),
+            })
+        );
+    }
     assert_eq!(upstream.envelope().items.len(), 2);
     assert_eq!(driven.item_refusals.len(), 1);
-    assert_eq!(driven.item_refusals[0].request_index, 1);
+    assert_eq!(driven.item_refusals[0].request_index, refused_index);
+    assert_eq!(
+        driven.item_refusals[0].occurrence,
+        ordered_keys[refused_index]
+    );
+    assert_eq!(driven.item_refusals[0].refusal, expected_refusal);
     assert_eq!(
         driven.item_refusals[0].refusal,
-        results[1].as_ref().unwrap_err().clone()
+        results[refused_index].as_ref().unwrap_err().clone()
     );
     assert_eq!(
         driven
@@ -426,7 +487,8 @@ fn real_qsl_export_refusal_is_withheld_before_codegen() {
             .iter()
             .map(|item| item.request_index)
             .collect::<Vec<_>>(),
-        [0, 2]
+        healthy_indices,
+        "both model-free siblings generate and the Widget refusal is withheld"
     );
 }
 
