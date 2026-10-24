@@ -10,7 +10,8 @@ use serde_json::Value;
 #[trace("IT-014-SC-01")]
 fn composed_dependency_cohort_has_one_shared_type_identity() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-    let output = Command::new(env!("CARGO"))
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let output = Command::new(cargo)
         .args([
             "metadata",
             "--locked",
