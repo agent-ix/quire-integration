@@ -62,6 +62,18 @@ fn composed_dependency_cohort_has_one_shared_type_identity() {
 
     for (repository, expected_names) in [
         (
+            "quire-canonical",
+            &["quire-canonical", "quire-canonical-derive"][..],
+        ),
+        (
+            "quire-spec-language",
+            &["quire-spec-language", "qsl-foundation", "qsl-replay"][..],
+        ),
+        (
+            "quire-contract-ir",
+            &["quire-contract-model", "quire-contract-ir"][..],
+        ),
+        (
             "filament-core-data",
             &[
                 "agent-ix-extraction-frontend",
