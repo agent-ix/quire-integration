@@ -81,7 +81,7 @@ fn composed_dependency_cohort_has_one_shared_type_identity() {
                 "agent-ix-semantic-schema",
             ][..],
         ),
-        ("quire-rs", &["quire-rs", "quire-rust-extraction"][..]),
+        ("quire-rs", &["quire-rs"][..]),
     ] {
         for name in expected_names {
             let members = sources(name);

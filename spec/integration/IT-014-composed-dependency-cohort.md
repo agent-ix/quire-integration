@@ -32,16 +32,17 @@ for each is the same as its package name, except `quire-contract-model` and
 `quire-contract-ir` both come from `quire-contract-ir`, and `qsl-foundation`
 and `qsl-replay` both come from `quire-spec-language`.
 The canonical source contributes `quire-canonical` and
-`quire-canonical-derive`.
+`quire-canonical-derive`. The normal graph selects `quire-rs`; its optional
+extraction and parser packages need not be present.
 
 ## Test Procedure
 
 1. Resolve the locked dependency graph with Cargo metadata.
    IT-014-SC-01: every named shared type package has exactly one package
-   identity and a locked Git source; the canonical, QSL, IR, filament core data
-   and quire-rs crates each come from their expected repository, with one
-   revision per repository across all packages from each source;
-   `serde_json_canonicalizer` is absent.
+   identity and a locked Git source; the canonical, QSL, IR and three filament
+   core data crates and the selected `quire-rs` package come from their expected
+   repositories, with one revision across every selected package from each
+   repository; `serde_json_canonicalizer` is absent.
 
 ## Expected Results
 
