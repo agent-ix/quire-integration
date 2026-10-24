@@ -800,16 +800,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
-name = "ix-cli-kit"
-version = "0.1.0"
-source = "git+https://github.com/agent-ix/ix-cli-kit?branch=main#7f3b58b6a65e237bf733437c1c10cd609c84f835"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "ix-trace-rs"
 version = "0.1.2"
 source = "git+https://github.com/agent-ix/ix-trace-rs?branch=main#e29cc07f70394ff018884d12406c1e150bded5f4"
@@ -1424,7 +1414,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-codegen"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#5155360abbe1c9a01444aaa90ac73a0d658d9933"
+source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#8d81a87c89fc61d9ec36d1bc40131b575560644f"
 dependencies = [
  "command-fds",
  "ix-trace-rs",
@@ -1446,9 +1436,8 @@ dependencies = [
 [[package]]
 name = "quire-contract-ir"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#1e177e071216b005eb2a7fe286d23ec717aeb791"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#d6d3e32a536dcd785b9bb07cb81072cac0989f4e"
 dependencies = [
- "ix-cli-kit",
  "quire-contract-model",
  "serde",
  "serde_json",
@@ -1458,7 +1447,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-model"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#1e177e071216b005eb2a7fe286d23ec717aeb791"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#d6d3e32a536dcd785b9bb07cb81072cac0989f4e"
 dependencies = [
  "ix-trace-rs",
  "jsonschema 0.17.1",
@@ -1495,7 +1484,7 @@ dependencies = [
 [[package]]
 name = "quire-driver"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-driver?branch=main#f5dccb6c06d8d74a3e619aef79f137d0219416b4"
+source = "git+https://github.com/agent-ix/quire-driver?branch=main#2db214bb94ed1224effd5c853d9f12c0caeb0098"
 dependencies = [
  "qsl-foundation",
  "qsl-package",
@@ -1506,6 +1495,7 @@ dependencies = [
  "quire-contract-codegen",
  "quire-contract-model",
  "quire-exact",
+ "quire-semantic-value",
  "serde",
  "serde_json",
  "thiserror",
