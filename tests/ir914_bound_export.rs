@@ -444,7 +444,7 @@ fn real_qsl_export_refusal_is_withheld_before_codegen() {
             .iter()
             .cloned()
             .collect::<Vec<_>>(),
-        [widget.clone()]
+        std::slice::from_ref(&widget)
     );
     let expected_refusal = ExportRefusal::Unbound {
         item: ordered_keys[refused_index].clone(),
