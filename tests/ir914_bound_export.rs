@@ -21,10 +21,9 @@ use qsl_replay::spine::{AdmittedModels, CheckedUnit, EmittedUnit, SpineLimits};
 use qsl_route::routing::Disposition;
 use qsl_route::{Candidate, ManifestDigest};
 use qsl_semantics::check::AbstractionKey;
-use qsl_semantics::family::FamilyOutcome;
 use qsl_semantics::model::intake::package_input;
-use qsl_semantics::model::key::DeclarationKey;
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
+use quire_checked::key::DeclarationKey;
 use quire_contract_codegen::{
     execute_kani_obligation, execute_kani_scalar_native, BackendDescriptor, BackendKind,
     BackendProviderEnvelope, ContractItemSettlement, ContractNegotiationError,
@@ -40,6 +39,7 @@ use quire_driver::{
     build_registry, drive, CompileInput, Driven, DriverRefusal, GenerationInput, KaniInput,
     ProviderManifest, QslCg, Upstream,
 };
+use quire_eval::FamilyOutcome;
 use quire_exact::{Cancel, Integer, Meter, Outcome, ScalarLimits as QslScalarLimits, Value};
 
 struct ExportVector {
