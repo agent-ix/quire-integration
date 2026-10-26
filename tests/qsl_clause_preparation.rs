@@ -3,7 +3,7 @@
 
 mod support;
 
-use std::{fs, ops::Range};
+use std::{fs, ops::Range, path::PathBuf, process::Command};
 
 use qsl_foundation::SourceIdentity;
 use qsl_semantics::model::intake::package_input;
@@ -66,6 +66,65 @@ fn mutate_runtime_helper_body(source: &str) -> Result<(String, Range<usize>), St
     let mut changed = source.to_owned();
     changed.replace_range(start..end, MUTANT_BODY);
     Ok((changed, start..end))
+}
+
+struct RuntimeWorktree {
+    root: PathBuf,
+    path: PathBuf,
+    active: bool,
+}
+
+impl RuntimeWorktree {
+    fn add(root: PathBuf, path: PathBuf) -> Self {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["worktree", "add", "--detach"])
+            .arg(&path)
+            .arg("HEAD")
+            .output()
+            .expect("create isolated checkout of resolved runtime");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Self {
+            root,
+            path,
+            active: true,
+        }
+    }
+
+    fn remove(mut self) {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(["worktree", "remove", "--force"])
+            .arg(&self.path)
+            .output()
+            .expect("remove isolated runtime checkout");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        self.active = false;
+    }
+}
+
+impl Drop for RuntimeWorktree {
+    fn drop(&mut self) {
+        if !self.active {
+            return;
+        }
+        let _ = Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(["worktree", "remove", "--force"])
+            .arg(&self.path)
+            .status();
+    }
 }
 
 const SOURCE: &str = "language \"ix:native\" edition \"1-draft\";\n\
@@ -184,8 +243,10 @@ fn qsl_authored_parameter_only_postcondition_emits_one_admitted_clause() {
 #[test]
 fn runtime_helper_mutation_changes_only_one_parsed_body() {
     let root = support::package_root("quire-contract-runtime");
-    let source = fs::read_to_string(root.join("src/operators.rs"))
-        .expect("resolved authoritative runtime helper source");
+    let scratch = tempfile::tempdir().expect("isolated runtime checkout parent");
+    let checkout = RuntimeWorktree::add(root, scratch.path().join("runtime"));
+    let helper = checkout.path.join("src/operators.rs");
+    let source = fs::read_to_string(&helper).expect("resolved authoritative runtime helper source");
     let (mutant, body) = mutate_runtime_helper_body(&source).expect("one parsed helper body");
     assert_eq!(&source[..body.start], &mutant[..body.start]);
     assert_eq!(
@@ -199,4 +260,14 @@ fn runtime_helper_mutation_changes_only_one_parsed_body() {
     let absent = source.replace("fn implies_short_circuit", "fn absent_helper");
     assert!(mutate_runtime_helper_body(&absent).is_err());
     assert!(mutate_runtime_helper_body(&format!("{source}\n{source}")).is_err());
+    fs::write(&helper, mutant).expect("change only parsed helper body in isolated checkout");
+    let changed = Command::new("git")
+        .arg("-C")
+        .arg(&checkout.path)
+        .args(["diff", "--name-only"])
+        .output()
+        .expect("inspect runtime mutation scope");
+    assert!(changed.status.success());
+    assert_eq!(changed.stdout, b"src/operators.rs\n");
+    checkout.remove();
 }
