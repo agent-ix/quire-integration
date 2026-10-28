@@ -1,6 +1,6 @@
 # Contributor guidance
 
-Read this file, `README.md`, `LICENSE-DECISION.md`, `CONTENT_RIGHTS.md`, and the
+Read this file, `README.md`, `CONTENT_RIGHTS.md`, and the
 owning issues before editing. This private bootstrap implements Research #34/#74
 under integration epics #39/#40.
 
