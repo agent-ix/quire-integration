@@ -12,14 +12,14 @@ use quire_contract_ir::{
     CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm,
 };
 use quire_exact::{
-    ChargePoint, IllTypedCause, Integer, LimitKind, Meter, NodeKey, Outcome, Quantity, Rational,
-    ScalarLimits, Undefined, UnitId,
+    ChargePoint, IllTypedCause, Integer, IntegerInterval, LimitKind, Meter, NodeKey, Outcome,
+    Quantity, Rational, RoundingMode, ScalarLimits, Undefined, UnitId,
 };
 use quire_semantic_value::{
     enumeration::EnumDeclaration,
     quantity::{
-        convert_quantity, evaluate_quantity, ConvertedValue, QuantityOperation, QuantityRefusal,
-        QuantityTarget, QuantityUnit, UnitTable,
+        convert_quantity, evaluate_quantity, ConvertedValue, HandoffRefusal, QuantityOperation,
+        QuantityRefusal, QuantityTarget, QuantityUnit, UnitTable,
     },
     semantic_node::SemanticGraphCause,
     unit::{CompoundUnitCause, DimensionNode, NominalDeclaration, UnitGraph, UnitNode},
@@ -187,6 +187,25 @@ fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
     .expect("the admitted enum cases are canonical");
     assert_eq!(declaration.key(), phase);
     assert_eq!(declaration.members(), ["OPEN", "SHUT"]);
+    let mut member_cases = Vec::new();
+    for node in &package.graph().nodes {
+        if node.semantic_form.as_ref() != "enum_value" || node.semantic_type != phase_node.node_id {
+            continue;
+        }
+        let CheckedTerm::Literal { value, .. } = &node.body else {
+            panic!("admitted enum member is a literal: {:?}", node.body);
+        };
+        let case = value.as_str().expect("admitted case name");
+        let member_key = admitted_key(&node.node_id);
+        let member = declaration
+            .member(case, member_key.clone())
+            .expect("reader-admitted case belongs to its declaration");
+        assert_eq!(member.declaration(), phase);
+        assert_eq!(member.member(), member_key);
+        member_cases.push(case);
+    }
+    member_cases.sort();
+    assert_eq!(member_cases, ["OPEN", "SHUT"]);
     let refusal = declaration
         .member("ABSENT", phase)
         .expect_err("a case outside the declaration refuses");
@@ -208,6 +227,10 @@ struct AdmittedUnits {
 }
 
 fn admitted_units() -> AdmittedUnits {
+    admitted_units_in_order(false)
+}
+
+fn admitted_units_in_order(reverse: bool) -> AdmittedUnits {
     let package = admitted();
     let dimension_id = declaration_id(package, "Length");
     let dimension = admitted_key(&dimension_id);
@@ -273,7 +296,7 @@ fn admitted_units() -> AdmittedUnits {
             (admitted_key(&id), exponent)
         })
         .collect();
-    let dimensions = BTreeMap::from([
+    let mut dimension_pairs = [
         (
             dimension.clone(),
             DimensionNode::checked(Vec::new(), NominalDeclaration::default())
@@ -294,8 +317,12 @@ fn admitted_units() -> AdmittedUnits {
             DimensionNode::checked(area_terms, NominalDeclaration::default())
                 .expect("admitted derived area"),
         ),
-    ]);
-    let units = BTreeMap::from([
+    ];
+    if reverse {
+        dimension_pairs.reverse();
+    }
+    let dimensions = BTreeMap::from(dimension_pairs);
+    let mut unit_pairs = [
         (
             metre.clone(),
             UnitNode::checked(
@@ -373,7 +400,11 @@ fn admitted_units() -> AdmittedUnits {
             )
             .expect("area canonical root"),
         ),
-    ]);
+    ];
+    if reverse {
+        unit_pairs.reverse();
+    }
+    let units = BTreeMap::from(unit_pairs);
     let graph = UnitGraph::from_checked_nodes(&dimensions, &units)
         .expect("the emitted source's unit topology admits");
     AdmittedUnits {
@@ -402,6 +433,25 @@ fn admitted_unit_graph_preserves_declared_owners_and_target_order() {
     assert!(admitted.graph.unit(admitted.celsius).is_some());
     assert!(admitted.graph.unit(admitted.square_metre).is_some());
     assert_eq!(admitted.graph.units().count(), 7);
+}
+
+#[test]
+#[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-5")]
+fn admitted_graph_has_the_same_canonical_dimensions_in_both_insertion_orders() {
+    let forward = admitted_units_in_order(false);
+    let reverse = admitted_units_in_order(true);
+    assert_eq!(forward.graph, reverse.graph);
+    assert_eq!(
+        forward.graph.dimension(forward.dimension),
+        reverse.graph.dimension(reverse.dimension)
+    );
+    let square = Integer::from(2_i64);
+    assert_eq!(
+        forward
+            .graph
+            .compound_unit(&[(forward.metre, square.clone())]),
+        reverse.graph.compound_unit(&[(reverse.metre, square)])
+    );
 }
 
 #[test]
@@ -708,13 +758,15 @@ fn admitted_compound_to_declared_handoff_survives_second_conversion() {
         Rational::from_integer(Integer::from(4_i64)),
         compound_id.clone(),
     );
+    assert_ne!(compound_id, UnitId::declared(admitted.square_metre.clone()));
+    let mut first_meter = meter();
     let Outcome::Completed(first) = convert_quantity(
         table.resolve(&source).expect("formed compound unit"),
         table
             .get(UnitId::declared(admitted.square_metre))
             .expect("admitted area root"),
         &QuantityTarget::Exact,
-        &mut meter(),
+        &mut first_meter,
     )
     .expect("same normalized dimension") else {
         panic!("compound converts to declared area");
@@ -723,9 +775,16 @@ fn admitted_compound_to_declared_handoff_survives_second_conversion() {
         first.value(),
         &ConvertedValue::Exact(Rational::from_integer(Integer::from(4_i64)))
     );
-    let (second_source, _) = first
+    let before_handoff = first_meter.admission_count();
+    let (second_source, identified) = first
         .identified_quantity()
         .expect("exact result is a quantity");
+    assert_eq!(first_meter.admission_count(), before_handoff);
+    assert_eq!(second_source.unit(), identified.id());
+    assert_eq!(
+        second_source.unit(),
+        UnitId::declared(admitted.square_metre)
+    );
     let Outcome::Completed(second) = convert_quantity(
         table.resolve(&second_source).expect("declared area unit"),
         table.get(compound_id).expect("formed compound target"),
@@ -739,6 +798,38 @@ fn admitted_compound_to_declared_handoff_survives_second_conversion() {
         second.value(),
         &ConvertedValue::Exact(Rational::from_integer(Integer::from(4_i64)))
     );
+}
+
+#[test]
+#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-275-AC-23")]
+fn admitted_nonexact_conversion_refuses_quantity_handoff_without_extra_charge() {
+    let admitted = admitted_units();
+    let table = UnitTable::declared(&admitted.graph);
+    let source = Quantity::new(
+        Rational::from_integer(Integer::from(1_i64)),
+        UnitId::declared(admitted.metre.clone()),
+    );
+    let mut meter = meter();
+    let Outcome::Completed(converted) = convert_quantity(
+        table.resolve(&source).expect("admitted metre"),
+        table
+            .get(UnitId::declared(admitted.metre))
+            .expect("same admitted metre"),
+        &QuantityTarget::Integer {
+            domain: IntegerInterval::spanning(Integer::from(0_i64), Integer::from(10_i64)),
+            rounding: RoundingMode::Exact,
+        },
+        &mut meter,
+    )
+    .expect("same dimension") else {
+        panic!("integer conversion completes");
+    };
+    let before_handoff = meter.admission_count();
+    assert_eq!(
+        converted.identified_quantity(),
+        Err(HandoffRefusal::NotExact)
+    );
+    assert_eq!(meter.admission_count(), before_handoff);
 }
 
 #[test]
