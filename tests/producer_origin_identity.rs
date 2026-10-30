@@ -205,6 +205,10 @@ fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
         let CheckedTerm::Literal { value, .. } = &node.body else {
             panic!("admitted enum member is a literal: {:?}", node.body);
         };
+        assert_eq!(
+            node.owner, phase_node.owner,
+            "the admitted enum member retains its declaration's source owner"
+        );
         let case = value.as_str().expect("admitted case name");
         let member_key = admitted_key(&node.node_id);
         let member = declaration
