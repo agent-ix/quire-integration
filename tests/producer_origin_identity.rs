@@ -52,13 +52,13 @@ const SOURCE: &str = "language \"ix:native\" edition \"1-draft\";\n\
 /// or refused package fails the test at the source-to-reader seam.
 fn admitted() -> &'static CheckedPackageV2 {
     static PACKAGE: OnceLock<CheckedPackageV2> = OnceLock::new();
-    PACKAGE.get_or_init(emit_and_read)
+    PACKAGE.get_or_init(|| emit_and_read(SOURCE))
 }
 
-fn emit_and_read() -> CheckedPackageV2 {
+fn emit_and_read(source_text: &str) -> CheckedPackageV2 {
     let directory = tempfile::tempdir().expect("test source directory");
     let source = directory.path().join(SOURCE_PATH);
-    fs::write(&source, SOURCE).expect("write authored source");
+    fs::write(&source, source_text).expect("write authored source");
     let manifest = support::qsl_root().join("Cargo.toml");
     let output = Command::new(env!("CARGO"))
         .current_dir(directory.path())
@@ -583,6 +583,138 @@ fn admitted_centimetres_match_an_independent_fraction_oracle() {
                 &ConvertedValue::Exact(expected),
                 "source={numerator}/{denominator} cm"
             );
+        }
+    }
+}
+
+/// TC-201's old i128 oracle varied both edge scales and offsets. One authored
+/// source declares each edge once, so all 256 source/target pairs retain keys
+/// from one emitted and IR-admitted package.
+#[test]
+#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-20")]
+fn admitted_scale_and_offset_matrix_matches_independent_i128_oracle() {
+    const SCALES: [(i128, i128); 4] = [(-3, 7), (1, 2), (2, 3), (3, 1)];
+    const OFFSETS: [(i128, i128); 4] = [(-1, 2), (0, 1), (1, 3), (7, 10)];
+    const VALUES: [i128; 6] = [-2, -1, 0, 1, 2, i64::MAX as i128 + 1_000_003];
+    let mut source = String::from(
+        "language \"ix:native\" edition \"1-draft\";\n\
+         profile v = \"quire.value.complete/v1\";\n\
+         dimension Length;\n\
+         unit root : Length = rational(1, 1);\n",
+    );
+    for (scale_index, &(numerator, denominator)) in SCALES.iter().enumerate() {
+        for (offset_index, &(offset, divisor)) in OFFSETS.iter().enumerate() {
+            source.push_str(&format!(
+                "unit u{scale_index}{offset_index} : Length = \
+                 rational({numerator}, {denominator}) * root + \
+                 rational({offset}, {divisor});\n"
+            ));
+        }
+    }
+    source.push_str("function keep using v(x: Int[0, 9]): Int[0, 9] pure { x }\n");
+    let package = emit_and_read(&source);
+    let dimension_id = declaration_id(&package, "Length");
+    let dimension = admitted_key(&dimension_id);
+    let root_id = declaration_id(&package, "root");
+    let root = admitted_key(&root_id);
+    let root_body = nominal_wire(declaration_node(&package, "root"));
+    assert_eq!(body_id(&root_body, "dimension_node_id"), dimension_id);
+    assert!(root_body["target_unit_node_id"].is_null());
+    let dimensions = BTreeMap::from([(
+        dimension.clone(),
+        DimensionNode::checked(Vec::new(), NominalDeclaration::default()).expect("base dimension"),
+    )]);
+    let mut units = BTreeMap::from([(
+        root.clone(),
+        UnitNode::checked(
+            dimension.clone(),
+            None,
+            body_rational(&root_body, "scale"),
+            body_rational(&root_body, "offset"),
+            NominalDeclaration::default(),
+        )
+        .expect("canonical root"),
+    )]);
+    let mut keys = Vec::new();
+    for scale_index in 0..SCALES.len() {
+        for offset_index in 0..OFFSETS.len() {
+            let name = format!("u{scale_index}{offset_index}");
+            let id = declaration_id(&package, &name);
+            let key = admitted_key(&id);
+            let body = nominal_wire(declaration_node(&package, &name));
+            assert_eq!(body_id(&body, "dimension_node_id"), dimension_id);
+            assert_eq!(body_id(&body, "target_unit_node_id"), root_id);
+            units.insert(
+                key.clone(),
+                UnitNode::checked(
+                    dimension.clone(),
+                    Some(root.clone()),
+                    body_rational(&body, "scale"),
+                    body_rational(&body, "offset"),
+                    NominalDeclaration::default(),
+                )
+                .expect("admitted scale and offset"),
+            );
+            keys.push(key);
+        }
+    }
+    let graph = UnitGraph::from_checked_nodes(&dimensions, &units)
+        .expect("the emitted scale/offset graph admits");
+    let table = UnitTable::declared(&graph);
+    let multiply = |(an, ad): (i128, i128), (bn, bd): (i128, i128)| (an * bn, ad * bd);
+    let subtract = |(an, ad): (i128, i128), (bn, bd): (i128, i128)| (an * bd - bn * ad, ad * bd);
+    let add = |(an, ad): (i128, i128), (bn, bd): (i128, i128)| (an * bd + bn * ad, ad * bd);
+    for (source_scale_index, &(source_scale_n, source_scale_d)) in SCALES.iter().enumerate() {
+        for (source_offset_index, &(source_offset_n, source_offset_d)) in OFFSETS.iter().enumerate()
+        {
+            let source_unit = &keys[source_scale_index * OFFSETS.len() + source_offset_index];
+            for (target_scale_index, &(target_scale_n, target_scale_d)) in SCALES.iter().enumerate()
+            {
+                for (target_offset_index, &(target_offset_n, target_offset_d)) in
+                    OFFSETS.iter().enumerate()
+                {
+                    let target_unit =
+                        &keys[target_scale_index * OFFSETS.len() + target_offset_index];
+                    let target = table
+                        .get(UnitId::declared(target_unit.clone()))
+                        .expect("admitted target unit");
+                    for value in VALUES {
+                        let quantity = Quantity::new(
+                            Rational::from_integer(Integer::from(value)),
+                            UnitId::declared(source_unit.clone()),
+                        );
+                        let Outcome::Completed(converted) = convert_quantity(
+                            table.resolve(&quantity).expect("admitted source unit"),
+                            target,
+                            &QuantityTarget::Exact,
+                            &mut meter(),
+                        )
+                        .expect("same dimension") else {
+                            panic!("admitted scale/offset conversion completes");
+                        };
+                        // Independent i128 fraction arithmetic: map through the
+                        // canonical root, then invert the target edge.
+                        let canonical = add(
+                            multiply((value, 1), (source_scale_n, source_scale_d)),
+                            (source_offset_n, source_offset_d),
+                        );
+                        let shifted = subtract(canonical, (target_offset_n, target_offset_d));
+                        let (expected_n, expected_d) =
+                            multiply(shifted, (target_scale_d, target_scale_n));
+                        let expected =
+                            Rational::new(Integer::from(expected_n), Integer::from(expected_d))
+                                .expect("nonzero target scale");
+                        assert_eq!(
+                            converted.value(),
+                            &ConvertedValue::Exact(expected),
+                            "source {source_scale_n}/{source_scale_d} + \
+                             {source_offset_n}/{source_offset_d}, target \
+                             {target_scale_n}/{target_scale_d} + \
+                             {target_offset_n}/{target_offset_d}, value {value}"
+                        );
+                    }
+                }
+            }
         }
     }
 }
