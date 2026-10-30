@@ -905,7 +905,7 @@ fn admitted_compound_to_declared_handoff_survives_second_conversion() {
     let mut table = UnitTable::declared(&admitted.graph);
     let compound = admitted
         .graph
-        .compound_unit(&[(admitted.metre, Integer::from(2_i64))])
+        .compound_unit(&[(admitted.metre.clone(), Integer::from(2_i64))])
         .expect("admitted metre forms square metres");
     let compound_id = table
         .insert(QuantityUnit::Compound(compound))
@@ -919,7 +919,7 @@ fn admitted_compound_to_declared_handoff_survives_second_conversion() {
     let Outcome::Completed(first) = convert_quantity(
         table.resolve(&source).expect("formed compound unit"),
         table
-            .get(UnitId::declared(admitted.square_metre))
+            .get(UnitId::declared(admitted.square_metre.clone()))
             .expect("admitted area root"),
         &QuantityTarget::Exact,
         &mut first_meter,
@@ -1030,7 +1030,7 @@ fn admitted_unit_identity_read_precedes_other_denials_and_zero_stops() {
 
 #[test]
 #[trace("TC-096", "IT-016-SC-02", "TC-034", "FR-007-AC-16", "FR-007-AC-17")]
-fn admitted_affine_power_refuses_and_distinct_length_units_multiply_canonically() {
+fn admitted_affine_power_refuses_and_distinct_length_units_combine_canonically() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
     let celsius = Quantity::new(
@@ -1084,6 +1084,28 @@ fn admitted_affine_power_refuses_and_distinct_length_units_multiply_canonically(
         .id()
         .expect("compound ID fits the configured bound");
     assert_eq!(product.unit(), &expected_unit);
+
+    let Outcome::Completed(quotient) = evaluate_quantity(
+        QuantityOperation::Divide(
+            table.resolve(&metre).expect("admitted metre"),
+            table.resolve(&centimetre).expect("admitted centimetre"),
+        ),
+        &mut meter(),
+    )
+    .expect("non-affine division") else {
+        panic!("distinct length units divide exactly");
+    };
+    assert_eq!(
+        quotient.magnitude(),
+        &Rational::from_integer(Integer::from(4_i64))
+    );
+    let dimensionless = admitted
+        .graph
+        .compound_unit(&[])
+        .expect("dimensionless compound unit")
+        .id()
+        .expect("dimensionless ID fits the configured bound");
+    assert_eq!(quotient.unit(), &dimensionless);
 }
 
 /// The malformed operation varies after admission. Every term key still came
