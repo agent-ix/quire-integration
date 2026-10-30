@@ -48,28 +48,15 @@ fn model_document() -> Vec<u8> {
     fs::read(model_document_path()).expect("read QSL's authoritative model document")
 }
 
-fn model_digest(document: &[u8]) -> String {
-    let packages = qsl_semantics::model::intake::package_input([document]);
-    let [(digest, _)] = packages.iter().collect::<Vec<_>>()[..] else {
-        panic!("one QSL-owned domain package document");
-    };
-    qsl_semantics::model::key::hex(digest)
-}
-
-fn source(document: &[u8]) -> String {
-    let value: JsonValue = serde_json::from_slice(document).expect("QSL model document JSON");
-    let version = value["package"]["version"]
-        .as_str()
-        .expect("QSL model package version");
+fn source() -> String {
     format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
-         model M = \"{MODEL_IDENTITY}\" version \"{version}\" digest \"sha256-jcs:{}\";\n\
+         model M = \"{MODEL_IDENTITY}\";\n\
          {SOURCE_BODY}\n\
          function keep_widget using v(x: M::Widget): M::Widget pure {{ x }}\n\
          function keep_gadget using v(x: M::Gadget): M::Gadget pure {{ x }}\n\
          function keep_rock using v(x: M::Rock): M::Rock pure {{ x }}\n",
-        model_digest(document),
     )
 }
 
@@ -91,9 +78,7 @@ fn admitted() -> &'static CheckedPackageV2 {
     PACKAGE.get_or_init(|| {
         let directory = tempfile::tempdir().expect("test source directory");
         let document = model_document();
-        let digest = model_digest(&document);
-        fs::write(directory.path().join(SOURCE_PATH), source(&document))
-            .expect("write authored source");
+        fs::write(directory.path().join(SOURCE_PATH), source()).expect("write authored source");
         let manifest = support::qsl_root().join("Cargo.toml");
         let output = Command::new(env!("CARGO"))
             .current_dir(directory.path())
@@ -125,7 +110,7 @@ fn admitted() -> &'static CheckedPackageV2 {
             evidence.support_feature(feature.as_str().expect("feature name"));
         }
         evidence
-            .insert_domain_package_document(&digest, &document)
+            .insert_domain_package_document(MODEL_IDENTITY, document.as_slice())
             .expect("QSL's domain document is valid reader evidence");
         let package = match read_checked_package(
             &output.stdout,
