@@ -363,8 +363,12 @@ fn admitted_quantity_huge_power_denies_before_computation_with_exact_over_u64_am
     assert_eq!(record.charge_point, ChargePoint::UnitRationalArithmetic);
     assert_eq!(record.next_charge.to_string(), "36893488147419103232");
     assert_eq!(
-        charged.admitted_charge_points(),
-        &[ChargePoint::UnitIdentityRead]
+        charged
+            .admitted_charges()
+            .iter()
+            .map(|charge| charge.point)
+            .collect::<Vec<_>>(),
+        [ChargePoint::UnitIdentityRead]
     );
 }
 
@@ -456,7 +460,14 @@ fn admitted_quantity_multiedge_and_affine_charge_order_is_exact() {
             arithmetic,
         ));
         schedule.extend([ChargePoint::UnitTargetDomain, ChargePoint::UnitResultRetain]);
-        assert_eq!(charged.admitted_charge_points(), schedule);
+        assert_eq!(
+            charged
+                .admitted_charges()
+                .iter()
+                .map(|charge| charge.point)
+                .collect::<Vec<_>>(),
+            schedule
+        );
         assert_eq!(charged.consumed(LimitKind::IntegerBits), bits);
         assert_eq!(charged.consumed(LimitKind::UnitEdges), edges as u64);
         assert_eq!(charged.consumed(LimitKind::WorkUnits), work);
@@ -540,7 +551,7 @@ fn admitted_affine_units_refuse_arithmetic_without_charging() {
         panic!("u2 addition completes");
     };
     assert_eq!(sum.magnitude(), &rational(3, 1));
-    assert_eq!(sum.unit(), UnitId::declared(named_key("u2")));
+    assert_eq!(sum.unit(), &UnitId::declared(named_key("u2")));
 }
 
 #[test]
