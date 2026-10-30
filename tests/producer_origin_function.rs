@@ -13,7 +13,6 @@ use std::{
 
 use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
-use qsl_semantics::model::{intake::package_input, key::hex};
 use quire_contract_ir::{
     read_checked_package, CheckedNodeOwner, CheckedPackageDispatchResult, CheckedPackageEvidence,
     CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2,
@@ -38,6 +37,7 @@ use serde_json::Value as JsonValue;
 
 const SOURCE_PATH: &str = "program.native";
 const MODEL_PATH: &str = "tests/fixtures/spine-model.semantic-ir.json";
+const MODEL_IDENTITY: &str = "acme/orders";
 const LIMITS: ScalarLimits = ScalarLimits {
     integer_bits: 1024,
     decimal_digits: 1024,
@@ -56,21 +56,15 @@ fn meter() -> Meter {
 }
 
 /// The model document remains in the QSL checkout selected by Cargo.lock.
-/// Its digest is computed only for QSL's model-selection content identity.
 fn admitted() -> &'static CheckedPackageV2 {
     static PACKAGE: OnceLock<CheckedPackageV2> = OnceLock::new();
     PACKAGE.get_or_init(|| {
         let model = support::qsl_root().join(MODEL_PATH);
         let document = fs::read(&model).expect("QSL-owned model document is present");
-        let documents = package_input([document.as_slice()]);
-        let [(digest, _)] = documents.iter().collect::<Vec<_>>()[..] else {
-            panic!("the QSL producer has one model document");
-        };
-        let digest = hex(digest);
         let source = format!(
             "language \"ix:native\" edition \"1-draft\";\n\
              profile v = \"quire.value.complete/v1\";\n\
-             model M = \"acme/orders\" version \"1.0.0\" digest \"sha256-jcs:{digest}\";\n\
+             model M = \"{MODEL_IDENTITY}\";\n\
              union RefChoice {{ Empty, WithRef(Reference<M::Widget>) }}\n\
              function identity using v(x: Boolean): Boolean pure {{ x }}\n\
              function held using v(w: Reference<M::Widget>): Boolean pure {{ true }}\n\
@@ -99,7 +93,7 @@ fn admitted() -> &'static CheckedPackageV2 {
         for feature in wire["lock"]["required_features"].as_array().expect("feature list") {
             evidence.support_feature(feature.as_str().expect("feature name"));
         }
-        evidence.insert_domain_package_document(&digest, &document)
+        evidence.insert_domain_package_document(MODEL_IDENTITY, document.as_slice())
             .expect("the selected model document is valid evidence");
         let package = match read_checked_package(
             &output.stdout, CheckedPackageReadLimits::bounded(), &evidence,
@@ -294,7 +288,11 @@ fn admitted_function_arguments_keep_precedence_and_zero_charge() {
         Outcome::Completed(Value::Boolean(true))
     ));
     assert_eq!(
-        identity_meter.admitted_charge_points(),
+        identity_meter
+            .admitted_charges()
+            .iter()
+            .map(|charge| charge.point)
+            .collect::<Vec<_>>(),
         &[ChargePoint::FunctionCall]
     );
     let mut wrong_meter = meter();
@@ -485,8 +483,9 @@ fn admitted_function_call_charges_before_body_once_per_application() {
             one_step(|frame, _| {
                 match frame.meter(|meter| {
                     meter
-                        .admitted_charge_points()
-                        .contains(&ChargePoint::FunctionCall)
+                        .admitted_charges()
+                        .iter()
+                        .any(|charge| charge.point == ChargePoint::FunctionCall)
                 }) {
                     Ok(charged) => Outcome::Completed(Value::Boolean(charged)),
                     Err(refusal) => Outcome::Refused(refusal),
@@ -509,7 +508,11 @@ fn admitted_function_call_charges_before_body_once_per_application() {
         Outcome::Completed(Value::Boolean(true))
     ));
     assert_eq!(
-        charged.admitted_charge_points(),
+        charged
+            .admitted_charges()
+            .iter()
+            .map(|charge| charge.point)
+            .collect::<Vec<_>>(),
         &[ChargePoint::FunctionCall]
     );
     let plan = plan_call(&package, "observe", &[], &ObjectClosure::default()).expect("plan");
@@ -722,7 +725,11 @@ fn admitted_parent_missing_child_has_typed_cause_and_no_child_charge() {
     ));
     assert!(!resumed.get());
     assert_eq!(
-        charged.admitted_charge_points(),
+        charged
+            .admitted_charges()
+            .iter()
+            .map(|charge| charge.point)
+            .collect::<Vec<_>>(),
         &[ChargePoint::FunctionCall]
     );
 }
@@ -813,7 +820,11 @@ fn admitted_function_reentry_refuses_before_nested_charge() {
         })
     ));
     assert_eq!(
-        charged.admitted_charge_points(),
+        charged
+            .admitted_charges()
+            .iter()
+            .map(|charge| charge.point)
+            .collect::<Vec<_>>(),
         &[ChargePoint::FunctionCall]
     );
 }
