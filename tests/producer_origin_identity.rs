@@ -922,10 +922,10 @@ fn admitted_compound_to_declared_handoff_survives_second_conversion() {
         .identified_quantity()
         .expect("exact result is a quantity");
     assert_eq!(first_meter.admission_count(), before_handoff);
-    assert_eq!(second_source.unit(), identified.id());
+    assert_eq!(second_source.unit(), &identified.id());
     assert_eq!(
         second_source.unit(),
-        UnitId::declared(admitted.square_metre)
+        &UnitId::declared(admitted.square_metre)
     );
     let Outcome::Completed(second) = convert_quantity(
         table.resolve(&second_source).expect("declared area unit"),
