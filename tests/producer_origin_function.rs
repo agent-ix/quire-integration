@@ -66,7 +66,7 @@ fn admitted() -> &'static CheckedPackageV2 {
              profile v = \"quire.value.complete/v1\";\n\
              model M = \"{MODEL_IDENTITY}\";\n\
              union RefChoice {{ Empty, WithRef(Reference<M::Widget>) }}\n\
-             function identity using v(x: Boolean): Boolean pure {{ x }}\n\
+             function identity_fn using v(x: Boolean): Boolean pure {{ x }}\n\
              function held using v(w: Reference<M::Widget>): Boolean pure {{ true }}\n\
              function two using v(a: Boolean, b: Reference<M::Widget>): Boolean pure {{ a }}\n\
              function take_union using v(u: RefChoice): Boolean pure {{ true }}\n\
@@ -233,7 +233,7 @@ fn checked(functions: Vec<FunctionDeclaration>, types: TypeEnvironment) -> Check
 fn identity() -> CheckedPackage {
     checked(
         vec![function(
-            "identity",
+            "identity_fn",
             vec![("x", ValueType::Boolean)],
             one_step(|_, args| Outcome::Completed(args[0].clone())),
         )],
@@ -277,7 +277,7 @@ fn admitted_function_arguments_keep_precedence_and_zero_charge() {
     let mut identity_meter = meter();
     let success = identity
         .call(
-            "identity",
+            "identity_fn",
             vec![Value::Boolean(true)],
             &ObjectClosure::default(),
             &mut identity_meter,
@@ -299,7 +299,7 @@ fn admitted_function_arguments_keep_precedence_and_zero_charge() {
     assert_eq!(
         identity
             .call(
-                "identity",
+                "identity_fn",
                 vec![Value::Integer(Integer::one())],
                 &ObjectClosure::default(),
                 &mut wrong_meter,
