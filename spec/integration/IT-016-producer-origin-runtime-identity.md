@@ -7,6 +7,8 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-007
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/FR-008
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-011
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-273
@@ -41,9 +43,11 @@ Use the QSL checkout selected by this repository's Cargo lock and its installed
 `emit_checked_v2` example. Emit the checked package during the test from authored
 source, then read those bytes with the locked contract IR reader. Refusal or
 absence of the producer, reader, or required declaration is a test failure, not
-a skipped case. The test report identifies the producer command and lock-selected
-source revision; neither package bytes nor derived identity values are frozen
-as fixtures.
+a skipped case. `Cargo.lock` is the canonical record of the selected source
+revision. The test report identifies the producer command, application version
+and observed outcome, and points to that lock for the source revision; it adds
+no separate revision record. Neither package bytes nor derived identity values
+are frozen as fixtures.
 
 ## Inputs
 
@@ -58,12 +62,15 @@ the admitted package as the common identity source.
 
 1. Emit and read the package, then select the admitted unit declaration, enum
    declaration and members and their owners. Exercise RT's TC-033
-   FR-012-AC-4/5 and the owner checks previously in `exact_unit_owner.rs` and
+   FR-012-AC-4/5, the FR-011-AC-7 unit-graph insertion and malformed-order
+   checks, and the owner checks previously in `exact_unit_owner.rs` and
    `exact_vocabulary.rs`.
    IT-016-SC-01: the exact declaration/member owner and unit-graph causes,
    canonical dimension, compound term order and equality results match those
-   criteria, including a refused malformed member or term. The retained RT
-   FR-012-AC-3/6/7 and FR-007-AC-13 controls remain independently runnable.
+   criteria, including a refused malformed member or term and the stable
+   iteration or first cause required by FR-011-AC-7. The retained RT
+   FR-012-AC-3/6/7, FR-007-AC-13 and meter-consumed portions of FR-011-AC-7
+   remain independently runnable.
 2. Exercise the admitted units through the former TC-201 quantity scenarios in
    `exact_quantity_conversion.rs` and `exact_quantity_owner.rs`.
    IT-016-SC-02: FR-007-AC-12/16/17/20/21/22/23/24/25, FR-011-AC-2/4/6
@@ -75,9 +82,10 @@ the admitted package as the common identity source.
    composite declarations, enum variants and foreign references.
    IT-016-SC-03: FR-277-AC-1/2/3/4/5/6 retain their exact Boolean results,
    seventeen-pair schedule, typed refusal, capacity denial and charge-prefix
-   oracles. Foreign-reference and composite/enum equality preserve their
-   original distinct-owner result and refusal observations. RT's separate
-   FR-277-AC-8 source inspection remains in RT.
+   oracles. FR-008-AC-5/6 retain the foreign-reference universe boundary,
+   distinct-owner result and refusal observations, while composites with
+   different declarations compare unequal and enums compare by variant.
+   RT's separate FR-277-AC-8 source inspection remains in RT.
 4. Apply admitted functions and expressions through the seven moved TC-194
    identity-dependent cases in `exact_function_application.rs`.
    IT-016-SC-04: FR-273-AC-2/3/5/8 retain arity and argument-validation
@@ -86,8 +94,9 @@ the admitted package as the common identity source.
    refusals, with their original no-extra-charge outcomes. The remaining
    TC-194/TC-195 runtime cases remain runnable in RT.
 5. For each moved RT test row, bind its criterion tags to the runnable
-   integration test symbol, and report the producer command, lock-selected
-   source revision and exact result or refusal observed in this run.
+   integration test symbol, and report the producer command, application
+   version and exact result or refusal observed in this run. Identify
+   `Cargo.lock` as the source-revision record used for this run.
    IT-016-SC-05: every IR-1175 AC1–5 row has a mapped, executed symbol and
    observable oracle; a missing row, skipped case, copied producer fixture,
    frozen output digest or locally invented semantic key fails the gate.

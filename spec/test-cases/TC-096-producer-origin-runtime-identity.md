@@ -7,6 +7,8 @@ relationships:
     type: references
   - target: ix://agent-ix/quire-contract-runtime/FR-012
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/FR-008
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-007
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-273
