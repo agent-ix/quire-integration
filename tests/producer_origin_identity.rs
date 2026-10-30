@@ -237,11 +237,10 @@ struct AdmittedUnits {
 }
 
 fn admitted_units() -> AdmittedUnits {
-    admitted_units_in_order(false)
+    admitted_units_from_package(admitted())
 }
 
-fn admitted_units_in_order(reverse: bool) -> AdmittedUnits {
-    let package = admitted();
+fn admitted_units_from_package(package: &CheckedPackageV2) -> AdmittedUnits {
     let dimension_id = declaration_id(package, "Length");
     let dimension = admitted_key(&dimension_id);
     let time_id = declaration_id(package, "Time");
@@ -306,7 +305,7 @@ fn admitted_units_in_order(reverse: bool) -> AdmittedUnits {
             (admitted_key(&id), exponent)
         })
         .collect();
-    let mut dimension_pairs = [
+    let dimension_pairs = [
         (
             dimension.clone(),
             DimensionNode::checked(Vec::new(), NominalDeclaration::default())
@@ -328,11 +327,8 @@ fn admitted_units_in_order(reverse: bool) -> AdmittedUnits {
                 .expect("admitted derived area"),
         ),
     ];
-    if reverse {
-        dimension_pairs.reverse();
-    }
     let dimensions = BTreeMap::from(dimension_pairs);
-    let mut unit_pairs = [
+    let unit_pairs = [
         (
             metre.clone(),
             UnitNode::checked(
@@ -411,9 +407,6 @@ fn admitted_units_in_order(reverse: bool) -> AdmittedUnits {
             .expect("area canonical root"),
         ),
     ];
-    if reverse {
-        unit_pairs.reverse();
-    }
     let units = BTreeMap::from(unit_pairs);
     let graph = UnitGraph::from_checked_nodes(&dimensions, &units)
         .expect("the emitted source's unit topology admits");
@@ -448,20 +441,37 @@ fn admitted_unit_graph_preserves_declared_owners_and_target_order() {
 #[test]
 #[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-5")]
 fn admitted_graph_has_the_same_canonical_dimensions_in_both_insertion_orders() {
-    let forward = admitted_units_in_order(false);
-    let reverse = admitted_units_in_order(true);
-    assert_eq!(forward.graph, reverse.graph);
-    assert_eq!(
-        forward.graph.dimension(forward.dimension),
-        reverse.graph.dimension(reverse.dimension)
+    let time_block = "dimension Time;\nunit s : Time = rational(1, 1);\n";
+    let temperature_block = "dimension Temperature;\nunit K : Temperature = rational(1, 1);\nunit degC : Temperature = rational(1, 1) * K + rational(5463, 20);\n";
+    let original = format!("{time_block}{temperature_block}");
+    assert!(
+        SOURCE.contains(&original),
+        "the source order being varied exists"
     );
-    let square = Integer::from(2_i64);
-    assert_eq!(
-        forward
+    let reversed = SOURCE.replacen(&original, &format!("{temperature_block}{time_block}"), 1);
+    let reordered_package = emit_and_read(&reversed);
+    let forward = admitted_units();
+    let reverse = admitted_units_from_package(&reordered_package);
+    for admitted in [&forward, &reverse] {
+        let length = admitted
             .graph
-            .compound_unit(&[(forward.metre, square.clone())]),
-        reverse.graph.compound_unit(&[(reverse.metre, square)])
-    );
+            .dimension(admitted.dimension.clone())
+            .expect("admitted Length dimension");
+        assert_eq!(
+            length.exponents().collect::<Vec<_>>(),
+            vec![(admitted.dimension.clone(), &Integer::from(1_i64))]
+        );
+        let square = admitted
+            .graph
+            .unit(admitted.square_metre.clone())
+            .expect("admitted square metre unit");
+        assert_eq!(
+            square.dimension().exponents().collect::<Vec<_>>(),
+            vec![(admitted.dimension.clone(), &Integer::from(2_i64))]
+        );
+        let keys: Vec<_> = admitted.graph.units().map(|unit| unit.key()).collect();
+        assert!(keys.windows(2).all(|pair| pair[0] < pair[1]));
+    }
 }
 
 #[test]
