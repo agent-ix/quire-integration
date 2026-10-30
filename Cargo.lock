@@ -1547,6 +1547,7 @@ dependencies = [
  "quire-checked",
  "quire-contract-codegen",
  "quire-contract-model",
+ "quire-contract-runtime",
  "quire-driver",
  "quire-eval",
  "quire-exact",

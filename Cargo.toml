@@ -34,6 +34,7 @@ quire-eval = { git = "https://github.com/agent-ix/quire-eval", branch = "main", 
 quire-checked = { git = "https://github.com/agent-ix/quire-eval", branch = "main", default-features = false }
 quire-semantic-value = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
+quire-contract-runtime = { git = "https://github.com/agent-ix/quire-contract-runtime", branch = "main", features = ["exact"] }
 quire-contract-codegen = { git = "https://github.com/agent-ix/quire-contract-codegen", branch = "main" }
 quire-driver = { git = "https://github.com/agent-ix/quire-driver", branch = "main" }
 quire-exact = { git = "https://github.com/agent-ix/quire-exact", branch = "main", features = ["test-support"] }
