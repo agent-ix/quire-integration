@@ -8,8 +8,9 @@ use std::{collections::BTreeMap, fs, process::Command, sync::OnceLock};
 use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
 use quire_contract_ir::{
-    read_checked_package, CheckedNodeId, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm,
+    read_checked_package, CheckedNodeId, CheckedNodeOwner, CheckedPackageDispatchResult,
+    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2,
+    CheckedTerm,
 };
 use quire_exact::{
     ChargePoint, IllTypedCause, Integer, IntegerInterval, LimitKind, Meter, NodeKey, Outcome,
@@ -131,6 +132,15 @@ fn declaration_node<'a>(package: &'a CheckedPackageV2, name: &str) -> &'a Checke
             matches.len()
         );
     };
+    assert!(
+        matches!(
+            &node.owner,
+            Some(CheckedNodeOwner::Source { authority, identity })
+                if authority.as_ref() == "local" && identity.as_ref() == "source:program.native"
+        ),
+        "{name} retains the producer's source owner: {:?}",
+        node.owner
+    );
     node
 }
 
