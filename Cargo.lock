@@ -1421,7 +1421,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-codegen"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#e6a5c7c4403760a15372d1c6c8be1cde93955534"
+source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#a8c0a0edf4611624e98261cf0e26de1fbe7c6bca"
 dependencies = [
  "command-fds",
  "ix-trace-rs",
