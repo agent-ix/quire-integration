@@ -187,7 +187,7 @@ fn body_rational(body: &Value, member: &str) -> Rational {
 
 /// TC-033's enum declaration checks consume a producer-origin declaration key.
 #[test]
-#[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-4")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-4")]
 fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
     let package = admitted();
     let phase_node = declaration_node(package, "Phase");
@@ -434,7 +434,14 @@ fn admitted_units_from_package(package: &CheckedPackageV2) -> AdmittedUnits {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-5", "FR-011-AC-7")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-01",
+    "TC-033",
+    "FR-012-AC-5",
+    "FR-011-AC-7"
+)]
 fn admitted_unit_graph_preserves_declared_owners_and_target_order() {
     let admitted = admitted_units();
     assert!(admitted.graph.dimension(admitted.dimension).is_some());
@@ -449,7 +456,7 @@ fn admitted_unit_graph_preserves_declared_owners_and_target_order() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-5")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-5")]
 fn admitted_graph_has_the_same_canonical_dimensions_in_both_insertion_orders() {
     let time_block = "dimension Time;\nunit s : Time = rational(1, 1);\n";
     let temperature_block = "dimension Temperature;\nunit K : Temperature = rational(1, 1);\nunit degC : Temperature = rational(1, 1) * K + rational(5463, 20);\n";
@@ -485,7 +492,7 @@ fn admitted_graph_has_the_same_canonical_dimensions_in_both_insertion_orders() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-5")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-5")]
 fn admitted_root_units_have_canonical_compound_terms_and_order_refusal() {
     let admitted = admitted_units();
     let mut roots = [admitted.metre, admitted.second];
@@ -528,7 +535,14 @@ fn meter() -> Meter {
 /// The former TC-201 consumer path reads the package's declared unit IDs.
 /// The expected centimetre conversion is an independent rational oracle.
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-20", "FR-007-AC-21")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-02",
+    "TC-201",
+    "FR-007-AC-20",
+    "FR-007-AC-21"
+)]
 fn admitted_units_convert_exactly_and_incompatible_dimensions_do_not_charge() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -574,7 +588,7 @@ fn admitted_units_convert_exactly_and_incompatible_dimensions_do_not_charge() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-20")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-20")]
 fn admitted_centimetres_match_an_independent_fraction_oracle() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -611,7 +625,7 @@ fn admitted_centimetres_match_an_independent_fraction_oracle() {
 /// source declares each edge once, so all 256 source/target pairs retain keys
 /// from one emitted and IR-admitted package.
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-20")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-20")]
 fn admitted_scale_and_offset_matrix_matches_independent_i128_oracle() {
     const SCALES: [(i128, i128); 4] = [(-3, 7), (1, 2), (2, 3), (3, 1)];
     const OFFSETS: [(i128, i128); 4] = [(-1, 2), (0, 1), (1, 3), (7, 10)];
@@ -746,7 +760,7 @@ fn admitted_scale_and_offset_matrix_matches_independent_i128_oracle() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-23")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-23")]
 fn admitted_conversion_charges_in_read_edge_arithmetic_target_retain_order() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -804,7 +818,14 @@ fn admitted_conversion_charges_in_read_edge_arithmetic_target_retain_order() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-22", "FR-007-AC-24")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-02",
+    "TC-201",
+    "FR-007-AC-22",
+    "FR-007-AC-24"
+)]
 fn admitted_affine_unit_converts_exactly_and_refuses_arithmetic_before_charge() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -850,7 +871,7 @@ fn admitted_affine_unit_converts_exactly_and_refuses_arithmetic_before_charge() 
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-25")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-25")]
 fn admitted_conversion_retention_denial_has_exact_incomplete_fields() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -880,7 +901,7 @@ fn admitted_conversion_retention_denial_has_exact_incomplete_fields() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-25")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-25")]
 fn admitted_two_edge_conversion_denial_reports_the_second_edge() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -911,7 +932,7 @@ fn admitted_two_edge_conversion_denial_reports_the_second_edge() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-275-AC-23")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-275-AC-23")]
 fn admitted_compound_to_declared_handoff_survives_second_conversion() {
     let admitted = admitted_units();
     let mut table = UnitTable::declared(&admitted.graph);
@@ -969,7 +990,7 @@ fn admitted_compound_to_declared_handoff_survives_second_conversion() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-275-AC-23")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-275-AC-23")]
 fn admitted_nonexact_conversion_refuses_quantity_handoff_without_extra_charge() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -1001,7 +1022,14 @@ fn admitted_nonexact_conversion_refuses_quantity_handoff_without_extra_charge() 
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-032", "FR-011-AC-2", "FR-011-AC-4")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-02",
+    "TC-032",
+    "FR-011-AC-2",
+    "FR-011-AC-4"
+)]
 fn admitted_unit_identity_read_precedes_other_denials_and_zero_stops() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -1041,7 +1069,14 @@ fn admitted_unit_identity_read_precedes_other_denials_and_zero_stops() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-034", "FR-007-AC-16", "FR-007-AC-17")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-02",
+    "TC-034",
+    "FR-007-AC-16",
+    "FR-007-AC-17"
+)]
 fn admitted_affine_power_refuses_and_distinct_length_units_combine_canonically() {
     let admitted = admitted_units();
     let table = UnitTable::declared(&admitted.graph);
@@ -1123,7 +1158,14 @@ fn admitted_affine_power_refuses_and_distinct_length_units_combine_canonically()
 /// The malformed operation varies after admission. Every term key still came
 /// from a real source declaration that IR accepted.
 #[test]
-#[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-4", "FR-011-AC-7")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-01",
+    "TC-033",
+    "FR-012-AC-4",
+    "FR-011-AC-7"
+)]
 fn admitted_dimension_keys_expose_first_typed_term_cause() {
     let package = admitted();
     let length = admitted_key(&declaration_id(package, "Length"));
@@ -1182,7 +1224,14 @@ fn admitted_dimension_keys_expose_first_typed_term_cause() {
 /// The graph's malformed edges are varied after the producer and reader have
 /// admitted the keys. Distinct keys always designate real source declarations.
 #[test]
-#[trace("TC-096", "IT-016-SC-01", "TC-033", "FR-012-AC-4", "FR-011-AC-7")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-01",
+    "TC-033",
+    "FR-012-AC-4",
+    "FR-011-AC-7"
+)]
 fn admitted_unit_keys_expose_first_typed_edge_and_topology_cause() {
     let package = admitted();
     let length = admitted_key(&declaration_id(package, "Length"));

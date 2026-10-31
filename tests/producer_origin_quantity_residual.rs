@@ -277,7 +277,7 @@ fn quantity(unit: &str, numerator: i64, denominator: i64) -> Quantity {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-034", "FR-007-AC-12")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-034", "FR-007-AC-12")]
 fn admitted_quantity_operations_report_the_first_typed_cause_without_charge() {
     let graph = graph();
     let table = UnitTable::declared(&graph);
@@ -340,7 +340,7 @@ fn admitted_quantity_operations_report_the_first_typed_cause_without_charge() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-032", "FR-011-AC-6")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-032", "FR-011-AC-6")]
 fn admitted_quantity_huge_power_denies_before_computation_with_exact_over_u64_amount() {
     let graph = graph();
     let table = UnitTable::declared(&graph);
@@ -381,7 +381,14 @@ fn admitted_quantity_huge_power_denies_before_computation_with_exact_over_u64_am
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-20", "FR-007-AC-23")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-02",
+    "TC-201",
+    "FR-007-AC-20",
+    "FR-007-AC-23"
+)]
 fn admitted_noncommuting_multiedge_conversion_keeps_order_and_edge_count() {
     let graph = graph();
     let table = UnitTable::declared(&graph);
@@ -415,7 +422,7 @@ fn admitted_noncommuting_multiedge_conversion_keeps_order_and_edge_count() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-23")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-23")]
 fn admitted_quantity_multiedge_and_affine_charge_order_is_exact() {
     let graph = graph();
     let mut table = UnitTable::declared(&graph);
@@ -484,7 +491,7 @@ fn admitted_quantity_multiedge_and_affine_charge_order_is_exact() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-23")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-23")]
 fn admitted_inch_conversion_reports_first_two_rational_charge_amounts() {
     let graph = graph();
     let table = UnitTable::declared(&graph);
@@ -511,7 +518,7 @@ fn admitted_inch_conversion_reports_first_two_rational_charge_amounts() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-24")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-24")]
 fn admitted_affine_units_refuse_arithmetic_without_charging() {
     let graph = graph();
     let table = UnitTable::declared(&graph);
@@ -563,7 +570,7 @@ fn admitted_affine_units_refuse_arithmetic_without_charging() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-25")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-02", "TC-201", "FR-007-AC-25")]
 fn admitted_conversion_denials_preserve_charge_point_prefix_and_amounts() {
     let graph = graph();
     let mut table = UnitTable::declared(&graph);

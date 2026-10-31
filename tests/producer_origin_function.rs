@@ -270,7 +270,14 @@ fn held() -> CheckedPackage {
 /// Arity wins over a malformed argument; parameter order wins over a later
 /// dangling reference. Every refusal precedes the first meter charge.
 #[test]
-#[trace("TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-2", "FR-273-AC-3")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-04",
+    "TC-194",
+    "FR-273-AC-2",
+    "FR-273-AC-3"
+)]
 fn admitted_function_arguments_keep_precedence_and_zero_charge() {
     let identity = identity();
     let mut identity_meter = meter();
@@ -428,7 +435,14 @@ fn admitted_function_arguments_keep_precedence_and_zero_charge() {
 /// The union declaration is QSL-authored; its member payload is a reference
 /// to the admitted model Widget, so the nested target must still be checked.
 #[test]
-#[trace("TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-2", "FR-273-AC-3")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-04",
+    "TC-194",
+    "FR-273-AC-2",
+    "FR-273-AC-3"
+)]
 fn admitted_union_argument_refuses_nested_dangling_reference() {
     let union = declaration_key("RefChoice");
     let member =
@@ -473,7 +487,14 @@ fn admitted_union_argument_refuses_nested_dangling_reference() {
 /// The application charge is visible when the body starts; `evaluate`'s own
 /// root has no application charge, while each reached child has one.
 #[test]
-#[trace("TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-2", "FR-273-AC-3")]
+#[trace(
+    "IT-016-SC-05",
+    "TC-096",
+    "IT-016-SC-04",
+    "TC-194",
+    "FR-273-AC-2",
+    "FR-273-AC-3"
+)]
 fn admitted_function_call_charges_before_body_once_per_application() {
     let package = checked(
         vec![function(
@@ -547,6 +568,7 @@ fn admitted_function_call_charges_before_body_once_per_application() {
 /// checked under another package, and runtime evaluation carries that cause.
 #[test]
 #[trace(
+    "IT-016-SC-05",
     "TC-096",
     "IT-016-SC-04",
     "TC-194",
@@ -680,7 +702,7 @@ fn admitted_expression_keeps_plan_and_evaluation_refusal_distinctions() {
 /// The generated child's missing name is distinct from a public unknown
 /// function refusal, and the parent charge is the only admitted charge.
 #[test]
-#[trace("TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-8")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-8")]
 fn admitted_parent_missing_child_has_typed_cause_and_no_child_charge() {
     let resumed = Rc::new(Cell::new(false));
     let body_resumed = Rc::clone(&resumed);
@@ -734,7 +756,7 @@ fn admitted_parent_missing_child_has_typed_cause_and_no_child_charge() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-8")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-8")]
 fn admitted_function_meter_borrow_conflict_has_typed_cause() {
     let package = checked(
         vec![function(
@@ -769,7 +791,7 @@ fn admitted_function_meter_borrow_conflict_has_typed_cause() {
 }
 
 #[test]
-#[trace("TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-8")]
+#[trace("IT-016-SC-05", "TC-096", "IT-016-SC-04", "TC-194", "FR-273-AC-8")]
 fn admitted_function_reentry_refuses_before_nested_charge() {
     let holder: Rc<RefCell<Option<Rc<CheckedPackage>>>> = Rc::new(RefCell::new(None));
     let body_holder = Rc::clone(&holder);

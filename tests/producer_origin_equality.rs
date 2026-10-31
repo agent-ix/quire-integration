@@ -325,7 +325,14 @@ fn full_schedule() -> Vec<ChargePoint> {
 
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-1, FR-277-AC-2.
 #[test]
-#[trace("IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-1", "FR-277-AC-2")]
+#[trace(
+    "IT-016-SC-05",
+    "IT-016-SC-03",
+    "TC-096",
+    "TC-203",
+    "FR-277-AC-1",
+    "FR-277-AC-2"
+)]
 fn admitted_record_equality_keeps_the_complete_seventeen_pair_schedule() {
     let (types, checked, key) = checked_equality();
     let left = operand(&types, key.clone(), 0);
@@ -344,7 +351,7 @@ fn admitted_record_equality_keeps_the_complete_seventeen_pair_schedule() {
 
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-3.
 #[test]
-#[trace("IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-3")]
+#[trace("IT-016-SC-05", "IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-3")]
 fn denied_seventeenth_pair_and_result_retention_keep_the_admitted_prefix() {
     let (types, checked, key) = checked_equality();
     let value = operand(&types, key, 0);
@@ -372,7 +379,7 @@ fn denied_seventeenth_pair_and_result_retention_keep_the_admitted_prefix() {
 
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-4.
 #[test]
-#[trace("IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-4")]
+#[trace("IT-016-SC-05", "IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-4")]
 fn distinct_admitted_static_composite_types_refuse_before_evaluation() {
     let first = admitted_declaration_key("Six");
     let second = admitted_declaration_key("Other");
@@ -399,7 +406,7 @@ fn distinct_admitted_static_composite_types_refuse_before_evaluation() {
 
 /// Trace: IT-016-SC-03, TC-096, TC-026, FR-008-AC-5.
 #[test]
-#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+#[trace("IT-016-SC-05", "IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
 fn admitted_composites_with_different_declarations_compare_unequal() {
     let first = admitted_declaration_key("Six");
     let second = admitted_declaration_key("Other");
@@ -441,7 +448,7 @@ fn admitted_composites_with_different_declarations_compare_unequal() {
 
 /// Trace: IT-016-SC-03, TC-096, TC-026, FR-008-AC-5.
 #[test]
-#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+#[trace("IT-016-SC-05", "IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
 fn admitted_enum_cases_compare_by_variant_identity() {
     let phase = admitted_declaration("Phase");
     let CheckedTerm::NominalBody(body) = &phase.body else {
@@ -479,6 +486,7 @@ fn admitted_enum_cases_compare_by_variant_identity() {
 /// Trace: IT-016-SC-03, TC-096, TC-025, TC-026, FR-008-AC-5, FR-008-AC-6.
 #[test]
 #[trace(
+    "IT-016-SC-05",
     "IT-016-SC-03",
     "TC-096",
     "TC-025",
@@ -535,7 +543,7 @@ fn admitted_model_roots_set_the_reference_universe_and_distinct_owner_result() {
 
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-5.
 #[test]
-#[trace("IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-5")]
+#[trace("IT-016-SC-05", "IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-5")]
 fn admitted_equality_plan_refuses_atomically_at_fifty_work_units() {
     let (types, checked, key) = checked_equality();
     let value = operand(&types, key, 0);
@@ -556,7 +564,7 @@ fn admitted_equality_plan_refuses_atomically_at_fifty_work_units() {
 
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-6.
 #[test]
-#[trace("IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-6")]
+#[trace("IT-016-SC-05", "IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-6")]
 fn admitted_equality_plan_checks_result_capacity_before_pair_charges() {
     let (types, checked, key) = checked_equality();
     let value = operand(&types, key, 0);
