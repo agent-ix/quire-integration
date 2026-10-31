@@ -46,6 +46,13 @@ const SOURCE: &str = "language \"ix:native\" edition \"1-draft\";\n\
     dimension Temperature;\n\
     unit K : Temperature = rational(1, 1);\n\
     unit degC : Temperature = rational(1, 1) * K + rational(5463, 20);\n\
+    function touch_m using v(x: Quantity<m>): Quantity<m> pure { x }\n\
+    function touch_cm using v(x: Quantity<cm>): Quantity<cm> pure { x }\n\
+    function touch_km using v(x: Quantity<km>): Quantity<km> pure { x }\n\
+    function touch_m2 using v(x: Quantity<m2>): Quantity<m2> pure { x }\n\
+    function touch_s using v(x: Quantity<s>): Quantity<s> pure { x }\n\
+    function touch_K using v(x: Quantity<K>): Quantity<K> pure { x }\n\
+    function touch_degC using v(x: Quantity<degC>): Quantity<degC> pure { x }\n\
     function keep using v(x: Int[0, 9]): Int[0, 9] pure { x }\n";
 
 /// Run the lock-selected QSL producer and the IR reader. Either missing tool
@@ -64,7 +71,7 @@ fn emit_and_read(source_text: &str) -> CheckedPackageV2 {
         .current_dir(directory.path())
         .env(
             "CARGO_TARGET_DIR",
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target/qsl-producer"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target"),
         )
         .arg("run")
         .arg("--locked")
@@ -205,10 +212,9 @@ fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
         let CheckedTerm::Literal { value, .. } = &node.body else {
             panic!("admitted enum member is a literal: {:?}", node.body);
         };
-        assert_eq!(
-            node.owner, phase_node.owner,
-            "the admitted enum member retains its declaration's source owner"
-        );
+        // The literal has no declaration and therefore no independent
+        // owner; its checked semantic type names the source-owned enum.
+        assert!(node.owner.is_none(), "enum member owner is its type");
         let case = value.as_str().expect("admitted case name");
         let member_key = admitted_key(&node.node_id);
         let member = declaration
@@ -616,12 +622,18 @@ fn admitted_scale_and_offset_matrix_matches_independent_i128_oracle() {
          dimension Length;\n\
          unit root : Length = rational(1, 1);\n",
     );
+    source.push_str("function touch_root using v(x: Quantity<root>): Quantity<root> pure { x }\n");
     for (scale_index, &(numerator, denominator)) in SCALES.iter().enumerate() {
         for (offset_index, &(offset, divisor)) in OFFSETS.iter().enumerate() {
             source.push_str(&format!(
                 "unit u{scale_index}{offset_index} : Length = \
                  rational({numerator}, {denominator}) * root + \
                  rational({offset}, {divisor});\n"
+            ));
+            source.push_str(&format!(
+                "function touch_u{scale_index}{offset_index} using v(x: \
+                 Quantity<u{scale_index}{offset_index}>): \
+                 Quantity<u{scale_index}{offset_index}> pure {{ x }}\n"
             ));
         }
     }
