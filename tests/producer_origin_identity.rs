@@ -1066,6 +1066,13 @@ fn admitted_unit_identity_read_precedes_other_denials_and_zero_stops() {
     )
     .expect("same unit");
     assert_eq!(outcome, Outcome::Undefined(Undefined::DivisionByZero));
+    let negative = Integer::from(-1_i64);
+    let outcome = evaluate_quantity(
+        QuantityOperation::Power(table.resolve(&zero).expect("admitted unit"), &negative),
+        &mut meter(),
+    )
+    .expect("same unit");
+    assert_eq!(outcome, Outcome::Undefined(Undefined::DivisionByZero));
 }
 
 #[test]
