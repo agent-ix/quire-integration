@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! IT-016-SC-03: checked equality uses a QSL-emitted composite declaration.
 
+#[path = "support/producer_origin.rs"]
+mod producer_origin_support;
 mod support;
 
-use std::{fs, num::NonZeroU64, process::Command, sync::OnceLock};
+use std::{fs, num::NonZeroU64, sync::OnceLock};
 
 use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
-use quire_contract_ir::{
-    read_checked_package, CheckedNodeOwner, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm,
-};
+use quire_contract_ir::{CheckedNodeOwner, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm};
 use quire_exact::{
     ChargePoint, CollectionKind, CollectionType, EffectiveId, EnumMember, FieldValue,
     IllTypedCause, InjectedDenial, Integer, LimitKind, Meter, NodeKey, ObjectId, ObjectReference,
@@ -76,57 +75,20 @@ const LIMITS: ScalarLimits = ScalarLimits {
 fn admitted() -> &'static CheckedPackageV2 {
     static PACKAGE: OnceLock<CheckedPackageV2> = OnceLock::new();
     PACKAGE.get_or_init(|| {
-        let directory = tempfile::tempdir().expect("test source directory");
-        let document = model_document();
-        fs::write(directory.path().join(SOURCE_PATH), source()).expect("write authored source");
-        let manifest = support::qsl_root().join("Cargo.toml");
-        let output = Command::new(env!("CARGO"))
-            .current_dir(directory.path())
-            .env(
-                "CARGO_TARGET_DIR",
-                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target"),
-            )
-            .arg("run")
-            .arg("--locked")
-            .arg("--quiet")
-            .arg("--manifest-path")
-            .arg(manifest)
-            .args(["--example", "emit_checked_v2", "--", "--model"])
-            .arg(model_document_path())
-            .args(["--package-name", "agent-ix/it-016-equality", SOURCE_PATH])
-            .output()
-            .expect("the lock-selected QSL producer runs");
-        assert!(
-            output.status.success(),
-            "emit_checked_v2 refused: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let wire: JsonValue = serde_json::from_slice(&output.stdout).expect("producer emits JSON");
-        let mut evidence = CheckedPackageEvidence::new();
-        for feature in wire["lock"]["required_features"]
-            .as_array()
-            .expect("producer lock has feature list")
-        {
-            evidence.support_feature(feature.as_str().expect("feature name"));
-        }
-        evidence
-            .insert_domain_package_document(MODEL_IDENTITY, document.as_slice())
-            .expect("QSL's domain document is valid reader evidence");
-        let package = match read_checked_package(
-            &output.stdout,
-            CheckedPackageReadLimits::bounded(),
-            &evidence,
-        ) {
-            CheckedPackageDispatchResult::AdmittedV2(package) => *package,
-            other => panic!("IR refused QSL's package: {other:?}"),
-        };
-        eprintln!(
-            "producer=cargo run --locked --example emit_checked_v2; application={}; \
-             source-revision=Cargo.lock; outcome=AdmittedV2({})",
-            env!("CARGO_PKG_VERSION"),
-            package.name()
-        );
-        package
+        let model_path = model_document_path();
+        let source = source();
+        producer_origin_support::emit_and_read_checked_v2(
+            producer_origin_support::CheckedProducerRequest {
+                source_path: SOURCE_PATH,
+                source: &source,
+                package_name: "agent-ix/it-016-equality",
+                models: &[producer_origin_support::ModelInput {
+                    identity: MODEL_IDENTITY,
+                    path: &model_path,
+                }],
+                execution_points: None,
+            },
+        )
     })
 }
 

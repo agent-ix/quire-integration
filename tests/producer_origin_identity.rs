@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! IT-016 / TC-096: runtime identities originate in QSL source admitted by IR.
 
+#[path = "support/producer_origin.rs"]
+mod producer_origin_support;
 mod support;
 
-use std::{collections::BTreeMap, fs, process::Command, sync::OnceLock};
+use std::{collections::BTreeMap, sync::OnceLock};
 
 use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
 use quire_contract_ir::{
-    read_checked_package, CheckedNodeId, CheckedNodeOwner, CheckedPackageDispatchResult,
-    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2,
-    CheckedTerm,
+    CheckedNodeId, CheckedNodeOwner, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm,
 };
 use quire_exact::{
     ChargePoint, IllTypedCause, Integer, IntegerInterval, LimitKind, Meter, NodeKey, Outcome,
@@ -63,59 +63,15 @@ fn admitted() -> &'static CheckedPackageV2 {
 }
 
 fn emit_and_read(source_text: &str) -> CheckedPackageV2 {
-    let directory = tempfile::tempdir().expect("test source directory");
-    let source = directory.path().join(SOURCE_PATH);
-    fs::write(&source, source_text).expect("write authored source");
-    let manifest = support::qsl_root().join("Cargo.toml");
-    let output = Command::new(env!("CARGO"))
-        .current_dir(directory.path())
-        .env(
-            "CARGO_TARGET_DIR",
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target"),
-        )
-        .arg("run")
-        .arg("--locked")
-        .arg("--quiet")
-        .arg("--manifest-path")
-        .arg(&manifest)
-        .args([
-            "--example",
-            "emit_checked_v2",
-            "--",
-            "--package-name",
-            "agent-ix/it-016",
-        ])
-        .arg(SOURCE_PATH)
-        .output()
-        .expect("the lock-selected QSL producer runs");
-    assert!(
-        output.status.success(),
-        "emit_checked_v2 refused: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let wire: Value = serde_json::from_slice(&output.stdout).expect("producer emits JSON");
-    let mut evidence = CheckedPackageEvidence::new();
-    for feature in wire["lock"]["required_features"]
-        .as_array()
-        .expect("producer lock has feature list")
-    {
-        evidence.support_feature(feature.as_str().expect("feature name"));
-    }
-    let package = match read_checked_package(
-        &output.stdout,
-        CheckedPackageReadLimits::bounded(),
-        &evidence,
-    ) {
-        CheckedPackageDispatchResult::AdmittedV2(package) => *package,
-        other => panic!("IR refused QSL's package: {other:?}"),
-    };
-    eprintln!(
-        "producer=cargo run --locked --example emit_checked_v2; application={}; \
-         source-revision=Cargo.lock; outcome=AdmittedV2({})",
-        env!("CARGO_PKG_VERSION"),
-        package.name()
-    );
-    package
+    producer_origin_support::emit_and_read_checked_v2(
+        producer_origin_support::CheckedProducerRequest {
+            source_path: SOURCE_PATH,
+            source: source_text,
+            package_name: "agent-ix/it-016",
+            models: &[],
+            execution_points: None,
+        },
+    )
 }
 
 /// Select the exact admitted declaration, refusing absence or ambiguity.
@@ -230,6 +186,25 @@ fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
         .member("ABSENT", phase)
         .expect_err("a case outside the declaration refuses");
     assert_eq!(refusal.cause, SemanticGraphCause::UndeclaredCase);
+    let phase = admitted_key(&phase_node.node_id);
+    for members in [
+        vec![],
+        vec!["OPEN".to_owned(), "OPEN".to_owned()],
+        vec!["not an identifier".to_owned()],
+    ] {
+        assert_eq!(
+            EnumDeclaration::new(phase.clone(), ordered, members)
+                .expect_err("malformed admitted enum operation refuses")
+                .cause,
+            SemanticGraphCause::NonCanonicalPreimage
+        );
+    }
+    assert_eq!(
+        EnumDeclaration::new(phase, false, vec!["SHUT".to_owned(), "OPEN".to_owned()])
+            .expect_err("unordered members must be sorted")
+            .cause,
+        SemanticGraphCause::UnsortedUnorderedMembers
+    );
 }
 
 /// TC-033's unit consumer uses the exact dimension and unit identities IR
@@ -489,6 +464,21 @@ fn admitted_graph_has_the_same_canonical_dimensions_in_both_insertion_orders() {
         let keys: Vec<_> = admitted.graph.units().map(|unit| unit.key()).collect();
         assert!(keys.windows(2).all(|pair| pair[0] < pair[1]));
     }
+    let compound = |admitted: &AdmittedUnits| {
+        let mut terms = [
+            (admitted.metre.clone(), Integer::from(2_i64)),
+            (admitted.second.clone(), Integer::from(-2_i64)),
+        ];
+        terms.sort_by(|left, right| left.0.cmp(&right.0));
+        admitted
+            .graph
+            .compound_unit(&terms)
+            .expect("both admitted roots form a canonical compound")
+    };
+    let forward_compound = compound(&forward);
+    let reverse_compound = compound(&reverse);
+    assert_eq!(forward_compound, reverse_compound);
+    assert_eq!(forward_compound.id(), reverse_compound.id());
 }
 
 #[test]
@@ -515,6 +505,15 @@ fn admitted_root_units_have_canonical_compound_terms_and_order_refusal() {
         .compound_unit(&[terms[1].clone(), terms[0].clone()])
         .expect_err("unsorted terms refuse");
     assert_eq!(refused.cause, CompoundUnitCause::UnsortedTerms);
+    let different = admitted
+        .graph
+        .compound_unit(&[
+            terms[0].clone(),
+            (terms[1].0.clone(), Integer::from(-2_i64)),
+        ])
+        .expect("different nonzero exponent admits");
+    assert_ne!(compound, different);
+    assert!(actual.iter().all(|(_, exponent)| !exponent.is_zero()));
 }
 
 fn meter() -> Meter {

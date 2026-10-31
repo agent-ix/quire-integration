@@ -1,22 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! IT-016-SC-04 / TC-096: TC-194 function observations from QSL-admitted IDs.
 
+#[path = "support/producer_origin.rs"]
+mod producer_origin_support;
 mod support;
 
 use std::{
     cell::{Cell, RefCell},
-    fs,
-    process::Command,
     rc::Rc,
     sync::OnceLock,
 };
 
 use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
-use quire_contract_ir::{
-    read_checked_package, CheckedNodeOwner, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2,
-};
+use quire_contract_ir::{CheckedNodeOwner, CheckedPackageV2, CheckedSemanticNodeV2};
 use quire_contract_runtime::exact::{
     plan_call, plan_evaluation, Body, BodyStep, CheckMode, CheckedPackage, CheckingLimits,
     EvaluationRefusal, Frame, FunctionDeclaration, InputRefusal, PackageDeclarations,
@@ -33,7 +30,6 @@ use quire_semantic_value::{
     },
     object_closure::ObjectClosure,
 };
-use serde_json::Value as JsonValue;
 
 const SOURCE_PATH: &str = "program.native";
 const MODEL_PATH: &str = "tests/fixtures/spine-model.semantic-ir.json";
@@ -60,7 +56,6 @@ fn admitted() -> &'static CheckedPackageV2 {
     static PACKAGE: OnceLock<CheckedPackageV2> = OnceLock::new();
     PACKAGE.get_or_init(|| {
         let model = support::qsl_root().join(MODEL_PATH);
-        let document = fs::read(&model).expect("QSL-owned model document is present");
         let source = format!(
             "language \"ix:native\" edition \"1-draft\";\n\
              profile v = \"quire.value.complete/v1\";\n\
@@ -76,33 +71,18 @@ fn admitted() -> &'static CheckedPackageV2 {
              function borrow using v(): Boolean pure {{ true }}\n\
              function reenter using v(): Boolean pure {{ true }}\n"
         );
-        let directory = tempfile::tempdir().expect("source directory");
-        fs::write(directory.path().join(SOURCE_PATH), source).expect("write authored QSL source");
-        let output = Command::new(env!("CARGO"))
-            .current_dir(directory.path())
-            .env("CARGO_TARGET_DIR", std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target"))
-            .arg("run").arg("--locked").arg("--quiet")
-            .arg("--manifest-path").arg(support::qsl_root().join("Cargo.toml"))
-            .args(["--example", "emit_checked_v2", "--", "--model"])
-            .arg(&model)
-            .args(["--package-name", "agent-ix/it-016-functions", SOURCE_PATH])
-            .output().expect("locked QSL emitter starts");
-        assert!(output.status.success(), "QSL emitter: {}", String::from_utf8_lossy(&output.stderr));
-        let wire: JsonValue = serde_json::from_slice(&output.stdout).expect("QSL emits JSON");
-        let mut evidence = CheckedPackageEvidence::new();
-        for feature in wire["lock"]["required_features"].as_array().expect("feature list") {
-            evidence.support_feature(feature.as_str().expect("feature name"));
-        }
-        evidence.insert_domain_package_document(MODEL_IDENTITY, document.as_slice())
-            .expect("the selected model document is valid evidence");
-        let package = match read_checked_package(
-            &output.stdout, CheckedPackageReadLimits::bounded(), &evidence,
-        ) {
-            CheckedPackageDispatchResult::AdmittedV2(package) => *package,
-            other => panic!("IR refused QSL output: {other:?}"),
-        };
-        eprintln!("producer=cargo run --locked --example emit_checked_v2; application={}; source-revision=Cargo.lock; outcome=AdmittedV2({})", env!("CARGO_PKG_VERSION"), package.name());
-        package
+        producer_origin_support::emit_and_read_checked_v2(
+            producer_origin_support::CheckedProducerRequest {
+                source_path: SOURCE_PATH,
+                source: &source,
+                package_name: "agent-ix/it-016-functions",
+                models: &[producer_origin_support::ModelInput {
+                    identity: MODEL_IDENTITY,
+                    path: &model,
+                }],
+                execution_points: None,
+            },
+        )
     })
 }
 
@@ -200,7 +180,6 @@ where
 fn function(name: &str, parameters: Vec<(&str, ValueType)>, body: Body) -> FunctionDeclaration {
     // The name passed to RT is taken back from the IR-admitted declaration.
     let node = declaration_node(name);
-    let _key = declaration_key(name);
     let admitted_name = node
         .declaration
         .as_ref()

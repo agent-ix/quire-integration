@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! IT-016-SC-02 / TC-096: remaining TC-201 quantity controls on admitted units.
 
+#[path = "support/producer_origin.rs"]
+mod producer_origin_support;
 mod support;
 
-use std::{collections::BTreeMap, fs, process::Command, sync::OnceLock};
+use std::{collections::BTreeMap, sync::OnceLock};
 
 use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
-use quire_contract_ir::{
-    read_checked_package, CheckedNodeId, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm,
-};
+use quire_contract_ir::{CheckedNodeId, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm};
 use quire_exact::{
     ChargePoint, IllTyped, IllTypedCause, Integer, LimitKind, Meter, NodeKey, Outcome, Quantity,
     Rational, ScalarLimits, UnitId,
@@ -102,62 +101,19 @@ fn rational(numerator: i64, denominator: i64) -> Rational {
 fn admitted() -> &'static CheckedPackageV2 {
     static PACKAGE: OnceLock<CheckedPackageV2> = OnceLock::new();
     PACKAGE.get_or_init(|| {
-        let directory = tempfile::tempdir().expect("source directory");
         let mut source = SOURCE.to_owned();
         for unit in UNIT_NAMES {
             source.push_str(&format!(
                 "function touch_{unit} using v(x: Quantity<{unit}>): Quantity<{unit}> pure {{ x }}\n"
             ));
         }
-        fs::write(directory.path().join(SOURCE_PATH), source).expect("write authored QSL source");
-        let output = Command::new(env!("CARGO"))
-            .current_dir(directory.path())
-            .env(
-                "CARGO_TARGET_DIR",
-                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target"),
-            )
-            .arg("run")
-            .arg("--locked")
-            .arg("--quiet")
-            .arg("--manifest-path")
-            .arg(support::qsl_root().join("Cargo.toml"))
-            .args([
-                "--example",
-                "emit_checked_v2",
-                "--",
-                "--package-name",
-                "agent-ix/it-016-quantity",
-                SOURCE_PATH,
-            ])
-            .output()
-            .expect("lock-selected QSL emitter starts");
-        assert!(
-            output.status.success(),
-            "QSL emitter: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let wire: Value = serde_json::from_slice(&output.stdout).expect("QSL emits JSON");
-        let mut evidence = CheckedPackageEvidence::new();
-        for feature in wire["lock"]["required_features"]
-            .as_array()
-            .expect("feature list")
-        {
-            evidence.support_feature(feature.as_str().expect("feature name"));
-        }
-        let package = match read_checked_package(
-            &output.stdout,
-            CheckedPackageReadLimits::bounded(),
-            &evidence,
-        ) {
-            CheckedPackageDispatchResult::AdmittedV2(package) => *package,
-            other => panic!("IR refused QSL's checked package: {other:?}"),
-        };
-        eprintln!(
-            "producer=cargo run --locked --example emit_checked_v2; application={}; source-revision=Cargo.lock; outcome=AdmittedV2({})",
-            env!("CARGO_PKG_VERSION"),
-            package.name()
-        );
-        package
+        producer_origin_support::emit_and_read_checked_v2(producer_origin_support::CheckedProducerRequest {
+            source_path: SOURCE_PATH,
+            source: &source,
+            package_name: "agent-ix/it-016-quantity",
+            models: &[],
+            execution_points: None,
+        })
     })
 }
 
