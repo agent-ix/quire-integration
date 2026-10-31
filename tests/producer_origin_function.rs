@@ -122,7 +122,7 @@ fn model_object() -> (EffectiveId, UniverseId) {
         .iter()
         .filter(|node| {
             matches!(&node.owner, Some(CheckedNodeOwner::Model { identity, node: owner_node })
-                if &**identity == MODEL_IDENTITY && &**owner_node == original)
+                if &**identity == MODEL_IDENTITY && **owner_node == original)
         })
         .collect();
     let [node] = nodes.as_slice() else {
