@@ -69,7 +69,7 @@ pub fn emit_and_read_checked_v2(request: CheckedProducerRequest<'_>) -> CheckedP
     for model in request.models {
         let bytes = fs::read(model.path).expect("QSL-owned model document is present");
         evidence
-            .insert_domain_package_document(model.identity, &bytes)
+            .insert_domain_package_document(model.identity, bytes.as_slice())
             .expect("QSL model document is valid reader evidence");
     }
     let package = match read_checked_package(
