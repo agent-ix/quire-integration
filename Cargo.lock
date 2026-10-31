@@ -211,9 +211,9 @@ checksum = "175812e0be2bccb6abe50bb8d566126198344f707e304f45c648fd8f2cc0365e"
 
 [[package]]
 name = "cc"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "877bf67ac8e52449eb2f9e98a344ea163beb70dd1f9eebe3cc5357dcfeaee4df"
+checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -606,9 +606,9 @@ dependencies = [
 
 [[package]]
 name = "globset"
-version = "0.4.20"
+version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07c34a9410465b45bd9787443bc7370f37735bad04b0f0cd57ff1a3186c98988"
+checksum = "f98b0d85522dc0a824cfebbc9594ff4a9b289c568bea0370319dfbdf20ccdd2d"
 dependencies = [
  "aho-corasick",
  "bstr",
@@ -751,9 +751,9 @@ dependencies = [
 
 [[package]]
 name = "ignore"
-version = "0.4.33"
+version = "0.4.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00b69833ed729dc5aa7d19541d96d6cf8e9137194207a04916d658e43168402f"
+checksum = "484be5657551d7868d67587df967fb4fcbe9d266a761cc855aaa148fda0b3cc7"
 dependencies = [
  "crossbeam-deque",
  "globset",
@@ -805,9 +805,9 @@ source = "git+https://github.com/agent-ix/ix-trace-rs?branch=main#e29cc07f70394f
 
 [[package]]
 name = "js-sys"
-version = "0.3.106"
+version = "0.3.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7883d941dae510fb2d978fc3fe018c71c9e2892fd38854de3e8b92c2e5ad9cc5"
+checksum = "8dc09d2154098bbf4ef54eab6b117a3c24cbbffe94046b16ee6d6d4510584d3a"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -964,9 +964,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.34"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "logos"
@@ -1247,7 +1247,7 @@ dependencies = [
 [[package]]
 name = "qsl-cst"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "ix-trace-rs",
  "logos",
@@ -1259,7 +1259,7 @@ dependencies = [
 [[package]]
 name = "qsl-eval"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1278,7 +1278,7 @@ dependencies = [
 [[package]]
 name = "qsl-forms"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "ix-trace-rs",
  "qsl-cst",
@@ -1290,21 +1290,20 @@ dependencies = [
 [[package]]
 name = "qsl-foundation"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "ix-trace-rs",
  "quire-exact",
  "quire-semantic-value",
  "serde",
  "serde_json",
- "sha2",
  "thiserror",
 ]
 
 [[package]]
 name = "qsl-package"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1322,7 +1321,7 @@ dependencies = [
 [[package]]
 name = "qsl-replay"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "base64 0.22.1",
  "ix-trace-rs",
@@ -1349,7 +1348,7 @@ dependencies = [
 [[package]]
 name = "qsl-route"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1363,7 +1362,7 @@ dependencies = [
 [[package]]
 name = "qsl-semantics"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "agent-ix-extraction-frontend",
  "agent-ix-semantic-ir",
@@ -1421,7 +1420,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-codegen"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#a8c0a0edf4611624e98261cf0e26de1fbe7c6bca"
+source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#8b45fba43011cb0da0ca6133d3ee2284d5cfeaea"
 dependencies = [
  "command-fds",
  "ix-trace-rs",
@@ -1443,7 +1442,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-ir"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#01de9dcfd29e9edb65bad6fce84ca5a631e7440f"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#013b4e9fc45a46394d5c1ed8881d6a3cc83ec771"
 dependencies = [
  "ix-trace-rs",
  "quire-contract-model",
@@ -1455,7 +1454,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-model"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#01de9dcfd29e9edb65bad6fce84ca5a631e7440f"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#013b4e9fc45a46394d5c1ed8881d6a3cc83ec771"
 dependencies = [
  "ix-trace-rs",
  "jsonschema 0.17.1",
@@ -1488,7 +1487,7 @@ dependencies = [
 [[package]]
 name = "quire-driver"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-driver?branch=main#2db214bb94ed1224effd5c853d9f12c0caeb0098"
+source = "git+https://github.com/agent-ix/quire-driver?branch=main#bd140de81cff95443cafd46090603bbcd10e620b"
 dependencies = [
  "qsl-foundation",
  "qsl-package",
@@ -1518,7 +1517,7 @@ dependencies = [
 [[package]]
 name = "quire-exact"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-exact?branch=main#eea6b1220c47494ac338434e2d213d41a2aceb16"
+source = "git+https://github.com/agent-ix/quire-exact?branch=main#532d87b67f5c5866e9aa231f2cdc245c4aa350bc"
 dependencies = [
  "allocator-api2",
  "num-bigint",
@@ -1592,7 +1591,7 @@ dependencies = [
 [[package]]
 name = "quire-spec-language"
 version = "0.2.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#8d0a0d379b6e639f5cddb0bc3bc2c16c46536d36"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#e41f52d3049fd0a4ad2fc7f65f9350681dcb3eae"
 dependencies = [
  "ix-trace-rs",
  "logos",
@@ -1612,7 +1611,6 @@ dependencies = [
  "quire-semantic-value",
  "serde",
  "serde_json",
- "sha2",
  "thiserror",
  "unicode-normalization",
 ]
@@ -1620,7 +1618,7 @@ dependencies = [
 [[package]]
 name = "quire-verification-contracts"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-verification-contracts?branch=main#7942fb4b4a0f99ed2a6e6639493eb6c3b821d2ec"
+source = "git+https://github.com/agent-ix/quire-verification-contracts?branch=main#5070338df68b896d4e26051123133e2cb93f4ec9"
 dependencies = [
  "chrono",
  "jsonschema 0.55.1",
@@ -1972,9 +1970,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.16.3"
+version = "1.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
 
 [[package]]
 name = "spin"
@@ -2292,9 +2290,12 @@ dependencies = [
 
 [[package]]
 name = "utf8_iter"
-version = "1.0.4"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+checksum = "af3bd9d3e571c26fcce9d033b87ea5ab061b8d2ffe9b7a5675d810d68f03edf0"
+dependencies = [
+ "utf_types",
+]
 
 [[package]]
 name = "utf8parse"
@@ -2303,10 +2304,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
-name = "uuid"
-version = "1.28.0"
+name = "utf_types"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
+checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
+
+[[package]]
+name = "uuid"
+version = "1.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a0e2d11620c50695fe12bbbfde96b3477fe606e7284c22d505c12ce51214514"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
@@ -2369,12 +2376,11 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bb54f33acc68fd454578d9820b0bde1a1a3d17aa17bb7b6595806d02886d409"
+checksum = "a0181c14ddd6c7b8b0b0132a5f1ea2f32be0d893cd3ea97b6e3b28886b8a3d1c"
 dependencies = [
  "cfg-if",
- "once_cell",
  "rustversion",
  "wasm-bindgen-macro",
  "wasm-bindgen-shared",
@@ -2382,9 +2388,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e29d0c35b16e224a7eeb5cd2d25e3e1968fbd65604117b44d3b789d00ee8535"
+checksum = "6e931a02a39abdbf66966fc35902b5ed58344750a70885bed4ebb3d8eaf28ed9"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -2392,9 +2398,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f501a8bc3719dba86ef8ae4728879c08001bea749eb1333ac5b91e040e2a6b7"
+checksum = "2ca4b54280e455bd831e33a6b8e734baf432fe63fbc35c42ac14ce67a043a53a"
 dependencies = [
  "bumpalo",
  "proc-macro2",
@@ -2405,9 +2411,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.129"
+version = "0.2.130"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
+checksum = "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e"
 dependencies = [
  "unicode-ident",
 ]
