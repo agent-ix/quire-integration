@@ -133,17 +133,16 @@ fn declaration_key(name: &str) -> NodeKey {
 }
 
 fn model_object() -> (EffectiveId, UniverseId) {
+    // Model nodes are owned by their domain declaration. They are not QSL
+    // source declarations and therefore have no `declaration` member.
+    let original = format!("ix://{MODEL_IDENTITY}/Widget");
     let nodes: Vec<_> = admitted()
         .graph()
         .nodes
         .iter()
         .filter(|node| {
-            node.declaration.as_ref().is_some_and(|declaration| {
-                declaration
-                    .qualified_name
-                    .last()
-                    .is_some_and(|part| &**part == "Widget")
-            }) && matches!(&node.owner, Some(CheckedNodeOwner::Model { .. }))
+            matches!(&node.owner, Some(CheckedNodeOwner::Model { identity, node: owner_node })
+                if &**identity == MODEL_IDENTITY && &**owner_node == original)
         })
         .collect();
     let [node] = nodes.as_slice() else {
