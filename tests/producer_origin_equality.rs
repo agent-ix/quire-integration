@@ -131,7 +131,7 @@ fn admitted_model_type(name: &str) -> (NodeKey, EffectiveId) {
             Some(CheckedNodeOwner::Model {
                 identity,
                 node: owner_node,
-            }) if &**identity == MODEL_IDENTITY && &**owner_node == original => {
+            }) if &**identity == MODEL_IDENTITY && **owner_node == original => {
                 Some((node, identity.as_ref(), owner_node.as_ref()))
             }
             _ => None,
