@@ -51,6 +51,27 @@ const SOURCE: &str = "language \"ix:native\" edition \"1-draft\";\n\
     unit target_mid : Chain = rational(4, 1) * root + rational(-2, 1);\n\
     unit target_leaf : Chain = rational(3, 1) * target_mid + rational(7, 1);\n";
 
+const UNIT_NAMES: [&str; 18] = [
+    "m",
+    "cm",
+    "km",
+    "inch",
+    "m2",
+    "cm2",
+    "s",
+    "K",
+    "C",
+    "F",
+    "u1",
+    "u2",
+    "u3",
+    "root",
+    "source_mid",
+    "source_leaf",
+    "target_mid",
+    "target_leaf",
+];
+
 const LIMITS: ScalarLimits = ScalarLimits {
     integer_bits: 1024,
     decimal_digits: 1024,
@@ -82,7 +103,13 @@ fn admitted() -> &'static CheckedPackageV2 {
     static PACKAGE: OnceLock<CheckedPackageV2> = OnceLock::new();
     PACKAGE.get_or_init(|| {
         let directory = tempfile::tempdir().expect("source directory");
-        fs::write(directory.path().join(SOURCE_PATH), SOURCE).expect("write authored QSL source");
+        let mut source = SOURCE.to_owned();
+        for unit in UNIT_NAMES {
+            source.push_str(&format!(
+                "function touch_{unit} using v(x: Quantity<{unit}>): Quantity<{unit}> pure {{ x }}\n"
+            ));
+        }
+        fs::write(directory.path().join(SOURCE_PATH), source).expect("write authored QSL source");
         let output = Command::new(env!("CARGO"))
             .current_dir(directory.path())
             .env(
@@ -217,47 +244,28 @@ fn graph() -> UnitGraph {
             )
         })
         .collect::<BTreeMap<_, _>>();
-    let units = [
-        "m",
-        "cm",
-        "km",
-        "inch",
-        "m2",
-        "cm2",
-        "s",
-        "K",
-        "C",
-        "F",
-        "u1",
-        "u2",
-        "u3",
-        "root",
-        "source_mid",
-        "source_leaf",
-        "target_mid",
-        "target_leaf",
-    ]
-    .into_iter()
-    .map(|name| {
-        let record = body(name);
-        assert_eq!(record["term"], "unit");
-        let dimension = body_key(&record, "dimension_node_id");
-        let target = if record["target_unit_node_id"].is_null() {
-            None
-        } else {
-            Some(body_key(&record, "target_unit_node_id"))
-        };
-        let unit = UnitNode::checked(
-            dimension,
-            target,
-            body_rational(&record, "scale"),
-            body_rational(&record, "offset"),
-            NominalDeclaration::default(),
-        )
-        .expect("admitted unit edge");
-        (named_key(name), unit)
-    })
-    .collect::<BTreeMap<_, _>>();
+    let units = UNIT_NAMES
+        .into_iter()
+        .map(|name| {
+            let record = body(name);
+            assert_eq!(record["term"], "unit");
+            let dimension = body_key(&record, "dimension_node_id");
+            let target = if record["target_unit_node_id"].is_null() {
+                None
+            } else {
+                Some(body_key(&record, "target_unit_node_id"))
+            };
+            let unit = UnitNode::checked(
+                dimension,
+                target,
+                body_rational(&record, "scale"),
+                body_rational(&record, "offset"),
+                NominalDeclaration::default(),
+            )
+            .expect("admitted unit edge");
+            (named_key(name), unit)
+        })
+        .collect::<BTreeMap<_, _>>();
     UnitGraph::from_checked_nodes(&dimensions, &units).expect("QSL's unit topology admits")
 }
 
