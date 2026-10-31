@@ -9,7 +9,7 @@
 
 mod support;
 
-use std::{collections::BTreeSet, fs};
+use std::{collections::BTreeMap, fs};
 
 use ix_trace_rs::trace;
 use qsl_foundation::SourceIdentity;
@@ -23,12 +23,12 @@ use qsl_semantics::{
     },
 };
 use quire_contract_ir::{
-    read_checked_package, CheckedPackageDispatchResult, CheckedPackageEvidence,
-    CheckedPackageReadLimits, CheckedPackageRefusalCode, CheckedPackageV2, CheckedTerm,
+    read_checked_package, CheckedNodeId, CheckedNodeOwner, CheckedPackageDispatchResult,
+    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageRefusalCode, CheckedPackageV2,
+    CheckedTerm,
 };
 use quire_semantic_value::checking::CheckingLimits;
 use serde_json::Value;
-use sha2::{Digest as _, Sha256};
 
 /// The version the authored domain package document carries.
 const AUTHORED_VERSION: &str = "1.0.0";
@@ -132,23 +132,26 @@ fn admitted(version: &str) -> CheckedPackageV2 {
     }
 }
 
-/// The node id of `declaration`'s model node: the SHA-256 of its structural
-/// node preimage, whose `owner` is exactly `{identity, kind, node}`.
-fn model_node_id(declaration: &str) -> String {
-    let preimage = format!(
-        r#"{{"body":{{"members":[],"term":"aggregate"}},"declaration":null,"node_tag":"model","owner":{{"identity":"{IDENTITY}","kind":"model","node":"ix://{IDENTITY}/{declaration}"}},"recursion":null,"semantic_form":"object_type","semantic_type":null,"version":"quire.structural-node/v1"}}"#
-    );
-    format!("{:x}", Sha256::digest(preimage.as_bytes()))
-}
-
-/// The ids of the model nodes IR admitted.
-fn model_node_ids(package: &CheckedPackageV2) -> BTreeSet<String> {
+/// The admitted structural identities of declarations owned by the model.
+fn model_node_ids(package: &CheckedPackageV2) -> BTreeMap<String, CheckedNodeId> {
     package
         .graph()
         .nodes
         .iter()
-        .filter(|node| &*node.node_tag == "model")
-        .map(|node| node.node_id.digest.to_string())
+        .filter_map(|node| match (&*node.node_tag, &node.owner) {
+            (
+                "model",
+                Some(CheckedNodeOwner::Model {
+                    identity,
+                    node: owner_node,
+                }),
+            ) => {
+                assert_eq!(&**identity, IDENTITY);
+                Some((owner_node.to_string(), node.node_id.clone()))
+            }
+            ("model", owner) => panic!("model node has unexpected owner: {owner:?}"),
+            _ => None,
+        })
         .collect()
 }
 
@@ -232,15 +235,18 @@ fn a_domain_package_supplied_under_another_digest_is_refused() {
     );
 }
 
-/// IT-012-SC-02: every model node IR admitted is keyed by the content-only
-/// `ModelOwner`, `{kind, identity, node}`. A `version` member in the owner
-/// would change each node's id away from these.
+/// IT-012-SC-02: each admitted model node has its selected model declaration
+/// as owner, with no version member in that owner.
 #[test]
 #[trace("IT-012-SC-02")]
 fn model_nodes_are_owned_by_the_content_only_model_owner() {
     let package = admitted(AUTHORED_VERSION);
-    let expected: BTreeSet<String> = DECLARATIONS.iter().map(|d| model_node_id(d)).collect();
-    assert_eq!(model_node_ids(&package), expected);
+    let nodes = model_node_ids(&package);
+    let expected = DECLARATIONS
+        .iter()
+        .map(|declaration| format!("ix://{IDENTITY}/{declaration}"))
+        .collect::<Vec<_>>();
+    assert_eq!(nodes.keys().cloned().collect::<Vec<_>>(), expected);
 }
 
 /// IT-012-SC-03: a version-only change of the domain package leaves the
