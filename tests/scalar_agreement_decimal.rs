@@ -712,14 +712,25 @@ fn qsl_type_admitted(lo: i64, hi: i64, first: u64, last: u64) -> bool {
         parsed.diagnostics()
     );
     let unit = qsl_forms::build_unit(&parsed).expect("S2 builds D10 type declaration");
-    let declarations = PackageDeclarations::assemble(
+    let declarations = match PackageDeclarations::assemble(
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
         SelectedModels::default(),
         Vec::new(),
-    )
-    .expect("S3 assembles D10 type declaration");
+    ) {
+        Ok(declarations) => declarations,
+        Err(refusal) => {
+            assert!(
+                refusal
+                    .errors
+                    .iter()
+                    .all(|error| error.cause.code() == qsl_foundation::diagnostic::Code::IllTyped),
+                "D10 S3 must refuse as ill_typed: {refusal:?}"
+            );
+            return false;
+        }
+    };
     match declarations.check(CheckingLimits::default()) {
         Ok(_) => true,
         Err(refusals) => {
