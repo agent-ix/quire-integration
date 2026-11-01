@@ -699,33 +699,48 @@ fn qsl_type_admitted(lo: i64, hi: i64, first: u64, last: u64) -> bool {
          type T = Decimal[{lo},{hi};{first},{last};exact];\n\
          function f using v(a: T): T pure {{ a }}\n"
     );
-    let Ok(parsed) = qsl_cst::parse(
+    let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "ir669-d10", "fixture", "1"),
         "decimal.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
-    ) else {
-        return false;
-    };
-    if !parsed.is_admissible() {
-        return false;
-    }
-    let Ok(unit) = qsl_forms::build_unit(&parsed) else {
-        return false;
-    };
-    let Ok(declarations) = PackageDeclarations::assemble(
+    )
+    .expect("S1 parses D10 type declaration");
+    assert!(
+        parsed.is_admissible(),
+        "D10 syntax: {:?}",
+        parsed.diagnostics()
+    );
+    let unit = qsl_forms::build_unit(&parsed).expect("S2 builds D10 type declaration");
+    let declarations = PackageDeclarations::assemble(
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
         SelectedModels::default(),
         Vec::new(),
-    ) else {
-        return false;
-    };
-    declarations.check(CheckingLimits::default()).is_ok()
+    )
+    .expect("S3 assembles D10 type declaration");
+    match declarations.check(CheckingLimits::default()) {
+        Ok(_) => true,
+        Err(refusals) => {
+            assert!(!refusals.is_empty());
+            assert!(
+                refusals
+                    .iter()
+                    .all(|refusal| refusal.cause.code()
+                        == qsl_foundation::diagnostic::Code::IllTyped),
+                "D10 must refuse as ill_typed: {refusals:?}"
+            );
+            false
+        }
+    }
 }
 
 fn qsl_membership(type_spelling: &str, value: Decimal) -> bool {
+    qsl_membership_limited(type_spelling, value, UNLIMITED)
+}
+
+fn qsl_membership_limited(type_spelling: &str, value: Decimal, limits: ScalarLimits) -> bool {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
@@ -751,7 +766,7 @@ fn qsl_membership(type_spelling: &str, value: Decimal) -> bool {
     .check(CheckingLimits::default())
     .expect("S4 checks membership function");
     let package = CheckedPackage::link(graph);
-    let mut meter = Meter::new(UNLIMITED);
+    let mut meter = Meter::new(limits);
     match package.call(
         &QualifiedName::unqualified("f").expect("f is an identifier"),
         vec![Value::Decimal(value.clone())],
@@ -759,6 +774,16 @@ fn qsl_membership(type_spelling: &str, value: Decimal) -> bool {
         &mut meter,
     ) {
         Ok(evaluation) => {
+            if let FamilyOutcome::Evaluated(Outcome::Incomplete(refusal)) = &evaluation.outcome {
+                assert_eq!(limits.work_units, 0);
+                assert_eq!(refusal.limit_kind, LimitKind::WorkUnits);
+                assert_eq!(refusal.charge_point, ChargePoint::FunctionCall);
+                assert_eq!(refusal.limit, 0);
+                assert_eq!(refusal.consumed, 0);
+                assert_eq!(refusal.next_charge, Integer::from(1_i64));
+                assert_eq!(meter.admission_count(), 0);
+                return true;
+            }
             let FamilyOutcome::Evaluated(Outcome::Completed(Value::Decimal(actual))) =
                 evaluation.outcome
             else {
@@ -1096,8 +1121,9 @@ fn d19() {
     assert!(ty.contains(&decimal(0, 0)));
     assert!(!ty.contains(&decimal(1, 0)));
     let qsl_type = "Decimal[0,10;4294967295,4294967295;exact]";
-    assert!(qsl_membership(qsl_type, decimal(0, 0)));
-    assert!(!qsl_membership(qsl_type, decimal(1, 0)));
+    let zero = limits(0, 0, 0, 0, 0, 0);
+    assert!(qsl_membership_limited(qsl_type, decimal(0, 0), zero));
+    assert!(!qsl_membership_limited(qsl_type, decimal(1, 0), zero));
 }
 
 fn ordering(
