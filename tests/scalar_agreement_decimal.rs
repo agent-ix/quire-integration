@@ -13,9 +13,9 @@ use qsl_semantics::{
 };
 use quire_eval::{CallFailure, FamilyOutcome};
 use quire_exact::{
-    evaluate_decimal, order_numbers, ChargePoint, Decimal, DecimalOperation, DecimalResult,
-    DecimalType, InjectedDenial, Integer, LimitKind, Meter, OrderedOperands, OrderingOperator,
-    Outcome, Refusal, RoundingMode, ScalarLimits, Undefined, Value,
+    evaluate_decimal, order_numbers, planned_equality, ChargePoint, Decimal, DecimalOperation,
+    DecimalResult, DecimalType, InjectedDenial, Integer, LimitKind, Meter, OrderedOperands,
+    OrderingOperator, Outcome, Refusal, RoundingMode, ScalarLimits, Undefined, Value,
 };
 use quire_semantic_value::{call::InputRefusal, checking::CheckingLimits, loss::ValueLoss};
 use quire_specification::{vectors_of, TestCase};
@@ -218,8 +218,22 @@ fn qsl_convert(
 }
 
 fn conversion_agreement(input: Decimal, input_type: &str, result_type: &str, target: &DecimalType) {
-    let (kernel, kernel_meter) = rt(DecimalOperation::Round(&input), target, UNLIMITED);
-    let (qsl, losses, qsl_meter) = qsl_convert(input_type, result_type, input, UNLIMITED);
+    conversion_agreement_limited(input, input_type, result_type, target, UNLIMITED);
+}
+
+fn conversion_agreement_limited(
+    input: Decimal,
+    input_type: &str,
+    result_type: &str,
+    target: &DecimalType,
+    limits: ScalarLimits,
+) {
+    let (kernel, kernel_meter) = rt(DecimalOperation::Round(&input), target, limits);
+    let qsl_limits = ScalarLimits {
+        work_units: limits.work_units.saturating_add(1),
+        ..limits
+    };
+    let (qsl, losses, qsl_meter) = qsl_convert(input_type, result_type, input, qsl_limits);
     match (kernel, qsl) {
         (Outcome::Completed(expected), Outcome::Completed(Value::Decimal(actual))) => {
             assert_eq!(actual.representation(), expected.value().representation());
@@ -229,6 +243,14 @@ fn conversion_agreement(input: Decimal, input_type: &str, result_type: &str, tar
             }
         }
         (Outcome::Refused(expected), Outcome::Refused(actual)) => assert_eq!(actual, expected),
+        (Outcome::Incomplete(expected), Outcome::Incomplete(actual)) => {
+            assert_eq!(actual.limit_kind, expected.limit_kind);
+            assert_eq!(actual.charge_point, expected.charge_point);
+            assert_eq!(actual.next_charge, expected.next_charge);
+            let offset = u64::from(expected.limit_kind == LimitKind::WorkUnits);
+            assert_eq!(actual.limit, expected.limit + offset);
+            assert_eq!(actual.consumed, expected.consumed + offset);
+        }
         (expected, actual) => {
             panic!("QSL/RT conversion disagreement: RT {expected:?}, QSL {actual:?}")
         }
@@ -377,7 +399,16 @@ fn d01() {
     assert_eq!(left.normalized(), decimal(1, 0).representation());
     assert_eq!(right.normalized(), left.normalized());
     assert_ne!(left.representation(), right.representation());
-    let (outcome, losses, _) = qsl_binary(
+    let mut kernel_meter = Meter::new(UNLIMITED);
+    assert_eq!(
+        planned_equality(
+            &Value::Decimal(left.clone()),
+            &Value::Decimal(right.clone()),
+            &mut kernel_meter,
+        ),
+        Outcome::Completed(true)
+    );
+    let (outcome, losses, qsl_meter) = qsl_binary(
         "=",
         "Decimal[0,1000;0,2;exact]",
         "Decimal[0,1000;0,2;exact]",
@@ -388,6 +419,13 @@ fn d01() {
     );
     assert!(matches!(outcome, Outcome::Completed(Value::Boolean(true))));
     assert!(losses.is_empty());
+    for kind in LimitKind::ALL {
+        let offset = u64::from(kind == LimitKind::WorkUnits);
+        assert_eq!(
+            qsl_meter.consumed(kind),
+            kernel_meter.consumed(kind) + offset
+        );
+    }
 }
 
 fn d02() {
@@ -460,6 +498,7 @@ fn d03() {
             Outcome::Refused(Refusal::InexactDecimal { .. })
         ));
     }
+    d03_exact_qsl_agreement();
 }
 
 fn d04() {
@@ -517,6 +556,7 @@ fn d05() {
         &rounded,
         UNLIMITED,
     );
+    d05_exact_qsl_agreement();
 }
 
 fn d06() {
@@ -539,6 +579,7 @@ fn d07() {
     ));
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 4);
     assert_eq!(meter.consumed(LimitKind::ResultUnits), 0);
+    d07_qsl_agreement();
 }
 
 fn d08() {
@@ -559,6 +600,7 @@ fn d08() {
             Outcome::Refused(Refusal::DecimalOutOfDomain { .. })
         ));
     }
+    d08_qsl_agreement();
 }
 
 fn d09() {
@@ -789,6 +831,7 @@ fn d12() {
         rt(DecimalOperation::Divide(&left, &right), &narrow, UNLIMITED).0,
         Outcome::Refused(Refusal::DecimalOutOfDomain { .. })
     ));
+    d12_narrow_qsl_agreement();
 }
 
 fn d13() {
@@ -960,6 +1003,7 @@ fn d16() {
         3,
         1,
     );
+    d16_qsl_agreement();
 }
 
 fn d17() {
@@ -1399,23 +1443,19 @@ fn d25_mixed_profile_admission_pending() {
     assert!(!d25_source("p + r", "P"));
 }
 
-// These probes remain ignored until QSL can admit the corresponding source
-// or the observed stage refusal is recorded as an upstream dependency.
-#[test]
-#[ignore = "D03 exact-mode QSL admission probe"]
-fn d03_exact_qsl_probe() {
+fn d03_exact_qsl_agreement() {
     let ty = target(-9, 9, 0, 0, RoundingMode::Exact);
-    conversion_agreement(
-        decimal(25, 1),
-        "Decimal[-25,25;1,1;exact]",
-        "Decimal[-9,9;0,0;exact]",
-        &ty,
-    );
+    for value in [decimal(25, 1), decimal(-25, 1)] {
+        conversion_agreement(
+            value,
+            "Decimal[-25,25;1,1;exact]",
+            "Decimal[-9,9;0,0;exact]",
+            &ty,
+        );
+    }
 }
 
-#[test]
-#[ignore = "D05 exact-mode QSL admission probe"]
-fn d05_exact_qsl_probe() {
+fn d05_exact_qsl_agreement() {
     let ty = target(-1000, 1000, 0, 2, RoundingMode::Exact);
     agreement(
         "/",
@@ -1430,7 +1470,7 @@ fn d05_exact_qsl_probe() {
 }
 
 #[test]
-#[ignore = "D06 normalized-zero QSL admission probe"]
+#[ignore = "QSL S4 CheckCause::Unproved(Nonzero) for a zero divisor"]
 fn d06_qsl_probe() {
     let ty = target(-1000, 1000, 0, 2, RoundingMode::NearestEven);
     agreement(
@@ -1445,9 +1485,7 @@ fn d06_qsl_probe() {
     );
 }
 
-#[test]
-#[ignore = "D07 bounded-result QSL admission probe"]
-fn d07_qsl_probe() {
+fn d07_qsl_agreement() {
     let ty = target(-2, 2, 0, 0, RoundingMode::NearestAway);
     conversion_agreement(
         decimal(25, 1),
@@ -1457,9 +1495,7 @@ fn d07_qsl_probe() {
     );
 }
 
-#[test]
-#[ignore = "D08 endpoint QSL conversion admission probe"]
-fn d08_qsl_probe() {
+fn d08_qsl_agreement() {
     let ty = target(-2, 2, 0, 0, RoundingMode::Exact);
     for coefficient in [-2, 2, -3, 3] {
         conversion_agreement(
@@ -1471,9 +1507,7 @@ fn d08_qsl_probe() {
     }
 }
 
-#[test]
-#[ignore = "D12 narrow-result QSL admission probe"]
-fn d12_narrow_qsl_probe() {
+fn d12_narrow_qsl_agreement() {
     let ty = target(-10, 10, 0, 2, RoundingMode::NearestEven);
     agreement(
         "/",
@@ -1488,7 +1522,7 @@ fn d12_narrow_qsl_probe() {
 }
 
 #[test]
-#[ignore = "D15 normalized-zero QSL admission probe"]
+#[ignore = "QSL S4 CheckCause::Unproved(Nonzero) for a zero divisor"]
 fn d15_qsl_probe() {
     let ty = target(-1000, 1000, 0, 2, RoundingMode::NearestEven);
     agreement(
@@ -1503,14 +1537,22 @@ fn d15_qsl_probe() {
     );
 }
 
-#[test]
-#[ignore = "D16 bounded-result QSL admission probe"]
-fn d16_qsl_probe() {
+fn d16_qsl_agreement() {
     let ty = target(-2, 2, 0, 0, RoundingMode::NearestAway);
-    conversion_agreement(
-        decimal(25, 1),
-        "Decimal[25,25;1,1;exact]",
-        "Decimal[-2,2;0,0;nearest-away]",
-        &ty,
-    );
+    let base = limits(5, 2, 0, 1, 4, 0);
+    for limit in [
+        base,
+        ScalarLimits {
+            work_units: 3,
+            ..base
+        },
+    ] {
+        conversion_agreement_limited(
+            decimal(25, 1),
+            "Decimal[25,25;1,1;exact]",
+            "Decimal[-2,2;0,0;nearest-away]",
+            &ty,
+            limit,
+        );
+    }
 }
