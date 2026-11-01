@@ -42,6 +42,20 @@ fn assert_scalar_counters(qsl: &Meter, runtime: &Meter) {
     }
 }
 
+fn assert_qspec_row(id: &str) {
+    let rows: Vec<_> = quire_specification::vectors_of(quire_specification::TestCase::Tc192)
+        .filter(|row| row.id == id)
+        .collect();
+    let [row] = rows.as_slice() else {
+        panic!(
+            "QSpec TC-192 must offer exactly one {id} row; found {}",
+            rows.len()
+        );
+    };
+    assert!(!row.inputs.is_empty(), "{id} needs authored inputs");
+    assert!(!row.expected.is_empty(), "{id} needs authored expectation");
+}
+
 fn checked_package(source: &str, profile: Option<DivisionProfile>) -> CheckedPackage {
     let mut declarations = assembled_source(source, "quire.value.complete/v1");
     if let Some(profile) = profile {
@@ -90,6 +104,7 @@ fn assembled_source(source: &str, facet: &str) -> PackageDeclarations {
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn modulo_through_qsl_matches_runtime() {
+    assert_qspec_row("DIV-02");
     let (qsl, qsl_meter, runtime, runtime_meter) =
         checked_modulo(-7, 3, LIMITS, LIMITS, IntegerDomain::Mathematical);
     let Outcome::Completed(Value::Integer(qsl_value)) = qsl else {
@@ -210,11 +225,8 @@ fn checked_division_with_limits(
 #[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn integer_division_profile_rows_match_runtime() {
-    let source_rows: Vec<_> = quire_specification::vectors_of(quire_specification::TestCase::Tc192)
-        .map(|vector| vector.id)
-        .collect();
-    assert!(source_rows.contains(&"DIV-01"));
-    assert!(source_rows.contains(&"DIV-04"));
+    assert_qspec_row("DIV-01");
+    assert_qspec_row("DIV-04");
     for profile in DivisionProfile::ALL {
         for member in [DivisionMember::Quotient, DivisionMember::Remainder] {
             let (qsl, qsl_meter, runtime, runtime_meter) = checked_division(profile, member, 7, 0);
@@ -260,6 +272,7 @@ fn integer_division_profile_rows_match_runtime() {
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn division_result_retain_denial_matches_runtime() {
+    assert_qspec_row("DIV-08");
     let limits = ScalarLimits {
         integer_bits: 3,
         decimal_digits: 0,
@@ -337,6 +350,7 @@ fn division_result_retain_denial_matches_runtime() {
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn modulus_charge_prefix_and_denials_match_runtime() {
+    assert_qspec_row("DIV-10");
     let base = ScalarLimits {
         integer_bits: 3,
         decimal_digits: 0,
@@ -414,6 +428,7 @@ fn modulus_charge_prefix_and_denials_match_runtime() {
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn zero_divisor_stops_after_operand_charge() {
+    assert_qspec_row("DIV-11");
     let base = ScalarLimits {
         integer_bits: 3,
         decimal_digits: 0,
@@ -482,6 +497,7 @@ fn zero_divisor_stops_after_operand_charge() {
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn operand_size_denial_precedes_work_denial() {
+    assert_qspec_row("DIV-13");
     let limits = ScalarLimits {
         integer_bits: 2,
         work_units: 0,
@@ -518,6 +534,7 @@ fn operand_size_denial_precedes_work_denial() {
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn modulus_does_not_follow_selected_division_law() {
+    assert_qspec_row("DIV-02");
     for profile in DivisionProfile::ALL {
         let package = checked_package(
             "function op using v(a: Integer, b: Integer): Integer pure { a mod b }",
@@ -559,6 +576,8 @@ fn modulus_does_not_follow_selected_division_law() {
 #[trace("TC-097", "IT-017-SC-04")]
 #[test]
 fn integer_division_definition_admission_precedes_evaluation() {
+    assert_qspec_row("DIV-03");
+    assert_qspec_row("DIV-09");
     use qsl_semantics::value::{admit_integer_division, DefinitionRole};
     use quire_semantic_value::definition::{PackageCause, PackageRefusal};
 
@@ -583,6 +602,7 @@ fn integer_division_definition_admission_precedes_evaluation() {
 #[trace("TC-097", "IT-017-SC-02")]
 #[test]
 fn division_source_precedence_matches_selected_law() {
+    assert_qspec_row("DIV-17");
     let package = checked_package(
         "function op using v(): Integer pure { 1 + 7 div 3 * 2 }",
         Some(DivisionProfile::Truncating),
@@ -605,6 +625,7 @@ fn division_source_precedence_matches_selected_law() {
 #[trace("TC-097", "IT-017-SC-04")]
 #[test]
 fn integer_operator_source_spans_survive_form_building() {
+    assert_qspec_row("DIV-17");
     for expression in ["7 rem 3", "-7 mod 3"] {
         let source = format!(
             "language \"ix:native\" edition \"1-draft\";\n\
@@ -638,6 +659,7 @@ fn integer_operator_source_spans_survive_form_building() {
 #[trace("TC-097", "IT-017-SC-02")]
 #[test]
 fn rational_slash_never_becomes_integer_division() {
+    assert_qspec_row("DIV-18");
     let package = checked_package(
         "function op using v(): Rational[0,7;1,3] pure { 7 / 3 }",
         None,
