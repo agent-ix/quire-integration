@@ -31,12 +31,13 @@ composition has a separate owner.
 
 ## Target Integration
 
-QSpec owns the public typed scalar-vector source for TC-192 integer division,
+QSpec owns the public scalar-vector source for TC-192 integer division,
 TC-185 decimal, TC-193 IEEE, TC-186 text and enum, and TC-187 quantity and
-unit behavior. Its API must expose the complete authored cases and distinguish
-evaluation from admission cases, including distinct operations within a
-mixed case. Integration consumes that API directly rather than reading or
-reconstructing QSpec's Markdown. QSL parses, checks, and links original
+unit behavior. `quire_specification::{QUALIFICATION_VECTORS, TestCase, vectors_of}`
+exposes each authored row's case, ID, input prose, and expected-result prose.
+Integration dispatches each ID to executable behavior, including distinct
+operations within a mixed row; an unknown ID fails. It consumes that API
+without reading or reconstructing QSpec's Markdown. QSL parses, checks, and links original
 native source into a checked package; CheckedPackageEvaluation or
 evaluate_closed evaluates checked expressions with the shared exact Meter.
 The runtime side calls public exact and semantic-value operations with the
@@ -46,22 +47,22 @@ identity originates in QSL admission, never locally constructed bytes.
 ## Preconditions
 
 The repository's Cargo.lock supplies one coherent set of QSpec, QSL, RT,
-exact, and semantic-value dependencies. QSpec must provide the typed
-scalar-vector API described above; its present qualification crate does not
-yet export one. STD-612 owns that upstream API. Until STD-612 lands and the
-integration test can consume the API, this test cannot pass and the RT
-agreement criteria remain open. Missing producer support, a required
+exact, and semantic-value dependencies. QSpec's public row API is available
+under STD-612. The rows contain authored prose, not typed executable operands;
+integration owns per-ID executable dispatch and admission/evaluation
+classification. Full RT agreement remains open until every required row and
+sweep runs. Missing producer support, a required
 operation, or a required tool
 fails the run. The test neither copies another repository's corpus nor
 dispatches a hosted workflow.
 
 ## Inputs
 
-Use all cases exposed by QSpec's authoritative typed API for TC-192, TC-185,
-TC-193, TC-186, and TC-187. Each case supplies its source test and case ID,
-typed operation or admission request, expected value or noncompleted
-disposition, and expected accounting where that authority specifies it. The
-owner API presents mixed source cases as discrete operations. Use its stated
+Use all rows exposed by QSpec's authoritative API for TC-192, TC-185,
+TC-193, TC-186, and TC-187. Each row supplies its source test and ID,
+authored input and expected-result prose. Integration interprets that prose
+through explicit per-ID executable cases and splits mixed rows into distinct
+operations or admission phases. Use QSpec's stated
 limit tuples and fresh meters for each side and each denial. The RT TC-018
 through TC-022 generated operand sweeps and independent rational oracles
 remain required; derive operands within this test rather than copying a
@@ -71,11 +72,13 @@ the full API.
 
 ## Test Procedure
 
-1. Obtain the authoritative typed cases for all five QSpec scalar test cases
-   through QSpec's public API. Fail if that API is unavailable, refuses a
-   required case, or cannot distinguish evaluation from admission. Do not
-   infer case coverage from a handwritten list or source-text inspection.
-   IT-017-SC-01: every case offered by QSpec's complete scalar-vector API
+1. Obtain the authoritative rows for all five QSpec scalar test cases
+   through QSpec's public API. Dispatch every row ID to executable evaluation
+   or admission cases; split a mixed row into its distinct required observations.
+   An unknown row ID fails. The owner's prose identifies the obligation but is
+   not a typed executable request; no Markdown scan or separate tracking ledger
+   substitutes for behavior.
+   IT-017-SC-01: every row offered by QSpec's scalar-vector API
    reaches its specified evaluation or admission path without a silent skip.
 2. For each evaluation case, evaluate the checked QSL expression and the
    corresponding public RT operation under equal inputs and limits. Compare

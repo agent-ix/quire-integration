@@ -15,14 +15,14 @@ relationships:
 
 ## Description
 
-Run IT-017 against QSpec's public typed scalar-vector API for its integer
+Run IT-017 against QSpec's public scalar-vector row API for its integer
 division, decimal, IEEE, text and enum, and quantity and unit cases. Source
 admission remains distinct from evaluated agreement.
 
 ## Test Procedure
 
-Execute IT-017-SC-01 through IT-017-SC-05. For every QSpec evaluation case,
-run QSL and RT under matched inputs and limits and check the specified
+Execute IT-017-SC-01 through IT-017-SC-05. Dispatch each lock-selected QSpec
+row ID to executable cases. For every QSpec evaluation case, run QSL and RT under matched inputs and limits and check the specified
 result, charges, counters and denied-charge behavior. For every admission
 case, check the QSL admission decision without calling a runtime scalar
 operation. Run the generated sweeps required by RT TC-018 through TC-022.
