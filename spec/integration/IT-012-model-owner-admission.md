@@ -29,20 +29,23 @@ None beyond a local build. The domain package document is QSL's authored
 
 A unit selecting `acme/orders` and using two of its object types, with the
 domain package document supplied to IR's reader as evidence under its
-`sha256-jcs` digest.
+declared `acme/orders` identity. The emitted graph retains that selection in
+a `ModelRoot` owner.
 
 ## Test Procedure
 
 1. Emit the package and read its bytes through IR's reader.
-   IT-012-SC-01: the reader admits the package, its lock names the selected
-   domain package, and a document supplied under another digest is refused.
-2. Compute the id of each model node from its structural preimage, whose owner
-   is exactly `{kind, identity, node}`.
-   IT-012-SC-02: the ids of the model nodes IR admitted are exactly those.
-3. Relabel the domain package document, the unit's selection and the evidence
-   to another version, and repeat.
-   IT-012-SC-03: the lock's selection differs and the model node ids are the
-   same.
+   IT-012-SC-01: the reader admits the package, its model-root owner names the
+   selected domain package, and a document supplied under another identity is
+   refused as a missing import at the selected root owner's identity locus.
+2. Read each admitted model declaration's structural node identity and its
+   exact `{kind, identity, node}` model owner, excluding the package root.
+   IT-012-SC-02: the owners name the selected domain identity and the exact
+   Gadget and Widget declarations, with no version member.
+3. Change only the authored domain document's package version and repeat the
+   same identity-based unit selection and reader evidence construction.
+   IT-012-SC-03: the selected model-root identities and all model declaration
+   node identities remain equal across the two document versions.
 
 ## Expected Results
 
