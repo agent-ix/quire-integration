@@ -22,7 +22,7 @@ use qsl_route::routing::Disposition;
 use qsl_route::Candidate;
 use qsl_semantics::check::AbstractionKey;
 use qsl_semantics::model::intake::{package_input, PackageInput};
-use qsl_semantics::value::{CatalogRole, DefinitionLock};
+use qsl_semantics::value::DefinitionRole;
 use quire_checked::key::DeclarationKey;
 use quire_contract_codegen::{
     execute_kani_obligation, execute_kani_scalar_native, BackendDescriptor, BackendKind,
@@ -198,8 +198,7 @@ impl Upstream for ExportVector {
 #[test]
 #[trace("IT-013-SC-01")]
 fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
-    let lock = DefinitionLock::pinned();
-    let root = lock.entry(CatalogRole::Root).identity;
+    let root = DefinitionRole::Root.identity();
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
          function a using v(x: Int[0, 9]): Int[-9, 0] pure {{ -x }}\n\
@@ -330,7 +329,7 @@ fn compile_input<'a>(source: &'a str, packages: &'a PackageInput) -> CompileInpu
 }
 
 fn integer_siblings_source() -> String {
-    let root = DefinitionLock::pinned().entry(CatalogRole::Root).identity;
+    let root = DefinitionRole::Root.identity();
     format!(
         "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
          function a using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n\
@@ -493,8 +492,7 @@ fn real_qsl_export_refusal_is_withheld_before_codegen() {
 }
 
 fn drive_integer_step() -> Driven {
-    let lock = DefinitionLock::pinned();
-    let root = lock.entry(CatalogRole::Root).identity;
+    let root = DefinitionRole::Root.identity();
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\nprofile v = \"{root}\";\n\
          function step using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n"
