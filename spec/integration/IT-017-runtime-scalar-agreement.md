@@ -38,7 +38,7 @@ exposes each authored row's case, ID, input prose, and expected-result prose.
 Integration dispatches each ID to executable behavior, including distinct
 operations within a mixed row; an unknown ID fails. It consumes that API
 without reading or reconstructing QSpec's Markdown. QSL parses, checks, and links original
-native source into a checked package; CheckedPackageEvaluation or
+native source into a checked package; `CheckedPackageEvaluation` or
 evaluate_closed evaluates checked expressions with the shared exact Meter.
 The runtime side calls public exact and semantic-value operations with the
 same admitted operands, types, owner identities, and ScalarLimitsV1. Any
@@ -51,9 +51,9 @@ exact, and semantic-value dependencies. QSpec's public row API is available
 under STD-612. The rows contain authored prose, not typed executable operands;
 integration owns per-ID executable dispatch and admission/evaluation
 classification. Full RT agreement remains open until every required row and
-sweep runs. Missing producer support, a required
-operation, or a required tool
-fails the run. The test neither copies another repository's corpus nor
+sweep runs. Missing producer support, a required operation, or a required
+tool is recorded PENDING with an open upstream owner ticket and cannot be
+claimed as agreement. The test neither copies another repository's corpus nor
 dispatches a hosted workflow.
 
 ## Inputs

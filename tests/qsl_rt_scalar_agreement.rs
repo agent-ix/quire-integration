@@ -602,6 +602,39 @@ fn division_source_precedence_matches_selected_law() {
     assert_eq!(value, Integer::from(5_i64));
 }
 
+#[trace("TC-097", "IT-017-SC-04")]
+#[test]
+fn integer_operator_source_spans_survive_form_building() {
+    for expression in ["7 rem 3", "-7 mod 3"] {
+        let source = format!(
+            "language \"ix:native\" edition \"1-draft\";\n\
+             profile v = \"quire.value.complete/v1\";\n\
+             function op using v(): Integer pure {{ {expression} }}"
+        );
+        let parsed = qsl_cst::parse(
+            qsl_foundation::SourceIdentity::new("agent-ix", "ir-669-spans", "git", "1"),
+            "scalar.native",
+            source.as_bytes(),
+            qsl_cst::Limits::default(),
+        )
+        .expect("operator source parses");
+        assert!(parsed.is_admissible());
+        let unit = qsl_forms::build_unit(&parsed).expect("operator forms build");
+        let qsl_forms::DeclarationForm::Function(function) = unit.forms()[0].form() else {
+            panic!("operator is a function body");
+        };
+        let spans = &function.spans().expect("source spans").body;
+        let start = source.find(expression).expect("source expression");
+        assert_eq!(
+            spans.at(&[]),
+            Some(qsl_foundation::Span {
+                start,
+                end: start + expression.len()
+            })
+        );
+    }
+}
+
 #[trace("TC-097", "IT-017-SC-02")]
 #[test]
 fn rational_slash_never_becomes_integer_division() {
