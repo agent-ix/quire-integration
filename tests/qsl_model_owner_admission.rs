@@ -120,6 +120,19 @@ fn admitted(version: &str) -> CheckedPackageV2 {
     }
 }
 
+/// Domain selections retained by the admitted model-root owners.
+fn model_identities(package: &CheckedPackageV2) -> Vec<&str> {
+    package
+        .graph()
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.owner {
+            Some(CheckedNodeOwner::ModelRoot { identity }) => Some(identity.as_ref()),
+            _ => None,
+        })
+        .collect()
+}
+
 /// The admitted structural identities of declarations owned by the model.
 fn model_node_ids(package: &CheckedPackageV2) -> BTreeMap<String, CheckedNodeId> {
     package
@@ -137,6 +150,7 @@ fn model_node_ids(package: &CheckedPackageV2) -> BTreeMap<String, CheckedNodeId>
                 assert_eq!(&**identity, IDENTITY);
                 Some((owner_node.to_string(), node.node_id.clone()))
             }
+            ("model", Some(CheckedNodeOwner::ModelRoot { .. })) => None,
             ("model", owner) => panic!("model node has unexpected owner: {owner:?}"),
             _ => None,
         })
@@ -188,10 +202,7 @@ fn generated_scalar_claims(
 #[trace("IT-012-SC-01")]
 fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
     let package = admitted(AUTHORED_VERSION);
-    let [selection] = &package.lock().model_selections[..] else {
-        panic!("one model selection: {:?}", package.lock().model_selections);
-    };
-    assert_eq!(&*selection.identity, IDENTITY);
+    assert_eq!(model_identities(&package), [IDENTITY]);
     let declared: Vec<&str> = package
         .graph()
         .nodes
@@ -211,14 +222,27 @@ fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
 fn a_domain_package_supplied_under_another_identity_is_refused() {
     let document = domain_package(AUTHORED_VERSION);
     let bytes = emit(&unit_selecting(), &document);
+    let wire: Value = serde_json::from_slice(&bytes).unwrap();
+    let root_position = wire["semantic_graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|node| node["owner"]["kind"] == "model_root")
+        .expect("QSL emitted its selected model root");
+    let expected_path = format!("/semantic_graph/nodes/{root_position}/owner/identity");
     let evidence = evidence(&bytes, "foreign/orders", &document);
     let CheckedPackageDispatchResult::Refused(refusal) = read(&bytes, &evidence) else {
         panic!("expected a refusal");
     };
     assert_eq!(refusal.code, CheckedPackageRefusalCode::MissingImport);
     assert_eq!(
-        refusal.path.map(|path| path.to_string()).as_deref(),
-        Some("/lock/model_selections/0/identity")
+        refusal
+            .loci
+            .first()
+            .and_then(|locus| locus.path.as_ref())
+            .map(ToString::to_string)
+            .as_deref(),
+        Some(expected_path.as_str())
     );
 }
 
@@ -242,10 +266,7 @@ fn model_nodes_are_owned_by_the_content_only_model_owner() {
 #[trace("IT-012-SC-03")]
 fn a_version_only_change_of_the_domain_package_keys_the_same_model_nodes() {
     let (first, second) = (admitted(AUTHORED_VERSION), admitted("2.0.0"));
-    assert_eq!(
-        second.lock().model_selections,
-        first.lock().model_selections
-    );
+    assert_eq!(model_identities(&second), model_identities(&first));
     assert_eq!(model_node_ids(&second), model_node_ids(&first));
     assert_eq!(model_node_ids(&second).len(), DECLARATIONS.len());
 }
