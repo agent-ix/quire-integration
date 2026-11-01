@@ -1057,6 +1057,30 @@ fn ordering(
         consumed_bits,
         expected_bits,
     );
+    let qsl_short_limits = ScalarLimits {
+        integer_bits: short_bits,
+        work_units: base.work_units + 1,
+        ..base
+    };
+    let (qsl_short, losses, qsl_meter) = qsl_binary(
+        "<",
+        qsl_type,
+        qsl_type,
+        "Boolean",
+        left,
+        right,
+        qsl_short_limits,
+    );
+    denied(
+        qsl_short,
+        LimitKind::IntegerBits,
+        ChargePoint::OrderingArithmetic,
+        consumed_bits,
+        expected_bits,
+    );
+    assert!(losses.is_empty());
+    assert_eq!(qsl_meter.consumed(LimitKind::IntegerBits), consumed_bits);
+    assert_eq!(qsl_meter.consumed(LimitKind::WorkUnits), 2);
 }
 
 fn d20() {
