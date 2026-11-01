@@ -14,8 +14,8 @@ use qsl_semantics::{
 use quire_eval::{CallFailure, FamilyOutcome};
 use quire_exact::{
     evaluate_decimal, order_numbers, ChargePoint, Decimal, DecimalOperation, DecimalResult,
-    DecimalType, Integer, LimitKind, Meter, OrderedOperands, OrderingOperator, Outcome, Refusal,
-    RoundingMode, ScalarLimits, Undefined, Value,
+    DecimalType, InjectedDenial, Integer, LimitKind, Meter, OrderedOperands, OrderingOperator,
+    Outcome, Refusal, RoundingMode, ScalarLimits, Undefined, Value,
 };
 use quire_semantic_value::{call::InputRefusal, checking::CheckingLimits, loss::ValueLoss};
 use quire_specification::{vectors_of, TestCase};
@@ -96,6 +96,28 @@ fn qsl_binary(
     right: Decimal,
     limits: ScalarLimits,
 ) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
+    qsl_binary_with_denial(
+        operator,
+        left_type,
+        right_type,
+        result_type,
+        left,
+        right,
+        limits,
+        None,
+    )
+}
+
+fn qsl_binary_with_denial(
+    operator: &str,
+    left_type: &str,
+    right_type: &str,
+    result_type: &str,
+    left: Decimal,
+    right: Decimal,
+    limits: ScalarLimits,
+    denial: Option<InjectedDenial>,
+) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
@@ -121,7 +143,10 @@ fn qsl_binary(
     .check(CheckingLimits::default())
     .expect("S4 checks the decimal function");
     let package = CheckedPackage::link(graph);
-    let mut meter = Meter::new(limits);
+    let mut meter = match denial {
+        Some(denial) => Meter::new(limits).with_injected_denial(denial),
+        None => Meter::new(limits),
+    };
     let evaluation = package
         .call(
             &QualifiedName::unqualified("f").expect("f is an identifier"),
@@ -263,6 +288,9 @@ fn agreement(
             assert_eq!(actual.limit_kind, expected.limit_kind);
             assert_eq!(actual.charge_point, expected.charge_point);
             assert_eq!(actual.next_charge, expected.next_charge);
+            let offset = u64::from(expected.limit_kind == LimitKind::WorkUnits);
+            assert_eq!(actual.limit, expected.limit + offset);
+            assert_eq!(actual.consumed, expected.consumed + offset);
         }
         (expected, actual) => {
             panic!("QSL/RT decimal disagreement: RT {expected:?}, QSL {actual:?}")
@@ -567,6 +595,34 @@ fn d09() {
         1,
     );
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 4);
+    let (qsl_denied, losses, qsl_meter) = qsl_binary_with_denial(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[-1000,1000;0,2;nearest-even]",
+        left,
+        right,
+        ScalarLimits {
+            work_units: 6,
+            ..exact_limits
+        },
+        Some(InjectedDenial {
+            point: ChargePoint::DecimalResultRetain,
+            occurrence: std::num::NonZeroU64::new(1).unwrap(),
+        }),
+    );
+    denied(
+        qsl_denied,
+        LimitKind::WorkUnits,
+        ChargePoint::DecimalResultRetain,
+        5,
+        1,
+    );
+    assert!(losses.is_empty());
+    for kind in LimitKind::ALL {
+        let offset = u64::from(kind == LimitKind::WorkUnits);
+        assert_eq!(qsl_meter.consumed(kind), meter.consumed(kind) + offset);
+    }
 }
 
 fn d10() {
