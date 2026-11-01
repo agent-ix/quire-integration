@@ -41,27 +41,12 @@ scenario, each with its objective, preconditions, procedure and expected result.
 
 ### Example
 
-The model-owner test checks that contract IR refuses a package whose domain
-document does not match the digest the unit selected
-(`tests/qsl_model_owner_admission.rs`):
-
-```rust
-#[test]
-#[trace("IT-012-SC-01")]
-fn a_domain_package_supplied_under_another_digest_is_refused() {
-    let document = domain_package(AUTHORED_VERSION);
-    let bytes = emit(&unit_selecting(AUTHORED_VERSION, &document), &document);
-    let evidence = evidence(&bytes, &"0".repeat(64), &document);
-    let CheckedPackageDispatchResult::Refused(refusal) = read(&bytes, &evidence) else {
-        panic!("expected a refusal");
-    };
-    assert_eq!(refusal.code, CheckedPackageRefusalCode::MissingImport);
-    assert_eq!(
-        refusal.path.map(|path| path.to_string()).as_deref(),
-        Some("/lock/model_selections/0/digest")
-    );
-}
-```
+The model-owner test supplies a domain document under `foreign/orders` while
+its emitted unit selects `acme/orders`. IR refuses the missing selected import
+with `MissingImport`, locating it at the model-root owner's identity. The test
+`a_domain_package_supplied_under_another_identity_is_refused` in
+`tests/qsl_model_owner_admission.rs` checks the real emitter and reader through
+their current typed APIs.
 
 ## Version lock
 

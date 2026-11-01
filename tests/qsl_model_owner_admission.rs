@@ -19,7 +19,6 @@ use qsl_semantics::{
     model::{
         accounting::ModelNormalizationLimits,
         intake::{admit_unit, package_input},
-        key::hex,
     },
 };
 use quire_contract_ir::{
@@ -50,27 +49,16 @@ fn domain_package(version: &str) -> Vec<u8> {
     bytes
 }
 
-/// The `sha256-jcs` digest QSL keys `document` under.
-fn document_digest(document: &[u8]) -> String {
-    let packages = package_input([document]);
-    let [(digest, _)] = packages.iter().collect::<Vec<_>>()[..] else {
-        panic!("one supplied document");
-    };
-    hex(digest)
-}
-
-/// A unit whose `model M` selects `document` at `version`, using two of its
-/// object types.
-fn unit_selecting(version: &str, document: &[u8]) -> String {
+/// A unit selecting the domain package by its declared identity.
+fn unit_selecting() -> String {
     format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
-         model M = \"{IDENTITY}\" version \"{version}\" digest \"sha256-jcs:{}\";\n\
+         model M = \"{IDENTITY}\";\n\
          function keep using v(g: M::Gadget): M::Gadget pure {{ g }}\n\
          function held using v(w: Reference<M::Widget>): Boolean pure {{ true }}\n\
          function step using v(x: Int[0, 9]): Int[1, 10] pure {{ x + 1 }}\n\
-         function invert using v(flag: Boolean): Boolean pure {{ not flag }}\n",
-        document_digest(document)
+         function invert using v(flag: Boolean): Boolean pure {{ not flag }}\n"
     )
 }
 
@@ -89,29 +77,29 @@ fn emit(unit: &str, document: &[u8]) -> Vec<u8> {
     let unit = qsl_forms::build_unit(&parsed).expect("S2 builds the unit");
     let models = admit_unit(
         &unit.selections().models,
-        &package_input([document]),
+        &package_input([document]).expect("domain package has its declared identity"),
         ModelNormalizationLimits::default(),
     )
     .expect("the domain package admits");
-    let graph = PackageDeclarations::assemble(raw, unit, models, Vec::new())
-        .expect("the unit assembles")
-        .check(CheckingLimits::default())
-        .expect("the package checks");
+    let graph =
+        PackageDeclarations::assemble(raw, "agent-ix/it-012".to_owned(), unit, models, Vec::new())
+            .expect("the unit assembles")
+            .check(CheckingLimits::default())
+            .expect("the package checks");
     let emission = emit_checked(&CheckedPackage::link(graph)).expect("the package emits");
     assert_eq!(emission.omitted(), []);
     emission.package().bytes().to_vec()
 }
 
-/// What IR's reader holds about the domain package: its document under
-/// `digest`, and every feature the emitted lock requires.
-fn evidence(bytes: &[u8], digest: &str, document: &[u8]) -> CheckedPackageEvidence {
+/// Supply the selected domain document by identity and the required features.
+fn evidence(bytes: &[u8], identity: &str, document: &[u8]) -> CheckedPackageEvidence {
     let wire: Value = serde_json::from_slice(bytes).expect("the emitted package is JSON");
     let mut evidence = CheckedPackageEvidence::new();
     for feature in wire["lock"]["required_features"].as_array().unwrap() {
         evidence.support_feature(feature.as_str().unwrap());
     }
     evidence
-        .insert_domain_package_document(digest, document)
+        .insert_domain_package_document(identity, document)
         .expect("the domain document is valid evidence");
     evidence
 }
@@ -124,12 +112,25 @@ fn read(bytes: &[u8], evidence: &CheckedPackageEvidence) -> CheckedPackageDispat
 /// `version`, admitted by IR's reader.
 fn admitted(version: &str) -> CheckedPackageV2 {
     let document = domain_package(version);
-    let bytes = emit(&unit_selecting(version, &document), &document);
-    let evidence = evidence(&bytes, &document_digest(&document), &document);
+    let bytes = emit(&unit_selecting(), &document);
+    let evidence = evidence(&bytes, IDENTITY, &document);
     match read(&bytes, &evidence) {
         CheckedPackageDispatchResult::AdmittedV2(package) => *package,
         other => panic!("expected AdmittedV2, got {other:?}"),
     }
+}
+
+/// Domain selections retained by the admitted model-root owners.
+fn model_identities(package: &CheckedPackageV2) -> Vec<&str> {
+    package
+        .graph()
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.owner {
+            Some(CheckedNodeOwner::ModelRoot { identity }) => Some(identity.as_ref()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The admitted structural identities of declarations owned by the model.
@@ -149,6 +150,7 @@ fn model_node_ids(package: &CheckedPackageV2) -> BTreeMap<String, CheckedNodeId>
                 assert_eq!(&**identity, IDENTITY);
                 Some((owner_node.to_string(), node.node_id.clone()))
             }
+            ("model", Some(CheckedNodeOwner::ModelRoot { .. })) => None,
             ("model", owner) => panic!("model node has unexpected owner: {owner:?}"),
             _ => None,
         })
@@ -171,7 +173,7 @@ fn operation_nodes(
             else {
                 return false;
             };
-            descriptor.get("identity").and_then(Value::as_str) == Some(operation)
+            descriptor.identity() == Some(operation)
         })
         .map(|node| node.node_id.clone())
         .collect::<Vec<_>>();
@@ -200,11 +202,7 @@ fn generated_scalar_claims(
 #[trace("IT-012-SC-01")]
 fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
     let package = admitted(AUTHORED_VERSION);
-    let [selection] = &package.lock().model_selections[..] else {
-        panic!("one model selection: {:?}", package.lock().model_selections);
-    };
-    assert_eq!(&*selection.identity, IDENTITY);
-    assert_eq!(&*selection.digest_domain, "sha256-jcs");
+    assert_eq!(model_identities(&package), [IDENTITY]);
     let declared: Vec<&str> = package
         .graph()
         .nodes
@@ -217,21 +215,34 @@ fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
     }
 }
 
-/// IT-012-SC-01: a domain package document supplied under another document's
-/// digest is refused as a missing import at the selection's digest.
+/// IT-012-SC-01: a document supplied under a foreign identity cannot satisfy
+/// the selected model import.
 #[test]
 #[trace("IT-012-SC-01")]
-fn a_domain_package_supplied_under_another_digest_is_refused() {
+fn a_domain_package_supplied_under_another_identity_is_refused() {
     let document = domain_package(AUTHORED_VERSION);
-    let bytes = emit(&unit_selecting(AUTHORED_VERSION, &document), &document);
-    let evidence = evidence(&bytes, &"0".repeat(64), &document);
+    let bytes = emit(&unit_selecting(), &document);
+    let wire: Value = serde_json::from_slice(&bytes).unwrap();
+    let root_position = wire["semantic_graph"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|node| node["owner"]["kind"] == "model_root")
+        .expect("QSL emitted its selected model root");
+    let expected_path = format!("/semantic_graph/nodes/{root_position}/owner/identity");
+    let evidence = evidence(&bytes, "foreign/orders", &document);
     let CheckedPackageDispatchResult::Refused(refusal) = read(&bytes, &evidence) else {
         panic!("expected a refusal");
     };
     assert_eq!(refusal.code, CheckedPackageRefusalCode::MissingImport);
     assert_eq!(
-        refusal.path.map(|path| path.to_string()).as_deref(),
-        Some("/lock/model_selections/0/digest")
+        refusal
+            .loci
+            .first()
+            .and_then(|locus| locus.path.as_ref())
+            .map(ToString::to_string)
+            .as_deref(),
+        Some(expected_path.as_str())
     );
 }
 
@@ -250,15 +261,12 @@ fn model_nodes_are_owned_by_the_content_only_model_owner() {
 }
 
 /// IT-012-SC-03: a version-only change of the domain package leaves the
-/// selection's version changed and every model node's id the same.
+/// identity selection and every model node's id unchanged.
 #[test]
 #[trace("IT-012-SC-03")]
 fn a_version_only_change_of_the_domain_package_keys_the_same_model_nodes() {
     let (first, second) = (admitted(AUTHORED_VERSION), admitted("2.0.0"));
-    assert_ne!(
-        second.lock().model_selections,
-        first.lock().model_selections
-    );
+    assert_eq!(model_identities(&second), model_identities(&first));
     assert_eq!(model_node_ids(&second), model_node_ids(&first));
     assert_eq!(model_node_ids(&second).len(), DECLARATIONS.len());
 }
