@@ -1398,3 +1398,119 @@ fn d25_decimal_literal_admission_pending() {
 fn d25_mixed_profile_admission_pending() {
     assert!(!d25_source("p + r", "P"));
 }
+
+// These probes remain ignored until QSL can admit the corresponding source
+// or the observed stage refusal is recorded as an upstream dependency.
+#[test]
+#[ignore = "D03 exact-mode QSL admission probe"]
+fn d03_exact_qsl_probe() {
+    let ty = target(-9, 9, 0, 0, RoundingMode::Exact);
+    conversion_agreement(
+        decimal(25, 1),
+        "Decimal[-25,25;1,1;exact]",
+        "Decimal[-9,9;0,0;exact]",
+        &ty,
+    );
+}
+
+#[test]
+#[ignore = "D05 exact-mode QSL admission probe"]
+fn d05_exact_qsl_probe() {
+    let ty = target(-1000, 1000, 0, 2, RoundingMode::Exact);
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[-1000,1000;0,2;exact]",
+        decimal(1, 0),
+        decimal(3, 0),
+        &ty,
+        UNLIMITED,
+    );
+}
+
+#[test]
+#[ignore = "D06 normalized-zero QSL admission probe"]
+fn d06_qsl_probe() {
+    let ty = target(-1000, 1000, 0, 2, RoundingMode::NearestEven);
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[0,0;3,3;exact]",
+        "Decimal[-1000,1000;0,2;nearest-even]",
+        decimal(1, 0),
+        decimal(0, 3),
+        &ty,
+        UNLIMITED,
+    );
+}
+
+#[test]
+#[ignore = "D07 bounded-result QSL admission probe"]
+fn d07_qsl_probe() {
+    let ty = target(-2, 2, 0, 0, RoundingMode::NearestAway);
+    conversion_agreement(
+        decimal(25, 1),
+        "Decimal[25,25;1,1;exact]",
+        "Decimal[-2,2;0,0;nearest-away]",
+        &ty,
+    );
+}
+
+#[test]
+#[ignore = "D08 endpoint QSL conversion admission probe"]
+fn d08_qsl_probe() {
+    let ty = target(-2, 2, 0, 0, RoundingMode::Exact);
+    for coefficient in [-2, 2, -3, 3] {
+        conversion_agreement(
+            decimal(coefficient, 0),
+            "Decimal[-3,3;0,0;exact]",
+            "Decimal[-2,2;0,0;exact]",
+            &ty,
+        );
+    }
+}
+
+#[test]
+#[ignore = "D12 narrow-result QSL admission probe"]
+fn d12_narrow_qsl_probe() {
+    let ty = target(-10, 10, 0, 2, RoundingMode::NearestEven);
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[-10,10;0,2;nearest-even]",
+        decimal(1, 0),
+        decimal(3, 0),
+        &ty,
+        UNLIMITED,
+    );
+}
+
+#[test]
+#[ignore = "D15 normalized-zero QSL admission probe"]
+fn d15_qsl_probe() {
+    let ty = target(-1000, 1000, 0, 2, RoundingMode::NearestEven);
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[0,0;3,3;exact]",
+        "Decimal[-1000,1000;0,2;nearest-even]",
+        decimal(1, 0),
+        decimal(0, 3),
+        &ty,
+        limits(8, 3, 2, 2, 1, 1),
+    );
+}
+
+#[test]
+#[ignore = "D16 bounded-result QSL admission probe"]
+fn d16_qsl_probe() {
+    let ty = target(-2, 2, 0, 0, RoundingMode::NearestAway);
+    conversion_agreement(
+        decimal(25, 1),
+        "Decimal[25,25;1,1;exact]",
+        "Decimal[-2,2;0,0;nearest-away]",
+        &ty,
+    );
+}
