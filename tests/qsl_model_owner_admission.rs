@@ -81,10 +81,11 @@ fn emit(unit: &str, document: &[u8]) -> Vec<u8> {
         ModelNormalizationLimits::default(),
     )
     .expect("the domain package admits");
-    let graph = PackageDeclarations::assemble(raw, "agent-ix/it-012".to_owned(), unit, models, Vec::new())
-        .expect("the unit assembles")
-        .check(CheckingLimits::default())
-        .expect("the package checks");
+    let graph =
+        PackageDeclarations::assemble(raw, "agent-ix/it-012".to_owned(), unit, models, Vec::new())
+            .expect("the unit assembles")
+            .check(CheckingLimits::default())
+            .expect("the package checks");
     let emission = emit_checked(&CheckedPackage::link(graph)).expect("the package emits");
     assert_eq!(emission.omitted(), []);
     emission.package().bytes().to_vec()

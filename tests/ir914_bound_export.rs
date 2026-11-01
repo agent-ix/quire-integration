@@ -317,10 +317,7 @@ fn generation_input() -> GenerationInput<'static> {
     }
 }
 
-fn compile_input<'a>(
-    source: &'a str,
-    packages: &'a PackageInput,
-) -> CompileInput<'a> {
+fn compile_input<'a>(source: &'a str, packages: &'a PackageInput) -> CompileInput<'a> {
     CompileInput {
         source: SourceIdentity::new("agent-ix", "ir914-export-observation", "fixture", "1"),
         path: "ir914.native",
@@ -346,7 +343,8 @@ fn mixed_model_source() -> (String, PackageInput) {
     let root = support::qsl_root().join("tests/fixtures");
     let path = root.join("spine-model.semantic-ir.json");
     let document = fs::read(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-    let packages = package_input([document.as_slice()]).expect("QSL fixture declares one model identity");
+    let packages =
+        package_input([document.as_slice()]).expect("QSL fixture declares one model identity");
     let source_path = root.join("spine-model.native");
     let selected_source =
         fs::read_to_string(&source_path).unwrap_or_else(|error| panic!("{source_path:?}: {error}"));
