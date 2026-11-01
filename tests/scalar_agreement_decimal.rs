@@ -5,18 +5,19 @@
 //! vector; they do not derive expected behavior by parsing its prose.
 
 use ix_trace_rs::trace;
-use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName, ValueLoss};
+use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_package::CheckedPackage;
 use qsl_semantics::{
-    check::{CheckingLimits, PackageDeclarations},
-    family::FamilyOutcome,
-    model::object_environment::ObjectEnvironment,
+    check::PackageDeclarations,
+    model::{intake::SelectedModels, object_environment::ObjectEnvironment},
 };
+use quire_eval::FamilyOutcome;
 use quire_exact::{
     evaluate_decimal, order_numbers, ChargePoint, Decimal, DecimalOperation, DecimalResult,
     DecimalType, Integer, LimitKind, Meter, OrderedOperands, OrderingOperator, Outcome, Refusal,
     RoundingMode, ScalarLimits, Undefined, Value,
 };
+use quire_semantic_value::{checking::CheckingLimits, loss::ValueLoss};
 use quire_specification::{vectors_of, TestCase};
 
 const UNLIMITED: ScalarLimits = ScalarLimits {
@@ -108,12 +109,12 @@ fn qsl_binary(
     )
     .expect("S1 parses the decimal function");
     assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
-    let unit = qsl_forms::build_unit(&parsed, qsl_forms::FormsLimits::default())
-        .expect("S2 builds the decimal function");
+    let unit = qsl_forms::build_unit(&parsed).expect("S2 builds the decimal function");
     let graph = PackageDeclarations::assemble(
         parsed.source().reference().clone(),
+        "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the decimal function")
@@ -279,7 +280,7 @@ fn d01() {
         right,
         UNLIMITED,
     );
-    assert_eq!(outcome, Outcome::Completed(Value::Boolean(true)));
+    assert!(matches!(outcome, Outcome::Completed(Value::Boolean(true))));
     assert!(losses.is_empty());
 }
 
@@ -329,7 +330,7 @@ fn d03() {
                 loss.exact_numerator(),
                 &Integer::from(if coefficient < 0 { -5_i64 } else { 5_i64 })
             );
-            assert_eq!(loss.exact_denominator(), Integer::from(2));
+            assert_eq!(loss.exact_denominator(), Integer::from(2_i64));
             assert_eq!(loss.rounded_coefficient(), &Integer::from(coefficient));
             assert_eq!(loss.rounded_scale(), 0);
             assert_eq!(loss.mode(), mode);
@@ -385,9 +386,9 @@ fn d05() {
         decimal(33, 2).representation()
     );
     let loss = result.loss().expect("third records loss");
-    assert_eq!(loss.exact_numerator(), &Integer::from(1));
-    assert_eq!(loss.exact_denominator(), Integer::from(3));
-    assert_eq!(loss.rounded_coefficient(), &Integer::from(33));
+    assert_eq!(loss.exact_numerator(), &Integer::from(1_i64));
+    assert_eq!(loss.exact_denominator(), Integer::from(3_i64));
+    assert_eq!(loss.rounded_coefficient(), &Integer::from(33_i64));
     assert_eq!(loss.rounded_scale(), 2);
     assert_eq!(loss.mode(), RoundingMode::NearestEven);
     agreement(
@@ -457,7 +458,7 @@ fn d09() {
     );
     let mut meter = Meter::new(exact_limits).with_injected_denial(quire_exact::InjectedDenial {
         point: ChargePoint::DecimalResultRetain,
-        occurrence: 1,
+        occurrence: std::num::NonZeroU64::new(1).unwrap(),
     });
     let denied_outcome = evaluate_decimal(DecimalOperation::Divide(&left, &right), &ty, &mut meter);
     denied(
@@ -471,7 +472,7 @@ fn d09() {
 }
 
 fn d10() {
-    for (lo, hi, first, last) in [(3_i64, 2, 0, 0), (0, 9, 2, 1), (0, 9, 0, 4_294_967_296)] {
+    for (lo, hi, first, last) in [(3_i64, 2_i64, 0, 0), (0, 9, 2, 1), (0, 9, 0, 4_294_967_296)] {
         assert!(DecimalType::new(
             Integer::from(lo),
             Integer::from(hi),
@@ -480,8 +481,9 @@ fn d10() {
             RoundingMode::Exact
         )
         .is_err());
+        assert!(!qsl_type_admitted(lo, hi, first, last));
     }
-    for (lo, hi, first, last) in [(2_i64, 2, 1, 1), (0, 9, 0, 4_294_967_295)] {
+    for (lo, hi, first, last) in [(2_i64, 2_i64, 1, 1), (0, 9, 0, 4_294_967_295)] {
         assert!(DecimalType::new(
             Integer::from(lo),
             Integer::from(hi),
@@ -490,7 +492,41 @@ fn d10() {
             RoundingMode::Exact
         )
         .is_ok());
+        assert!(qsl_type_admitted(lo, hi, first, last));
     }
+}
+
+fn qsl_type_admitted(lo: i64, hi: i64, first: u64, last: u64) -> bool {
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\n\
+         profile v = \"quire.value.complete/v1\";\n\
+         type T = Decimal[{lo},{hi};{first},{last};exact];\n\
+         function f using v(a: T): T pure {{ a }}\n"
+    );
+    let Ok(parsed) = qsl_cst::parse(
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-d10", "fixture", "1"),
+        "decimal.native",
+        source.as_bytes(),
+        qsl_cst::Limits::default(),
+    ) else {
+        return false;
+    };
+    if !parsed.is_admissible() {
+        return false;
+    }
+    let Ok(unit) = qsl_forms::build_unit(&parsed) else {
+        return false;
+    };
+    let Ok(declarations) = PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "ir-669".to_owned(),
+        unit,
+        SelectedModels::default(),
+        Vec::new(),
+    ) else {
+        return false;
+    };
+    declarations.check(CheckingLimits::default()).is_ok()
 }
 
 fn d11() {
@@ -685,8 +721,8 @@ fn d18() {
         decimal(6, 1).representation()
     );
     let loss = result.loss().expect("D18 rounds");
-    assert_eq!(loss.exact_numerator(), &Integer::from(617));
-    assert_eq!(loss.exact_denominator(), Integer::from(1000));
+    assert_eq!(loss.exact_numerator(), &Integer::from(617_i64));
+    assert_eq!(loss.exact_denominator(), Integer::from(1000_i64));
     denied(
         rt(
             DecimalOperation::Divide(&left, &right),
@@ -748,7 +784,7 @@ fn ordering(
         right.clone(),
         qsl_limits,
     );
-    assert_eq!(qsl, Outcome::Completed(Value::Boolean(true)));
+    assert!(matches!(qsl, Outcome::Completed(Value::Boolean(true))));
     assert!(losses.is_empty());
     for kind in LimitKind::ALL {
         let offset = u64::from(kind == LimitKind::WorkUnits);
@@ -870,8 +906,8 @@ fn d24() {
         decimal(67, 2).representation()
     );
     let loss = result.loss().expect("D24 rounds");
-    assert_eq!(loss.exact_numerator(), &Integer::from(2));
-    assert_eq!(loss.exact_denominator(), Integer::from(3));
+    assert_eq!(loss.exact_numerator(), &Integer::from(2_i64));
+    assert_eq!(loss.exact_denominator(), Integer::from(3_i64));
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 5);
     denied(
         rt(
@@ -929,12 +965,12 @@ fn d25() {
             "D25 syntax: {:?}",
             parsed.diagnostics()
         );
-        let unit = qsl_forms::build_unit(&parsed, qsl_forms::FormsLimits::default())
-            .expect("S2 builds D25 source");
+        let unit = qsl_forms::build_unit(&parsed).expect("S2 builds D25 source");
         let checked = PackageDeclarations::assemble(
             parsed.source().reference().clone(),
+            "ir-669".to_owned(),
             unit,
-            Vec::new(),
+            SelectedModels::default(),
             Vec::new(),
         )
         .expect("S3 assembles D25 source")
