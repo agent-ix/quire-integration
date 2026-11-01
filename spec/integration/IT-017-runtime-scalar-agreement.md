@@ -79,7 +79,9 @@ the full API.
    not a typed executable request; no Markdown scan or separate tracking ledger
    substitutes for behavior.
    IT-017-SC-01: every row offered by QSpec's scalar-vector API
-   reaches its specified evaluation or admission path without a silent skip.
+   reaches its specified evaluation or admission path, or is named PENDING
+   with an open upstream owner ticket and the exact missing path. An unknown
+   ID, silent skip, or ticketless PENDING case fails.
 2. For each evaluation case, evaluate the checked QSL expression and the
    corresponding public RT operation under equal inputs and limits. Compare
    the completed value and Debug rendering, or the exact noncompleted
@@ -88,9 +90,9 @@ the full API.
    arguments requiring QSL call, assert its function.call envelope
    separately before comparing scalar charges; report raw meter results.
    Prefer evaluate_closed for closed expressions.
-   IT-017-SC-02: every evaluation case has a real two-sided observation and
-   the same specified value or noncompleted result; an operation that cannot
-   execute on either side fails.
+   IT-017-SC-02: every runnable evaluation case has a real two-sided
+   observation and the same specified value or noncompleted result. A case
+   that cannot execute remains PENDING under SC-01 and is not agreement.
 3. For each evaluation case whose authority specifies accounting, compare
    the complete ordered charge-point and amount sequence, consumed counters,
    and first denied charge under the exact and one-under limit. Deny each
@@ -100,7 +102,7 @@ the full API.
    conversion, and independent-oracle sweeps specified by RT TC-018 through
    TC-022. An authority case without a charge oracle remains a value/result
    comparison and cannot be claimed as charge agreement.
-   IT-017-SC-03: every authority-metered evaluation and required sweep
+   IT-017-SC-03: every runnable authority-metered evaluation and required sweep
    agrees in charge order, amounts, counters, denial fields, and stop prefix.
 4. For each admission case, run the QSL source, type, or package admission
    path and assert its exact admitted or refused result and provenance
@@ -111,23 +113,25 @@ the full API.
    observation, outside the scalar two-sided comparison. The admission
    phases of U11, DIV-03, DIV-09, T05b, and T09 are further examples;
    their QSpec-owned case definitions control the complete set.
-   IT-017-SC-04: every admission case has its own observed decision and is
-   never counted as two-sided scalar evaluation.
-5. Fail the full RT TC-018 through TC-022 agreement gate if any QSpec case
-   cannot run, any required admission observation or sweep is missing, or
-   any two-sided result or accounting observation differs. A preliminary
-   subset of tests may be reported as partial evidence, but it cannot mark
-   FR-006/FR-007 or TC-018 through TC-022 complete.
-   IT-017-SC-05: completion requires all offered QSpec cases and the full
-   RT procedures, with no unsupported or omitted operation.
+   IT-017-SC-04: every runnable admission case has its own observed decision
+   and is never counted as two-sided scalar evaluation.
+5. Fail closure for any unrun runnable case, missing sweep, unknown ID,
+   ticketless PENDING case, or two-sided mismatch. Record PENDING cases with
+   their open upstream owner tickets and exact missing paths; they do not
+   count as agreement or completion of the affected RT procedure. A family
+   PR may merge with that explicit partial result while IR-669 stays open
+   until the pending owner work lands and the affected cases rerun.
+   IT-017-SC-05: every runnable case and required RT sweep passes; every
+   remaining case is PENDING with an open owner ticket, not silently omitted.
 
 ## Expected Results
 
-Every QSpec evaluation case executes on QSL and RT and agrees on its
-specified result, refusal, charges, counters, and first stop. Every
-admission case retains its own decision and provenance. An absent QSpec
-API, skipped operation, mismatch, or copied corpus fails the completion
-gate. A successful starter subset is partial evidence only.
+Every runnable QSpec evaluation case executes on QSL and RT and agrees on
+its specified result, refusal, charges, counters, and first stop. Every
+runnable admission case retains its own decision and provenance. An absent
+QSpec API, skipped runnable operation, ticketless PENDING case, mismatch,
+or copied corpus fails closure. Ticket-backed PENDING cases remain open
+work and cannot be reported as agreement.
 
 ## Traceability
 

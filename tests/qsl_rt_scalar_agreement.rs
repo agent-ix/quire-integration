@@ -27,28 +27,23 @@ const LIMITS: ScalarLimits = ScalarLimits {
     result_units: 1024,
 };
 
-fn checked_package(source: &str, profile: Option<DivisionProfile>) -> CheckedPackage {
-    let source = format!(
-        "language \"ix:native\" edition \"1-draft\";\n\
-         profile v = \"quire.value.complete/v1\";\n{source}"
+fn assert_scalar_counters(qsl: &Meter, runtime: &Meter) {
+    assert_eq!(
+        qsl.admitted_charges()[0].point,
+        quire_exact::ChargePoint::FunctionCall
     );
-    let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
-        "scalar.native",
-        source.as_bytes(),
-        qsl_cst::Limits::default(),
-    )
-    .expect("QSL parses the scalar source");
-    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
-    let unit = qsl_forms::build_unit(&parsed).expect("QSL builds the source unit");
-    let mut declarations = PackageDeclarations::assemble(
-        parsed.source().reference().clone(),
-        "ir-669".to_owned(),
-        unit,
-        SelectedModels::default(),
-        Vec::new(),
-    )
-    .expect("QSL assembles the source unit");
+    for counter in LimitKind::ALL {
+        let call_work = u64::from(counter == LimitKind::WorkUnits);
+        assert_eq!(
+            qsl.consumed(counter),
+            runtime.consumed(counter) + call_work,
+            "{counter:?}"
+        );
+    }
+}
+
+fn checked_package(source: &str, profile: Option<DivisionProfile>) -> CheckedPackage {
+    let mut declarations = assembled_source(source, "quire.value.complete/v1");
     if let Some(profile) = profile {
         use qsl_semantics::value::{admit_integer_division, DefinitionRole};
         let role = match profile {
@@ -66,6 +61,30 @@ fn checked_package(source: &str, profile: Option<DivisionProfile>) -> CheckedPac
             .check(CheckingLimits::default())
             .expect("QSL checks the scalar source"),
     )
+}
+
+fn assembled_source(source: &str, facet: &str) -> PackageDeclarations {
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\n\
+         profile v = \"{facet}\";\n{source}"
+    );
+    let parsed = qsl_cst::parse(
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        "scalar.native",
+        source.as_bytes(),
+        qsl_cst::Limits::default(),
+    )
+    .expect("QSL parses the scalar source");
+    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    let unit = qsl_forms::build_unit(&parsed).expect("QSL builds the source unit");
+    PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "ir-669".to_owned(),
+        unit,
+        SelectedModels::default(),
+        Vec::new(),
+    )
+    .expect("QSL assembles the source unit")
 }
 
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
@@ -209,6 +228,7 @@ fn integer_division_profile_rows_match_runtime() {
                 runtime_meter.admitted_charges(),
                 "DIV-01 {profile:?} {member:?}"
             );
+            assert_scalar_counters(&qsl_meter, &runtime_meter);
         }
         for (member, expected) in [
             (
@@ -232,6 +252,7 @@ fn integer_division_profile_rows_match_runtime() {
                 &qsl_meter.admitted_charges()[1..],
                 runtime_meter.admitted_charges()
             );
+            assert_scalar_counters(&qsl_meter, &runtime_meter);
         }
     }
 }
@@ -276,6 +297,7 @@ fn division_result_retain_denial_matches_runtime() {
             &qsl_meter.admitted_charges()[1..],
             runtime_meter.admitted_charges()
         );
+        assert_scalar_counters(&qsl_meter, &runtime_meter);
 
         let denied = ScalarLimits {
             work_units: 3,
@@ -308,6 +330,7 @@ fn division_result_retain_denial_matches_runtime() {
             &qsl_meter.admitted_charges()[1..],
             runtime_meter.admitted_charges()
         );
+        assert_scalar_counters(&qsl_meter, &runtime_meter);
     }
 }
 
@@ -364,6 +387,7 @@ fn modulus_charge_prefix_and_denials_match_runtime() {
             &qsl_meter.admitted_charges()[1..],
             runtime_meter.admitted_charges()
         );
+        assert_scalar_counters(&qsl_meter, &runtime_meter);
     }
     let (qsl, qsl_meter, runtime, runtime_meter) = checked_modulo(
         -7,
@@ -384,6 +408,7 @@ fn modulus_charge_prefix_and_denials_match_runtime() {
         &qsl_meter.admitted_charges()[1..],
         runtime_meter.admitted_charges()
     );
+    assert_scalar_counters(&qsl_meter, &runtime_meter);
 }
 
 #[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
@@ -449,6 +474,7 @@ fn zero_divisor_stops_after_operand_charge() {
                 &qsl_meter.admitted_charges()[1..],
                 rt_meter.admitted_charges()
             );
+            assert_scalar_counters(&qsl_meter, &rt_meter);
         }
     }
 }
@@ -485,5 +511,139 @@ fn operand_size_denial_precedes_work_denial() {
             &qsl_meter.admitted_charges()[1..],
             runtime_meter.admitted_charges()
         );
+        assert_scalar_counters(&qsl_meter, &runtime_meter);
     }
+}
+
+#[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn modulus_does_not_follow_selected_division_law() {
+    for profile in DivisionProfile::ALL {
+        let package = checked_package(
+            "function op using v(a: Integer, b: Integer): Integer pure { a mod b }",
+            Some(profile),
+        );
+        let mut qsl_meter = Meter::new(LIMITS);
+        let qsl = package
+            .call(
+                &QualifiedName::unqualified("op").expect("function name"),
+                vec![
+                    Value::Integer(Integer::from(-7_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                ],
+                &ObjectEnvironment::default(),
+                &mut qsl_meter,
+            )
+            .expect("checked mod evaluates");
+        let FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(value))) = qsl.outcome
+        else {
+            panic!("DIV-02 QSL result under {profile:?}: {:?}", qsl.outcome);
+        };
+        let mut rt_meter = Meter::new(LIMITS);
+        let rt = quire_eval::modulo(
+            &Integer::from(-7_i64),
+            &Integer::from(3_i64),
+            &IntegerDomain::Mathematical,
+            &mut rt_meter,
+        );
+        assert_eq!(rt, Outcome::Completed(value.clone()));
+        assert_eq!(value, Integer::from(2_i64));
+        assert_eq!(
+            &qsl_meter.admitted_charges()[1..],
+            rt_meter.admitted_charges()
+        );
+        assert_scalar_counters(&qsl_meter, &rt_meter);
+    }
+}
+
+#[trace("TC-097", "IT-017-SC-04")]
+#[test]
+fn integer_division_definition_admission_precedes_evaluation() {
+    use qsl_semantics::value::{admit_integer_division, DefinitionRole};
+    use quire_semantic_value::definition::{PackageCause, PackageRefusal};
+
+    let truncating = DefinitionRole::IntegerDivisionTruncating.reference();
+    let floor = DefinitionRole::IntegerDivisionFloor.reference();
+    let euclidean = DefinitionRole::IntegerDivisionEuclidean.reference();
+    assert_eq!(
+        admit_integer_division(&[], None).unwrap_err(),
+        PackageRefusal::invalid_package(PackageCause::MissingMember)
+    );
+    assert_eq!(
+        admit_integer_division(&[truncating.clone(), floor], None).unwrap_err(),
+        PackageRefusal::invalid_package(PackageCause::ConflictingDefinition)
+    );
+    assert_eq!(
+        admit_integer_division(&[truncating.clone()], Some(&truncating)).unwrap_err(),
+        PackageRefusal::invalid_package(PackageCause::IncompatibleDefinition)
+    );
+    assert!(admit_integer_division(&[truncating], Some(&euclidean)).is_ok());
+}
+
+#[trace("TC-097", "IT-017-SC-02")]
+#[test]
+fn division_source_precedence_matches_selected_law() {
+    let package = checked_package(
+        "function op using v(): Integer pure { 1 + 7 div 3 * 2 }",
+        Some(DivisionProfile::Truncating),
+    );
+    let evaluation = package
+        .call(
+            &QualifiedName::unqualified("op").expect("function name"),
+            Vec::new(),
+            &ObjectEnvironment::default(),
+            &mut Meter::new(LIMITS),
+        )
+        .expect("complete-facet source evaluates");
+    let FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(value))) = evaluation.outcome
+    else {
+        panic!("DIV-17 complete-facet result: {:?}", evaluation.outcome);
+    };
+    assert_eq!(value, Integer::from(5_i64));
+}
+
+#[trace("TC-097", "IT-017-SC-02")]
+#[test]
+fn rational_slash_never_becomes_integer_division() {
+    let package = checked_package(
+        "function op using v(): Rational[0,7;1,3] pure { 7 / 3 }",
+        None,
+    );
+    let mut qsl_meter = Meter::new(LIMITS);
+    let evaluation = package
+        .call(
+            &QualifiedName::unqualified("op").expect("function name"),
+            Vec::new(),
+            &ObjectEnvironment::default(),
+            &mut qsl_meter,
+        )
+        .expect("checked rational slash evaluates");
+    let FamilyOutcome::Evaluated(Outcome::Completed(Value::Rational(qsl_value))) =
+        evaluation.outcome
+    else {
+        panic!("DIV-18 rational slash result: {:?}", evaluation.outcome);
+    };
+    let seven = quire_exact::Rational::from_integer(Integer::from(7_i64));
+    let three = quire_exact::Rational::from_integer(Integer::from(3_i64));
+    let mut runtime_meter = Meter::new(LIMITS);
+    let runtime = quire_exact::evaluate_rational_arithmetic(
+        quire_exact::RationalArithmetic::Divide(&seven, &three),
+        None,
+        &mut runtime_meter,
+    );
+    assert_eq!(runtime, Outcome::Completed(qsl_value.clone()));
+    assert_eq!(
+        qsl_value,
+        quire_exact::Rational::new(Integer::from(7_i64), Integer::from(3_i64))
+            .expect("nonzero denominator")
+    );
+    assert!(qsl_meter
+        .admitted_charges()
+        .iter()
+        .any(|charge| charge.point == quire_exact::ChargePoint::RationalArithmeticOperands));
+    assert_eq!(
+        &qsl_meter.admitted_charges()[1..],
+        runtime_meter.admitted_charges()
+    );
+    assert_scalar_counters(&qsl_meter, &runtime_meter);
 }
