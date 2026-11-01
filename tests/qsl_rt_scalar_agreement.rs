@@ -14,6 +14,9 @@ use quire_exact::{
 };
 use quire_semantic_value::checking::CheckingLimits;
 
+#[path = "ir669_div07_backend.rs"]
+mod div07_backend;
+
 const LIMITS: ScalarLimits = ScalarLimits {
     integer_bits: 1024,
     decimal_digits: 1024,
@@ -54,6 +57,80 @@ fn assert_qspec_row(id: &str) {
     };
     assert!(!row.inputs.is_empty(), "{id} needs authored inputs");
     assert!(!row.expected.is_empty(), "{id} needs authored expectation");
+}
+
+fn pending_qsl_case(vector: &quire_specification::QualificationVector, ticket: &str, reason: &str) {
+    assert!(
+        !vector.inputs.is_empty(),
+        "{} needs authored inputs",
+        vector.id
+    );
+    assert!(
+        !vector.expected.is_empty(),
+        "{} needs authored expectation",
+        vector.id
+    );
+    eprintln!("PENDING {} under {ticket}: {reason}", vector.id);
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-05")]
+#[test]
+fn tc192_dispatches_every_lock_selected_row() {
+    let mut seen = std::collections::BTreeSet::new();
+    for vector in quire_specification::vectors_of(quire_specification::TestCase::Tc192) {
+        assert!(
+            seen.insert(vector.id),
+            "duplicate QSpec TC-192 ID {}",
+            vector.id
+        );
+        match vector.id {
+            "DIV-01" | "DIV-04" => integer_division_profile_rows_match_runtime(),
+            "DIV-02" => modulus_does_not_follow_selected_division_law(),
+            "DIV-03" | "DIV-09" => integer_division_definition_admission_precedes_evaluation(),
+            "DIV-05" | "DIV-06" | "DIV-12" | "DIV-15" | "DIV-16" => {
+                pending_qsl_case(vector, "QSL-1389", "bounded result rejected at QSL S4")
+            }
+            "DIV-07" => {
+                div07_backend::missing_division_result_bound_settles_requires_bound_without_execution();
+                pending_qsl_case(
+                    vector,
+                    "QSL-1389",
+                    "operand and intermediate bound requests blocked at QSL S4",
+                );
+            }
+            "DIV-08" => division_result_retain_denial_matches_runtime(),
+            "DIV-10" => modulus_charge_prefix_and_denials_match_runtime(),
+            "DIV-11" => zero_divisor_stops_after_operand_charge(),
+            "DIV-13" => operand_size_denial_precedes_work_denial(),
+            "DIV-14" => pending_qsl_case(
+                vector,
+                "QSL-1391",
+                "SMT verdict and replay provider unavailable",
+            ),
+            "DIV-17" => {
+                division_source_precedence_matches_selected_law();
+                integer_operator_source_spans_survive_form_building();
+                pending_qsl_case(
+                    vector,
+                    "QSL-1392",
+                    "StateCore source rejects function before operator admission",
+                );
+            }
+            "DIV-18" => {
+                rational_slash_never_becomes_integer_division();
+                pending_qsl_case(
+                    vector,
+                    "QSL-1392",
+                    "StateCore source rejects function before operator admission",
+                );
+            }
+            other => panic!("unimplemented QSpec TC-192 vector {other}"),
+        }
+    }
+    assert!(!seen.is_empty(), "QSpec TC-192 offers no vectors");
+    generated_division_sweep_has_independent_integer_oracle();
+    integer_arithmetic_size_charge_is_exact_and_one_under();
+    arithmetic_charge_injection_stops_before_result_allocation();
 }
 
 fn checked_package(source: &str, profile: Option<DivisionProfile>) -> CheckedPackage {

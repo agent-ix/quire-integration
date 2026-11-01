@@ -30,7 +30,7 @@ fn finite_kani_registry() -> quire_driver::AdmittedRegistry {
 
 #[test]
 #[trace("TC-097", "IT-017-SC-04", "FR-147-AC-3")]
-fn missing_division_result_bound_settles_requires_bound_without_execution() {
+pub(crate) fn missing_division_result_bound_settles_requires_bound_without_execution() {
     let declaration = "function op using v(a: Int[0, 9], b: Int[1, 3]): Integer pure { a mod b }";
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
