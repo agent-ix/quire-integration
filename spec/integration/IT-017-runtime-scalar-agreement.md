@@ -105,9 +105,12 @@ the full API.
 4. For each admission case, run the QSL source, type, or package admission
    path and assert its exact admitted or refused result and provenance
    before scalar evaluation. No RT scalar operation or evaluation charge
-   may be substituted for it. The admission phases of U11, DIV-03, DIV-09,
-   D25, T05b, and T09 are examples; their QSpec-owned case definitions
-   control the complete set.
+   may be substituted for it. D25 is admission-only; DIV-17 and DIV-18
+   combine admission observations with complete-facet scalar evaluations.
+   DIV-14 requires its own QSL/SMT negotiation and backend-verdict
+   observation, outside the scalar two-sided comparison. The admission
+   phases of U11, DIV-03, DIV-09, T05b, and T09 are further examples;
+   their QSpec-owned case definitions control the complete set.
    IT-017-SC-04: every admission case has its own observed decision and is
    never counted as two-sided scalar evaluation.
 5. Fail the full RT TC-018 through TC-022 agreement gate if any QSpec case
