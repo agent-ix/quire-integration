@@ -620,6 +620,35 @@ fn division_source_precedence_matches_selected_law() {
         panic!("DIV-17 complete-facet result: {:?}", evaluation.outcome);
     };
     assert_eq!(value, Integer::from(5_i64));
+
+    let (qsl, qsl_meter, runtime, runtime_meter) =
+        checked_division(DivisionProfile::Truncating, DivisionMember::Remainder, 7, 3);
+    let Outcome::Completed(Value::Integer(remainder)) = qsl else {
+        panic!("DIV-17 rem result: {qsl:?}");
+    };
+    assert_eq!(remainder, Integer::from(1_i64));
+    assert_eq!(runtime, Outcome::Completed(remainder));
+    assert_eq!(
+        &qsl_meter.admitted_charges()[1..],
+        runtime_meter.admitted_charges()
+    );
+    assert_scalar_counters(&qsl_meter, &runtime_meter);
+
+    let literal = checked_package("function op using v(): Integer pure { -7 mod 3 }", None);
+    let literal_outcome = literal
+        .call(
+            &QualifiedName::unqualified("op").expect("function name"),
+            Vec::new(),
+            &ObjectEnvironment::default(),
+            &mut Meter::new(LIMITS),
+        )
+        .expect("literal mod evaluates");
+    let FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(modulus))) =
+        literal_outcome.outcome
+    else {
+        panic!("DIV-17 literal mod result: {:?}", literal_outcome.outcome);
+    };
+    assert_eq!(modulus, Integer::from(2_i64));
 }
 
 #[trace("TC-097", "IT-017-SC-04")]
@@ -701,4 +730,174 @@ fn rational_slash_never_becomes_integer_division() {
         runtime_meter.admitted_charges()
     );
     assert_scalar_counters(&qsl_meter, &runtime_meter);
+}
+
+fn independent_division(profile: DivisionProfile, a: i64, b: i64) -> (i64, i64) {
+    match profile {
+        DivisionProfile::Truncating => (a / b, a % b),
+        DivisionProfile::Floor => {
+            let quotient = a / b;
+            let remainder = a % b;
+            if remainder != 0 && (remainder > 0) != (b > 0) {
+                (quotient - 1, remainder + b)
+            } else {
+                (quotient, remainder)
+            }
+        }
+        DivisionProfile::Euclidean => (a.div_euclid(b), a.rem_euclid(b)),
+    }
+}
+
+#[trace("TC-097", "IT-017-SC-03")]
+#[test]
+fn generated_division_sweep_has_independent_integer_oracle() {
+    for a in [-7_i64, -3, -1, 0, 1, 3, 7] {
+        for b in [-7_i64, -3, -1, 1, 3, 7] {
+            for profile in DivisionProfile::ALL {
+                let (quotient, remainder) = independent_division(profile, a, b);
+                for (member, expected) in [
+                    (DivisionMember::Quotient, quotient),
+                    (DivisionMember::Remainder, remainder),
+                ] {
+                    let (qsl, qsl_meter, runtime, runtime_meter) =
+                        checked_division(profile, member, a, b);
+                    let Outcome::Completed(Value::Integer(qsl_value)) = qsl else {
+                        panic!("sweep QSL {a} {profile:?} {member:?} {b}: {qsl:?}");
+                    };
+                    assert_eq!(qsl_value, Integer::from(expected));
+                    assert_eq!(runtime, Outcome::Completed(qsl_value));
+                    assert_eq!(
+                        &qsl_meter.admitted_charges()[1..],
+                        runtime_meter.admitted_charges()
+                    );
+                    assert_scalar_counters(&qsl_meter, &runtime_meter);
+                }
+            }
+            let (qsl, qsl_meter, runtime, runtime_meter) =
+                checked_modulo(a, b, LIMITS, LIMITS, IntegerDomain::Mathematical);
+            let Outcome::Completed(Value::Integer(qsl_value)) = qsl else {
+                panic!("sweep QSL {a} mod {b}: {qsl:?}");
+            };
+            assert_eq!(qsl_value, Integer::from(a.rem_euclid(b)));
+            assert_eq!(runtime, Outcome::Completed(qsl_value));
+            assert_eq!(
+                &qsl_meter.admitted_charges()[1..],
+                runtime_meter.admitted_charges()
+            );
+            assert_scalar_counters(&qsl_meter, &runtime_meter);
+        }
+    }
+}
+
+#[trace("TC-097", "IT-017-SC-03")]
+#[test]
+fn integer_arithmetic_size_charge_is_exact_and_one_under() {
+    for bits in [2, 3] {
+        let limits = ScalarLimits {
+            integer_bits: bits,
+            ..LIMITS
+        };
+        let cases = [
+            checked_division_with_limits(
+                DivisionProfile::Truncating,
+                DivisionMember::Quotient,
+                7,
+                3,
+                limits,
+                limits,
+            ),
+            checked_modulo(7, 3, limits, limits, IntegerDomain::Mathematical),
+        ];
+        for (qsl, qsl_meter, runtime, runtime_meter) in cases {
+            if bits == 2 {
+                let Outcome::Incomplete(qsl_stop) = qsl else {
+                    panic!("QSL one-under: {qsl:?}");
+                };
+                let Outcome::Incomplete(runtime_stop) = runtime else {
+                    panic!("RT one-under: {runtime:?}");
+                };
+                assert_eq!(qsl_stop, runtime_stop);
+                assert_eq!(runtime_stop.limit_kind, LimitKind::IntegerBits);
+            } else {
+                assert!(matches!(qsl, Outcome::Completed(Value::Integer(_))));
+                assert!(matches!(runtime, Outcome::Completed(_)));
+                let arithmetic = runtime_meter
+                    .admitted_charges()
+                    .get(1)
+                    .expect("arithmetic charge");
+                assert_eq!(arithmetic.integer_bits, Some(3));
+            }
+            assert_eq!(
+                &qsl_meter.admitted_charges()[1..],
+                runtime_meter.admitted_charges()
+            );
+            assert_scalar_counters(&qsl_meter, &runtime_meter);
+        }
+    }
+}
+
+#[trace("TC-097", "IT-017-SC-03")]
+#[test]
+fn arithmetic_charge_injection_stops_before_result_allocation() {
+    use std::num::NonZeroU64;
+    for (operator, point) in [
+        ("div", quire_exact::ChargePoint::IntegerDivisionArithmetic),
+        ("mod", quire_exact::ChargePoint::IntegerModulusArithmetic),
+    ] {
+        let source = format!(
+            "function op using v(a: Integer, b: Integer): Integer pure {{ a {operator} b }}"
+        );
+        let profile = (operator == "div").then_some(DivisionProfile::Truncating);
+        let package = checked_package(&source, profile);
+        let denial = quire_exact::InjectedDenial {
+            point,
+            occurrence: NonZeroU64::new(1).expect("one occurrence"),
+        };
+        let mut qsl_meter = Meter::new(LIMITS).with_injected_denial(denial);
+        let evaluation = package
+            .call(
+                &QualifiedName::unqualified("op").expect("function name"),
+                vec![
+                    Value::Integer(Integer::from(7_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                ],
+                &ObjectEnvironment::default(),
+                &mut qsl_meter,
+            )
+            .expect("injected QSL operation evaluates to incomplete");
+        let FamilyOutcome::Evaluated(Outcome::Incomplete(qsl_stop)) = evaluation.outcome else {
+            panic!("injected QSL {operator}: {:?}", evaluation.outcome);
+        };
+        let mut runtime_meter = Meter::new(LIMITS).with_injected_denial(denial);
+        let runtime = if operator == "div" {
+            quire_exact::divide(
+                DivisionProfile::Truncating,
+                DivisionMember::Quotient,
+                &Integer::from(7_i64),
+                &Integer::from(3_i64),
+                &IntegerDomain::Mathematical,
+                &mut runtime_meter,
+            )
+        } else {
+            quire_eval::modulo(
+                &Integer::from(7_i64),
+                &Integer::from(3_i64),
+                &IntegerDomain::Mathematical,
+                &mut runtime_meter,
+            )
+        };
+        let Outcome::Incomplete(runtime_stop) = runtime else {
+            panic!("injected RT {operator}: {runtime:?}");
+        };
+        assert_eq!(qsl_stop.charge_point, point);
+        assert_eq!(qsl_stop.limit_kind, runtime_stop.limit_kind);
+        assert_eq!(qsl_stop.next_charge, runtime_stop.next_charge);
+        assert_eq!(qsl_stop.limit, runtime_stop.limit + 1);
+        assert_eq!(qsl_stop.consumed, runtime_stop.consumed + 1);
+        assert_eq!(
+            &qsl_meter.admitted_charges()[1..],
+            runtime_meter.admitted_charges()
+        );
+        assert_scalar_counters(&qsl_meter, &runtime_meter);
+    }
 }
