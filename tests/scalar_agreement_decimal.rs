@@ -141,6 +141,84 @@ fn qsl_binary(
     (outcome, losses, meter)
 }
 
+fn qsl_convert(
+    input_type: &str,
+    result_type: &str,
+    input: Decimal,
+    limits: ScalarLimits,
+) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\n\
+         profile v = \"quire.value.complete/v1\";\n\
+         function f using v(a: {input_type}): {result_type} pure {{ convert<{result_type}>(a) }}\n"
+    );
+    let parsed = qsl_cst::parse(
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal-convert", "fixture", "1"),
+        "decimal.native",
+        source.as_bytes(),
+        qsl_cst::Limits::default(),
+    )
+    .expect("S1 parses decimal conversion");
+    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    let unit = qsl_forms::build_unit(&parsed).expect("S2 builds decimal conversion");
+    let graph = PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "ir-669".to_owned(),
+        unit,
+        SelectedModels::default(),
+        Vec::new(),
+    )
+    .expect("S3 assembles decimal conversion")
+    .check(CheckingLimits::default())
+    .expect("S4 checks decimal conversion");
+    let package = CheckedPackage::link(graph);
+    let mut meter = Meter::new(limits);
+    let evaluation = package
+        .call(
+            &QualifiedName::unqualified("f").expect("f is an identifier"),
+            vec![Value::Decimal(input)],
+            &ObjectEnvironment::default(),
+            &mut meter,
+        )
+        .expect("S6a calls decimal conversion");
+    let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
+        panic!("expected a kernel outcome, got {:?}", evaluation.outcome);
+    };
+    let losses = evaluation
+        .losses
+        .into_iter()
+        .map(|loss| loss.loss)
+        .collect();
+    (outcome, losses, meter)
+}
+
+fn conversion_agreement(input: Decimal, input_type: &str, result_type: &str, target: &DecimalType) {
+    let (kernel, kernel_meter) = rt(DecimalOperation::Round(&input), target, UNLIMITED);
+    let (qsl, losses, qsl_meter) = qsl_convert(input_type, result_type, input, UNLIMITED);
+    match (kernel, qsl) {
+        (Outcome::Completed(expected), Outcome::Completed(Value::Decimal(actual))) => {
+            assert_eq!(actual.representation(), expected.value().representation());
+            match expected.loss() {
+                Some(loss) => assert_eq!(losses, vec![ValueLoss::Decimal(loss.clone())]),
+                None => assert!(losses.is_empty()),
+            }
+        }
+        (Outcome::Refused(expected), Outcome::Refused(actual)) => assert_eq!(actual, expected),
+        (expected, actual) => {
+            panic!("QSL/RT conversion disagreement: RT {expected:?}, QSL {actual:?}")
+        }
+    }
+    for kind in LimitKind::ALL {
+        let offset = u64::from(kind == LimitKind::WorkUnits);
+        assert_eq!(
+            qsl_meter.consumed(kind),
+            kernel_meter.consumed(kind) + offset,
+            "{}",
+            kind.as_str()
+        );
+    }
+}
+
 fn agreement(
     operator: &str,
     left_type: &str,
@@ -288,12 +366,16 @@ fn d02() {
     let left = decimal(125, 2);
     let right = decimal(75, 2);
     let ty = target(0, 1000, 0, 2, RoundingMode::Exact);
-    decimal_result(
-        rt(DecimalOperation::Add(&left, &right), &ty, UNLIMITED).0,
-        2,
-        0,
-        false,
+    let (outcome, _) = rt(DecimalOperation::Add(&left, &right), &ty, UNLIMITED);
+    let Outcome::Completed(result) = outcome else {
+        panic!("D02 should complete: {outcome:?}");
+    };
+    assert_eq!(
+        result.value().representation(),
+        decimal(200, 2).representation()
     );
+    assert_eq!(result.value().normalized(), decimal(2, 0).representation());
+    assert!(result.loss().is_none());
     agreement(
         "+",
         "Decimal[0,1000;0,2;exact]",
@@ -335,6 +417,12 @@ fn d03() {
             assert_eq!(loss.rounded_scale(), 0);
             assert_eq!(loss.mode(), mode);
             assert_eq!(meter.consumed(LimitKind::WorkUnits), 5);
+            conversion_agreement(
+                operand,
+                "Decimal[-25,25;1,1;exact]",
+                &format!("Decimal[-9,9;0,0;{}]", mode.as_str()),
+                &ty,
+            );
         }
     }
     let ty = target(-9, 9, 0, 0, RoundingMode::Exact);
