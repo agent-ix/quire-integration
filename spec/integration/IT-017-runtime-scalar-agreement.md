@@ -23,117 +23,109 @@ relationships:
 
 ## Objective
 
-Restore the QSL-versus-runtime agreement evidence removed from the runtime by
-IR-430. A changed scalar value, disposition, typed cause, charge, or counter on
-either side must fail. A source-admission case is not a successful scalar
-comparison, and an unavailable case cannot disappear from the corpus.
-Generated codegen oracles have a separate owner.
+Restore the QSL-versus-runtime agreement evidence removed from RT by IR-430.
+A changed scalar value, disposition, typed cause, charge, or counter on either
+side must fail. Source-admission behavior must remain distinct from scalar
+evaluation. This test does not compare generated codegen oracles; that
+composition has a separate owner.
 
 ## Target Integration
 
-The locked QSpec corpus supplies vector identities and expected results. QSL
-parses, checks, and links authored native source into a checked package;
-CheckedPackageEvaluation or evaluate_closed evaluates a checked expression
-using the lock-selected quire_exact::Meter. The runtime side calls its public
-exact and semantic-value operations with the same admitted operands, types,
-owner identities, and ScalarLimitsV1. Identities originate in QSL admission,
-never in locally constructed bytes or constituent parts.
+QSpec owns the public typed scalar-vector source for TC-192 integer division,
+TC-185 decimal, TC-193 IEEE, TC-186 text and enum, and TC-187 quantity and
+unit behavior. Its API must expose the complete authored cases and distinguish
+evaluation from admission cases, including distinct operations within a
+mixed case. Integration consumes that API directly rather than reading or
+reconstructing QSpec's Markdown. QSL parses, checks, and links original
+native source into a checked package; CheckedPackageEvaluation or
+evaluate_closed evaluates checked expressions with the shared exact Meter.
+The runtime side calls public exact and semantic-value operations with the
+same admitted operands, types, owner identities, and ScalarLimitsV1. Any
+identity originates in QSL admission, never locally constructed bytes.
 
 ## Preconditions
 
-Cargo.lock selects one revision each of QSpec's
-quire-specification-qualification package, QSL, runtime, and their shared exact
-and semantic-value crates. Cargo metadata locates the selected QSpec package
-manifest. The test reads the five explicitly named canonical TC Markdown
-paths below from that package. It copies no QSpec table, uses no sibling
-checkout or ambient branch, and adds no separate source revision pin. A
-missing package, TC source, producer, or required tool fails the run. The test
-does not publish or dispatch a hosted workflow.
+The repository's Cargo.lock supplies one coherent set of QSpec, QSL, RT,
+exact, and semantic-value dependencies. QSpec must provide the typed
+scalar-vector API described above; its present qualification crate does not
+yet export one. STD-612 owns that upstream API. Until STD-612 lands and the
+integration test can consume the API, this test cannot pass and the RT
+agreement criteria remain open. Missing producer support, a required
+operation, or a required tool
+fails the run. The test neither copies another repository's corpus nor
+dispatches a hosted workflow.
 
 ## Inputs
 
-The lock-selected QSpec files are:
-
-- spec/test-cases/TC-192-integer-division-profiles.md
-- spec/test-cases/TC-185-exact-decimal-semantics.md
-- spec/test-cases/TC-193-ieee-exceptional-and-rounding-profiles.md
-- spec/test-cases/TC-186-text-and-enum-identity-semantics.md
-- spec/test-cases/TC-187-quantity-and-unit-conversion.md
-
-Parse every row ID from each vector table. Split rows with multiple
-operations or admission and evaluation phases into named subcases. At
-authoring, TC-187 has 70 U rows, including suffixed U11 rows; RT's older
-"30 vectors" statement is not the census. The selected QSpec document
-controls each run. DIV-02, D02, F03, T01, U01, U10, and admission-only U11a
-are useful first discriminating cases, but do not substitute for the rest.
-Use each QSpec limit tuple and fresh meters for each side and denial.
+Use all cases exposed by QSpec's authoritative typed API for TC-192, TC-185,
+TC-193, TC-186, and TC-187. Each case supplies its source test and case ID,
+typed operation or admission request, expected value or noncompleted
+disposition, and expected accounting where that authority specifies it. The
+owner API presents mixed source cases as discrete operations. Use its stated
+limit tuples and fresh meters for each side and each denial. The RT TC-018
+through TC-022 generated operand sweeps and independent rational oracles
+remain required; derive operands within this test rather than copying a
+fixture from another repository. DIV-02, D02, F03, T01, U01, U10, and
+admission-only U11a are useful initial exercises but cannot substitute for
+the full API.
 
 ## Test Procedure
 
-1. Read all five TC documents from the lock-selected QSpec package. Build a
-   run ledger with one entry per row and one entry per distinct subcase of a
-   mixed row. Each entry names its source TC and row, expected observation,
-   classification as evaluated, admission-only, or unavailable, runnable test
-   symbol and observed result when present, and precise unavailability reason
-   when absent. Reject duplicates, missing or unclassified rows, and missing
-   vector tables.
-   IT-017-SC-01: the ledger covers exactly the selected QSpec rows and
-   subcases, with no row counted as run because it was merely listed.
-2. For every evaluated entry, evaluate the checked QSL expression and the
-   corresponding public runtime operation under equal inputs and limits.
-   Compare the completed value and Debug rendering, or the exact noncompleted
-   disposition and typed cause, with QSpec and each other. Never turn
-   Undefined, Refused, Incomplete, or an evaluation fault into a Boolean or
-   completed value. For typed arguments that require QSL call, assert its
-   function.call envelope separately and compare the scalar charge suffix;
-   report both raw meters. Prefer evaluate_closed for closed expressions.
-   IT-017-SC-02: every evaluated subcase has a real two-sided observation
-   and equal value or noncompleted result; an unrun evaluated subcase fails
-   the completion gate.
-3. For every evaluated row whose authority specifies accounting, compare
+1. Obtain the authoritative typed cases for all five QSpec scalar test cases
+   through QSpec's public API. Fail if that API is unavailable, refuses a
+   required case, or cannot distinguish evaluation from admission. Do not
+   infer case coverage from a handwritten list or source-text inspection.
+   IT-017-SC-01: every case offered by QSpec's complete scalar-vector API
+   reaches its specified evaluation or admission path without a silent skip.
+2. For each evaluation case, evaluate the checked QSL expression and the
+   corresponding public RT operation under equal inputs and limits. Compare
+   the completed value and Debug rendering, or the exact noncompleted
+   disposition and typed cause, against QSpec and each other. Undefined,
+   Refused, Incomplete, and evaluation faults remain distinct. For typed
+   arguments requiring QSL call, assert its function.call envelope
+   separately before comparing scalar charges; report raw meter results.
+   Prefer evaluate_closed for closed expressions.
+   IT-017-SC-02: every evaluation case has a real two-sided observation and
+   the same specified value or noncompleted result; an operation that cannot
+   execute on either side fails.
+3. For each evaluation case whose authority specifies accounting, compare
    the complete ordered charge-point and amount sequence, consumed counters,
    and first denied charge under the exact and one-under limit. Deny each
-   named charge independently with a fresh meter. Assert Incomplete's limit
-   kind, limit, consumed, next charge and charge point, with no later charge
-   or partial result. Run the arithmetic, rounding, profile, conversion, and
-   independent-oracle sweeps specified by RT TC-018 through TC-022. Name an
-   unmetered authority row as such instead of calling it charge agreement.
-   IT-017-SC-03: every authority-metered evaluated subcase and required
-   sweep agrees in charge order, amounts, counters, denial fields, and stop
-   prefix.
-4. For each admission-only entry, run QSL source, type, or package admission
-   and assert its exact admitted or refused result and provenance before
-   scalar evaluation. Record that no runtime scalar operation ran and no
-   evaluation charge was consumed. U11 owner selection and topology cases,
-   DIV-03 and DIV-09, D25, T05b, and T09's stale-key half receive this
-   treatment where their source rows require it. A mixed row's evaluated
-   half remains governed by steps 2 and 3.
-   IT-017-SC-04: each admission-only subcase has its own observed decision
-   and is excluded from the evaluated agreement count.
-5. Report evaluated, admission-only, unmetered, and unavailable entries by
-   row and subcase, with exact observation and test symbol. An unsupported QSL
-   operation, missing producer expression, or missing runtime entry is
-   unavailable with the exact missing API or behavior and an owning issue;
-   do not replace it with a local approximation.
-   IT-017-SC-05: the full RT TC-018 through TC-022 agreement claim passes
-   only with zero unavailable and unrun evaluated entries, all admission
-   observations, and all step-3 accounting and sweeps. A partial run reports
-   its completed subset and leaves the associated FR-006/FR-007 and TC rows
-   open.
+   named charge independently on fresh meters. Assert Incomplete's limit
+   kind, limit, consumed amount, next charge and charge point, with no later
+   charge or partial result. Run the arithmetic, rounding, profile,
+   conversion, and independent-oracle sweeps specified by RT TC-018 through
+   TC-022. An authority case without a charge oracle remains a value/result
+   comparison and cannot be claimed as charge agreement.
+   IT-017-SC-03: every authority-metered evaluation and required sweep
+   agrees in charge order, amounts, counters, denial fields, and stop prefix.
+4. For each admission case, run the QSL source, type, or package admission
+   path and assert its exact admitted or refused result and provenance
+   before scalar evaluation. No RT scalar operation or evaluation charge
+   may be substituted for it. The admission phases of U11, DIV-03, DIV-09,
+   D25, T05b, and T09 are examples; their QSpec-owned case definitions
+   control the complete set.
+   IT-017-SC-04: every admission case has its own observed decision and is
+   never counted as two-sided scalar evaluation.
+5. Fail the full RT TC-018 through TC-022 agreement gate if any QSpec case
+   cannot run, any required admission observation or sweep is missing, or
+   any two-sided result or accounting observation differs. A preliminary
+   subset of tests may be reported as partial evidence, but it cannot mark
+   FR-006/FR-007 or TC-018 through TC-022 complete.
+   IT-017-SC-05: completion requires all offered QSpec cases and the full
+   RT procedures, with no unsupported or omitted operation.
 
 ## Expected Results
 
-All five QSpec corpora are accounted for at the lock-selected revision. Every
-evaluated row and required sweep agrees on result, refusal, charge sequence,
-counters, and first stop. Every admission-only subcase retains its own
-decision and provenance. A changed QSpec row without a ledger entry, skipped
-comparison, unowned unavailable API, mismatched charge, or copied QSpec
-fixture fails completion. A passing starter subset is partial evidence, not
-completion of RT FR-007-AC-1 through AC-6.
+Every QSpec evaluation case executes on QSL and RT and agrees on its
+specified result, refusal, charges, counters, and first stop. Every
+admission case retains its own decision and provenance. An absent QSpec
+API, skipped operation, mismatch, or copied corpus fails the completion
+gate. A successful starter subset is partial evidence only.
 
 ## Traceability
 
-TC-097 invokes this procedure. Implementation symbols trace to the
-applicable IT-017 success criterion and RT FR-006/FR-007 criterion, and
-report the QSpec TC and vector row exercised. The per-row ledger is a run
-result derived from the locked QSpec source, not a committed duplicate corpus.
+TC-097 invokes this procedure. Each runnable test symbol traces to the
+applicable IT-017 success criterion and RT FR-006/FR-007 criterion, with
+the QSpec test and case ID supplied by the owner API. QSpec owns corpus
+completeness; integration asserts the behavior of every case it supplies.
