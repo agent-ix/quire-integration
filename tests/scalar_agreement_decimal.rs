@@ -5,7 +5,7 @@
 //! vector; they do not derive expected behavior by parsing its prose.
 
 use ix_trace_rs::trace;
-use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
+use qsl_eval::value::{CallFailure, CheckedPackageEvaluation, QualifiedName};
 use qsl_package::CheckedPackage;
 use qsl_semantics::{
     check::PackageDeclarations,
@@ -17,7 +17,7 @@ use quire_exact::{
     DecimalType, Integer, LimitKind, Meter, OrderedOperands, OrderingOperator, Outcome, Refusal,
     RoundingMode, ScalarLimits, Undefined, Value,
 };
-use quire_semantic_value::{checking::CheckingLimits, loss::ValueLoss};
+use quire_semantic_value::{call::InputRefusal, checking::CheckingLimits, loss::ValueLoss};
 use quire_specification::{vectors_of, TestCase};
 
 const UNLIMITED: ScalarLimits = ScalarLimits {
@@ -627,6 +627,57 @@ fn qsl_type_admitted(lo: i64, hi: i64, first: u64, last: u64) -> bool {
     declarations.check(CheckingLimits::default()).is_ok()
 }
 
+fn qsl_membership(type_spelling: &str, value: Decimal) -> bool {
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\n\
+         profile v = \"quire.value.complete/v1\";\n\
+         function f using v(a: {type_spelling}): {type_spelling} pure {{ a }}\n"
+    );
+    let parsed = qsl_cst::parse(
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal-membership", "fixture", "1"),
+        "decimal.native",
+        source.as_bytes(),
+        qsl_cst::Limits::default(),
+    )
+    .expect("S1 parses membership function");
+    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    let unit = qsl_forms::build_unit(&parsed).expect("S2 builds membership function");
+    let graph = PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "ir-669".to_owned(),
+        unit,
+        SelectedModels::default(),
+        Vec::new(),
+    )
+    .expect("S3 assembles membership function")
+    .check(CheckingLimits::default())
+    .expect("S4 checks membership function");
+    let package = CheckedPackage::link(graph);
+    let mut meter = Meter::new(UNLIMITED);
+    match package.call(
+        &QualifiedName::unqualified("f").expect("f is an identifier"),
+        vec![Value::Decimal(value.clone())],
+        &ObjectEnvironment::default(),
+        &mut meter,
+    ) {
+        Ok(evaluation) => {
+            let FamilyOutcome::Evaluated(Outcome::Completed(Value::Decimal(actual))) =
+                evaluation.outcome
+            else {
+                panic!("member did not retain a decimal: {:?}", evaluation.outcome);
+            };
+            assert_eq!(actual.representation(), value.representation());
+            assert_eq!(meter.consumed(LimitKind::WorkUnits), 1);
+            true
+        }
+        Err(CallFailure::Input(InputRefusal::WrongValueKind { parameter: 0 })) => {
+            assert_eq!(meter.admission_count(), 0);
+            false
+        }
+        other => panic!("unexpected decimal membership result: {other:?}"),
+    }
+}
+
 fn d11() {
     let wide = target(0, 10_000, 2, 2, RoundingMode::Exact);
     for value in [
@@ -636,11 +687,21 @@ fn d11() {
         decimal(9999, 2),
     ] {
         assert!(wide.contains(&value));
+        assert!(qsl_membership("Decimal[0,10000;2,2;exact]", value));
     }
     let narrow = target(0, 9999, 2, 2, RoundingMode::Exact);
     assert!(!narrow.contains(&decimal(100, 0)));
     assert!(narrow.contains(&decimal(9999, 2)));
+    assert!(!qsl_membership(
+        "Decimal[0,9999;2,2;exact]",
+        decimal(100, 0)
+    ));
+    assert!(qsl_membership(
+        "Decimal[0,9999;2,2;exact]",
+        decimal(9999, 2)
+    ));
     assert!(!target(-9, 9, 0, 2, RoundingMode::Exact).contains(&decimal(1, 3)));
+    assert!(!qsl_membership("Decimal[-9,9;0,2;exact]", decimal(1, 3)));
     assert_eq!(
         wide.contains(&decimal(1, 0)),
         wide.contains(&decimal(1000, 3))
@@ -656,6 +717,16 @@ fn d12() {
         33,
         2,
         true,
+    );
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[-1000,1000;0,2;nearest-even]",
+        left.clone(),
+        right.clone(),
+        &wide,
+        UNLIMITED,
     );
     let narrow = target(-10, 10, 0, 2, RoundingMode::NearestEven);
     assert!(matches!(
@@ -697,6 +768,16 @@ fn d13() {
             3,
             1,
         );
+        agreement(
+            "*",
+            "Decimal[150,150;2,2;exact]",
+            "Decimal[2,2;0,0;exact]",
+            &format!("Decimal[-9,9;0,0;{}]", mode.as_str()),
+            left.clone(),
+            right.clone(),
+            &ty,
+            short_work,
+        );
         let short_bits = ScalarLimits {
             integer_bits: 9,
             ..base
@@ -707,6 +788,16 @@ fn d13() {
             ChargePoint::DecimalArithmetic,
             8,
             10,
+        );
+        agreement(
+            "*",
+            "Decimal[150,150;2,2;exact]",
+            "Decimal[2,2;0,0;exact]",
+            &format!("Decimal[-9,9;0,0;{}]", mode.as_str()),
+            left.clone(),
+            right.clone(),
+            &ty,
+            short_bits,
         );
     }
 }
@@ -746,6 +837,19 @@ fn d14() {
         ChargePoint::DecimalArithmetic,
         2,
         1,
+    );
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[-1000,1000;0,2;exact]",
+        left,
+        right,
+        &ty,
+        ScalarLimits {
+            work_units: 2,
+            ..base
+        },
     );
 }
 
@@ -866,6 +970,19 @@ fn d18() {
         0,
         2,
     );
+    agreement(
+        "/",
+        "Decimal[1234,1234;3,3;exact]",
+        "Decimal[2,2;0,0;exact]",
+        "Decimal[-1000,1000;0,1;nearest-even]",
+        left,
+        right,
+        &ty,
+        ScalarLimits {
+            scale_expansion: 1,
+            ..base
+        },
+    );
 }
 
 fn d19() {
@@ -878,6 +995,9 @@ fn d19() {
     );
     assert!(ty.contains(&decimal(0, 0)));
     assert!(!ty.contains(&decimal(1, 0)));
+    let qsl_type = "Decimal[0,10;4294967295,4294967295;exact]";
+    assert!(qsl_membership(qsl_type, decimal(0, 0)));
+    assert!(!qsl_membership(qsl_type, decimal(1, 0)));
 }
 
 fn ordering(
@@ -975,6 +1095,16 @@ fn d22() {
     assert_eq!(value.value().normalized(), one.normalized());
     assert!(value.loss().is_none());
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 4);
+    agreement(
+        "*",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[0,1;0,1000;exact]",
+        one.clone(),
+        one.clone(),
+        &ty,
+        base,
+    );
     denied(
         rt(
             DecimalOperation::Multiply(&one, &one),
@@ -989,6 +1119,19 @@ fn d22() {
         ChargePoint::DecimalResultRetain,
         2,
         3323,
+    );
+    agreement(
+        "*",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[0,1;0,1000;exact]",
+        one.clone(),
+        one.clone(),
+        &ty,
+        ScalarLimits {
+            integer_bits: 3322,
+            ..base
+        },
     );
     denied(
         rt(
@@ -1005,6 +1148,19 @@ fn d22() {
         0,
         1000,
     );
+    agreement(
+        "*",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[0,1;0,1000;exact]",
+        one.clone(),
+        one,
+        &ty,
+        ScalarLimits {
+            scale_expansion: 999,
+            ..base
+        },
+    );
 }
 
 fn d23() {
@@ -1017,6 +1173,16 @@ fn d23() {
         ChargePoint::DecimalResultRetain,
         2,
         4_294_967_296,
+    );
+    agreement(
+        "*",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[0,1;0,4294967295;exact]",
+        one.clone(),
+        one,
+        &ty,
+        base,
     );
 }
 
@@ -1062,6 +1228,19 @@ fn d24() {
         0,
         2,
     );
+    agreement(
+        "/",
+        "Decimal[2,2;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[0,100;2,2;nearest-even]",
+        two.clone(),
+        three.clone(),
+        &rounded,
+        ScalarLimits {
+            scale_expansion: 1,
+            ..base
+        },
+    );
     let exact = target(0, 100, 2, 2, RoundingMode::Exact);
     let (outcome, meter) = rt(DecimalOperation::Divide(&two, &three), &exact, base);
     assert!(matches!(
@@ -1069,6 +1248,16 @@ fn d24() {
         Outcome::Refused(Refusal::InexactDecimal { .. })
     ));
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 3);
+    agreement(
+        "/",
+        "Decimal[2,2;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[0,100;2,2;exact]",
+        two,
+        three,
+        &exact,
+        base,
+    );
 }
 
 fn d25_source(body: &str, result: &str) -> bool {
