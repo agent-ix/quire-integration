@@ -31,13 +31,14 @@ composition has a separate owner.
 
 ## Target Integration
 
-QSpec owns the public typed scalar-vector source for TC-192 integer division,
+QSpec owns the public scalar-vector source for TC-192 integer division,
 TC-185 decimal, TC-193 IEEE, TC-186 text and enum, and TC-187 quantity and
-unit behavior. Its API must expose the complete authored cases and distinguish
-evaluation from admission cases, including distinct operations within a
-mixed case. Integration consumes that API directly rather than reading or
-reconstructing QSpec's Markdown. QSL parses, checks, and links original
-native source into a checked package; CheckedPackageEvaluation or
+unit behavior. `quire_specification::{QUALIFICATION_VECTORS, TestCase, vectors_of}`
+exposes each authored row's case, ID, input prose, and expected-result prose.
+Integration dispatches each ID to executable behavior, including distinct
+operations within a mixed row; an unknown ID fails. It consumes that API
+without reading or reconstructing QSpec's Markdown. QSL parses, checks, and links original
+native source into a checked package; `CheckedPackageEvaluation` or
 evaluate_closed evaluates checked expressions with the shared exact Meter.
 The runtime side calls public exact and semantic-value operations with the
 same admitted operands, types, owner identities, and ScalarLimitsV1. Any
@@ -46,22 +47,22 @@ identity originates in QSL admission, never locally constructed bytes.
 ## Preconditions
 
 The repository's Cargo.lock supplies one coherent set of QSpec, QSL, RT,
-exact, and semantic-value dependencies. QSpec must provide the typed
-scalar-vector API described above; its present qualification crate does not
-yet export one. STD-612 owns that upstream API. Until STD-612 lands and the
-integration test can consume the API, this test cannot pass and the RT
-agreement criteria remain open. Missing producer support, a required
-operation, or a required tool
-fails the run. The test neither copies another repository's corpus nor
+exact, and semantic-value dependencies. QSpec's public row API is available
+under STD-612. The rows contain authored prose, not typed executable operands;
+integration owns per-ID executable dispatch and admission/evaluation
+classification. Full RT agreement remains open until every required row and
+sweep runs. Missing producer support, a required operation, or a required
+tool is recorded PENDING with an open upstream owner ticket and cannot be
+claimed as agreement. The test neither copies another repository's corpus nor
 dispatches a hosted workflow.
 
 ## Inputs
 
-Use all cases exposed by QSpec's authoritative typed API for TC-192, TC-185,
-TC-193, TC-186, and TC-187. Each case supplies its source test and case ID,
-typed operation or admission request, expected value or noncompleted
-disposition, and expected accounting where that authority specifies it. The
-owner API presents mixed source cases as discrete operations. Use its stated
+Use all rows exposed by QSpec's authoritative API for TC-192, TC-185,
+TC-193, TC-186, and TC-187. Each row supplies its source test and ID,
+authored input and expected-result prose. Integration interprets that prose
+through explicit per-ID executable cases and splits mixed rows into distinct
+operations or admission phases. Use QSpec's stated
 limit tuples and fresh meters for each side and each denial. The RT TC-018
 through TC-022 generated operand sweeps and independent rational oracles
 remain required; derive operands within this test rather than copying a
@@ -71,12 +72,16 @@ the full API.
 
 ## Test Procedure
 
-1. Obtain the authoritative typed cases for all five QSpec scalar test cases
-   through QSpec's public API. Fail if that API is unavailable, refuses a
-   required case, or cannot distinguish evaluation from admission. Do not
-   infer case coverage from a handwritten list or source-text inspection.
-   IT-017-SC-01: every case offered by QSpec's complete scalar-vector API
-   reaches its specified evaluation or admission path without a silent skip.
+1. Obtain the authoritative rows for all five QSpec scalar test cases
+   through QSpec's public API. Dispatch every row ID to executable evaluation
+   or admission cases; split a mixed row into its distinct required observations.
+   An unknown row ID fails. The owner's prose identifies the obligation but is
+   not a typed executable request; no Markdown scan or separate tracking ledger
+   substitutes for behavior.
+   IT-017-SC-01: every row offered by QSpec's scalar-vector API
+   reaches its specified evaluation or admission path, or is named PENDING
+   with an open upstream owner ticket and the exact missing path. An unknown
+   ID, silent skip, or ticketless PENDING case fails.
 2. For each evaluation case, evaluate the checked QSL expression and the
    corresponding public RT operation under equal inputs and limits. Compare
    the completed value and Debug rendering, or the exact noncompleted
@@ -85,9 +90,9 @@ the full API.
    arguments requiring QSL call, assert its function.call envelope
    separately before comparing scalar charges; report raw meter results.
    Prefer evaluate_closed for closed expressions.
-   IT-017-SC-02: every evaluation case has a real two-sided observation and
-   the same specified value or noncompleted result; an operation that cannot
-   execute on either side fails.
+   IT-017-SC-02: every runnable evaluation case has a real two-sided
+   observation and the same specified value or noncompleted result. A case
+   that cannot execute remains PENDING under SC-01 and is not agreement.
 3. For each evaluation case whose authority specifies accounting, compare
    the complete ordered charge-point and amount sequence, consumed counters,
    and first denied charge under the exact and one-under limit. Deny each
@@ -97,31 +102,36 @@ the full API.
    conversion, and independent-oracle sweeps specified by RT TC-018 through
    TC-022. An authority case without a charge oracle remains a value/result
    comparison and cannot be claimed as charge agreement.
-   IT-017-SC-03: every authority-metered evaluation and required sweep
+   IT-017-SC-03: every runnable authority-metered evaluation and required sweep
    agrees in charge order, amounts, counters, denial fields, and stop prefix.
 4. For each admission case, run the QSL source, type, or package admission
    path and assert its exact admitted or refused result and provenance
    before scalar evaluation. No RT scalar operation or evaluation charge
-   may be substituted for it. The admission phases of U11, DIV-03, DIV-09,
-   D25, T05b, and T09 are examples; their QSpec-owned case definitions
-   control the complete set.
-   IT-017-SC-04: every admission case has its own observed decision and is
-   never counted as two-sided scalar evaluation.
-5. Fail the full RT TC-018 through TC-022 agreement gate if any QSpec case
-   cannot run, any required admission observation or sweep is missing, or
-   any two-sided result or accounting observation differs. A preliminary
-   subset of tests may be reported as partial evidence, but it cannot mark
-   FR-006/FR-007 or TC-018 through TC-022 complete.
-   IT-017-SC-05: completion requires all offered QSpec cases and the full
-   RT procedures, with no unsupported or omitted operation.
+   may be substituted for it. D25 is admission-only; DIV-17 and DIV-18
+   combine admission observations with complete-facet scalar evaluations.
+   DIV-14 requires its own QSL/SMT negotiation and backend-verdict
+   observation, outside the scalar two-sided comparison. The admission
+   phases of U11, DIV-03, DIV-09, T05b, and T09 are further examples;
+   their QSpec-owned case definitions control the complete set.
+   IT-017-SC-04: every runnable admission case has its own observed decision
+   and is never counted as two-sided scalar evaluation.
+5. Fail closure for any unrun runnable case, missing sweep, unknown ID,
+   ticketless PENDING case, or two-sided mismatch. Record PENDING cases with
+   their open upstream owner tickets and exact missing paths; they do not
+   count as agreement or completion of the affected RT procedure. A family
+   PR may merge with that explicit partial result while IR-669 stays open
+   until the pending owner work lands and the affected cases rerun.
+   IT-017-SC-05: every runnable case and required RT sweep passes; every
+   remaining case is PENDING with an open owner ticket, not silently omitted.
 
 ## Expected Results
 
-Every QSpec evaluation case executes on QSL and RT and agrees on its
-specified result, refusal, charges, counters, and first stop. Every
-admission case retains its own decision and provenance. An absent QSpec
-API, skipped operation, mismatch, or copied corpus fails the completion
-gate. A successful starter subset is partial evidence only.
+Every runnable QSpec evaluation case executes on QSL and RT and agrees on
+its specified result, refusal, charges, counters, and first stop. Every
+runnable admission case retains its own decision and provenance. An absent
+QSpec API, skipped runnable operation, ticketless PENDING case, mismatch,
+or copied corpus fails closure. Ticket-backed PENDING cases remain open
+work and cannot be reported as agreement.
 
 ## Traceability
 
