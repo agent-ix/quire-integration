@@ -452,3 +452,38 @@ fn zero_divisor_stops_after_operand_charge() {
         }
     }
 }
+
+#[trace("TC-097", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn operand_size_denial_precedes_work_denial() {
+    let limits = ScalarLimits {
+        integer_bits: 2,
+        work_units: 0,
+        ..LIMITS
+    };
+    for member in [DivisionMember::Quotient, DivisionMember::Remainder] {
+        let (qsl, qsl_meter, runtime, runtime_meter) = checked_division_with_limits(
+            DivisionProfile::Truncating,
+            member,
+            7,
+            3,
+            ScalarLimits {
+                work_units: 1,
+                ..limits
+            },
+            limits,
+        );
+        let Outcome::Incomplete(qsl_stop) = qsl else {
+            panic!("DIV-13 QSL: {qsl:?}");
+        };
+        let Outcome::Incomplete(runtime_stop) = runtime else {
+            panic!("DIV-13 RT: {runtime:?}");
+        };
+        assert_eq!(qsl_stop.limit_kind, LimitKind::IntegerBits);
+        assert_eq!(qsl_stop, runtime_stop);
+        assert_eq!(
+            &qsl_meter.admitted_charges()[1..],
+            runtime_meter.admitted_charges()
+        );
+    }
+}
