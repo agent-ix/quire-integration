@@ -19,9 +19,9 @@ use qsl_foundation::SourceIdentity;
 use qsl_package::{BoundItem, CheckedPackage, ExportRefusal, UnboundElement};
 use qsl_replay::spine::{AdmittedModels, CheckedUnit, EmittedUnit, SpineLimits};
 use qsl_route::routing::Disposition;
-use qsl_route::{Candidate, ManifestDigest};
+use qsl_route::Candidate;
 use qsl_semantics::check::AbstractionKey;
-use qsl_semantics::model::intake::package_input;
+use qsl_semantics::model::intake::{package_input, PackageInput};
 use qsl_semantics::value::{CatalogRole, DefinitionLock};
 use quire_checked::key::DeclarationKey;
 use quire_contract_codegen::{
@@ -148,11 +148,12 @@ impl Upstream for ExportVector {
         source: SourceIdentity,
         path: &str,
         bytes: &[u8],
-        packages: &BTreeMap<[u8; 32], Vec<u8>>,
+        package_name: &str,
+        packages: &PackageInput,
         limits: SpineLimits,
         cancel: &Cancel,
     ) -> Result<(CheckedUnit, AdmittedModels, EmittedUnit), DriverRefusal> {
-        QslCg.compile(source, path, bytes, packages, limits, cancel)
+        QslCg.compile(source, path, bytes, package_name, packages, limits, cancel)
     }
 
     fn read_package(
@@ -213,6 +214,7 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
             source: SourceIdentity::new("agent-ix", "ir914-integration", "git", "1"),
             path: "ir914.native",
             bytes: source.as_bytes(),
+            package_name: "agent-ix/it-013",
             packages: &BTreeMap::new(),
             limits: SpineLimits::default(),
             cancel: Cancel::new(),
@@ -290,7 +292,6 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
 fn kani_registry() -> quire_driver::AdmittedRegistry {
     build_registry(&[ProviderManifest {
         identity: "kani".to_owned(),
-        manifest_digest: ManifestDigest::from_digest([7; 32]),
         advertises: vec![(
             Some("value-validity".to_owned()),
             Some("bounded".to_owned()),
@@ -318,12 +319,13 @@ fn generation_input() -> GenerationInput<'static> {
 
 fn compile_input<'a>(
     source: &'a str,
-    packages: &'a BTreeMap<[u8; 32], Vec<u8>>,
+    packages: &'a PackageInput,
 ) -> CompileInput<'a> {
     CompileInput {
         source: SourceIdentity::new("agent-ix", "ir914-export-observation", "fixture", "1"),
         path: "ir914.native",
         bytes: source.as_bytes(),
+        package_name: "agent-ix/it-013",
         packages,
         limits: SpineLimits::default(),
         cancel: Cancel::new(),
@@ -340,11 +342,11 @@ fn integer_siblings_source() -> String {
     )
 }
 
-fn mixed_model_source() -> (String, BTreeMap<[u8; 32], Vec<u8>>) {
+fn mixed_model_source() -> (String, PackageInput) {
     let root = support::qsl_root().join("tests/fixtures");
     let path = root.join("spine-model.semantic-ir.json");
     let document = fs::read(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
-    let packages = package_input([document.as_slice()]);
+    let packages = package_input([document.as_slice()]).expect("QSL fixture declares one model identity");
     let source_path = root.join("spine-model.native");
     let selected_source =
         fs::read_to_string(&source_path).unwrap_or_else(|error| panic!("{source_path:?}: {error}"));
@@ -506,6 +508,7 @@ fn drive_integer_step() -> Driven {
             source: SourceIdentity::new("agent-ix", "it013-kani", "git", "1"),
             path: "it013.native",
             bytes: source.as_bytes(),
+            package_name: "agent-ix/it-013",
             packages: &BTreeMap::new(),
             limits: SpineLimits::default(),
             cancel: Cancel::new(),
