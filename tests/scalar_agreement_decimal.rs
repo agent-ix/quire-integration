@@ -5,13 +5,13 @@
 //! vector; they do not derive expected behavior by parsing its prose.
 
 use ix_trace_rs::trace;
-use qsl_eval::value::{CallFailure, CheckedPackageEvaluation, QualifiedName};
+use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_package::CheckedPackage;
 use qsl_semantics::{
     check::PackageDeclarations,
     model::{intake::SelectedModels, object_environment::ObjectEnvironment},
 };
-use quire_eval::FamilyOutcome;
+use quire_eval::{CallFailure, FamilyOutcome};
 use quire_exact::{
     evaluate_decimal, order_numbers, ChargePoint, Decimal, DecimalOperation, DecimalResult,
     DecimalType, Integer, LimitKind, Meter, OrderedOperands, OrderingOperator, Outcome, Refusal,
