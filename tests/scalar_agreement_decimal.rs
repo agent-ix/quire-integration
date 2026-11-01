@@ -424,13 +424,7 @@ fn d01() {
     );
     assert!(matches!(outcome, Outcome::Completed(Value::Boolean(true))));
     assert!(losses.is_empty());
-    for kind in LimitKind::ALL {
-        let offset = u64::from(kind == LimitKind::WorkUnits);
-        assert_eq!(
-            qsl_meter.consumed(kind),
-            kernel_meter.consumed(kind) + offset
-        );
-    }
+    assert_scalar_meter_agreement(&qsl_meter, &kernel_meter);
 }
 
 fn d02() {
@@ -634,6 +628,10 @@ fn d09() {
         occurrence: std::num::NonZeroU64::new(1).unwrap(),
     });
     let denied_outcome = evaluate_decimal(DecimalOperation::Divide(&left, &right), &ty, &mut meter);
+    let Outcome::Incomplete(kernel_stop) = &denied_outcome else {
+        panic!("D09 runtime injection must stop at result retention: {denied_outcome:?}");
+    };
+    let kernel_stop = kernel_stop.clone();
     denied(
         denied_outcome,
         LimitKind::WorkUnits,
@@ -658,6 +656,14 @@ fn d09() {
             occurrence: std::num::NonZeroU64::new(1).unwrap(),
         }),
     );
+    let Outcome::Incomplete(qsl_stop) = &qsl_denied else {
+        panic!("D09 QSL injection must stop at result retention: {qsl_denied:?}");
+    };
+    assert_eq!(qsl_stop.limit_kind, kernel_stop.limit_kind);
+    assert_eq!(qsl_stop.charge_point, kernel_stop.charge_point);
+    assert_eq!(qsl_stop.next_charge, kernel_stop.next_charge);
+    assert_eq!(qsl_stop.limit, kernel_stop.limit + 1);
+    assert_eq!(qsl_stop.consumed, kernel_stop.consumed + 1);
     denied(
         qsl_denied,
         LimitKind::WorkUnits,
@@ -666,10 +672,7 @@ fn d09() {
         1,
     );
     assert!(losses.is_empty());
-    for kind in LimitKind::ALL {
-        let offset = u64::from(kind == LimitKind::WorkUnits);
-        assert_eq!(qsl_meter.consumed(kind), meter.consumed(kind) + offset);
-    }
+    assert_scalar_meter_agreement(&qsl_meter, &meter);
 }
 
 fn d10() {
@@ -1176,24 +1179,22 @@ fn ordering(
     );
     assert!(matches!(qsl, Outcome::Completed(Value::Boolean(true))));
     assert!(losses.is_empty());
-    for kind in LimitKind::ALL {
-        let offset = u64::from(kind == LimitKind::WorkUnits);
-        assert_eq!(
-            qsl_meter.consumed(kind),
-            meter.consumed(kind) + offset,
-            "{}",
-            kind.as_str()
-        );
-    }
+    assert_scalar_meter_agreement(&qsl_meter, &meter);
+    let mut short_meter = Meter::new(ScalarLimits {
+        integer_bits: short_bits,
+        ..base
+    });
+    let kernel_short = order_numbers(
+        OrderingOperator::Less,
+        OrderedOperands::Decimals(&left, &right),
+        &mut short_meter,
+    );
+    let Outcome::Incomplete(kernel_stop) = &kernel_short else {
+        panic!("ordering runtime must stop at arithmetic: {kernel_short:?}");
+    };
+    let kernel_stop = kernel_stop.clone();
     denied(
-        order_numbers(
-            OrderingOperator::Less,
-            OrderedOperands::Decimals(&left, &right),
-            &mut Meter::new(ScalarLimits {
-                integer_bits: short_bits,
-                ..base
-            }),
-        ),
+        kernel_short,
         LimitKind::IntegerBits,
         ChargePoint::OrderingArithmetic,
         consumed_bits,
@@ -1213,6 +1214,10 @@ fn ordering(
         right,
         qsl_short_limits,
     );
+    let Outcome::Incomplete(qsl_stop) = &qsl_short else {
+        panic!("ordering QSL must stop at arithmetic: {qsl_short:?}");
+    };
+    assert_eq!(*qsl_stop, kernel_stop);
     denied(
         qsl_short,
         LimitKind::IntegerBits,
@@ -1221,8 +1226,7 @@ fn ordering(
         expected_bits,
     );
     assert!(losses.is_empty());
-    assert_eq!(qsl_meter.consumed(LimitKind::IntegerBits), consumed_bits);
-    assert_eq!(qsl_meter.consumed(LimitKind::WorkUnits), 2);
+    assert_scalar_meter_agreement(&qsl_meter, &short_meter);
 }
 
 fn d20() {
