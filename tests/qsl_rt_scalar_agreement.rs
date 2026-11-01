@@ -593,7 +593,7 @@ fn integer_division_definition_admission_precedes_evaluation() {
         PackageRefusal::invalid_package(PackageCause::ConflictingDefinition)
     );
     assert_eq!(
-        admit_integer_division(&[truncating.clone()], Some(&truncating)).unwrap_err(),
+        admit_integer_division(std::slice::from_ref(&truncating), Some(&truncating)).unwrap_err(),
         PackageRefusal::invalid_package(PackageCause::IncompatibleDefinition)
     );
     assert!(admit_integer_division(&[truncating], Some(&euclidean)).is_ok());
@@ -689,6 +689,15 @@ fn integer_operator_source_spans_survive_form_building() {
 #[test]
 fn rational_slash_never_becomes_integer_division() {
     assert_qspec_row("DIV-18");
+    let no_rational_expectation = assembled_source(
+        "function op using v(): Integer pure { 7 / 3 }",
+        "quire.value.complete/v1",
+    )
+    .check(CheckingLimits::default());
+    assert!(
+        no_rational_expectation.is_err(),
+        "integer slash needs a rational expected type"
+    );
     let package = checked_package(
         "function op using v(): Rational[0,7;1,3] pure { 7 / 3 }",
         None,
