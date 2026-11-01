@@ -544,6 +544,16 @@ fn d09() {
         2,
         true,
     );
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[-1000,1000;0,2;nearest-even]",
+        left.clone(),
+        right.clone(),
+        &ty,
+        exact_limits,
+    );
     let mut meter = Meter::new(exact_limits).with_injected_denial(quire_exact::InjectedDenial {
         point: ChargePoint::DecimalResultRetain,
         occurrence: std::num::NonZeroU64::new(1).unwrap(),
@@ -712,6 +722,16 @@ fn d14() {
         Outcome::Refused(Refusal::InexactDecimal { .. })
     ));
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 3);
+    agreement(
+        "/",
+        "Decimal[1,1;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[-1000,1000;0,2;exact]",
+        left.clone(),
+        right.clone(),
+        &ty,
+        base,
+    );
     denied(
         rt(
             DecimalOperation::Divide(&left, &right),
@@ -821,6 +841,16 @@ fn d18() {
     let loss = result.loss().expect("D18 rounds");
     assert_eq!(loss.exact_numerator(), &Integer::from(617_i64));
     assert_eq!(loss.exact_denominator(), Integer::from(1000_i64));
+    agreement(
+        "/",
+        "Decimal[1234,1234;3,3;exact]",
+        "Decimal[2,2;0,0;exact]",
+        "Decimal[-1000,1000;0,1;nearest-even]",
+        left.clone(),
+        right.clone(),
+        &ty,
+        base,
+    );
     denied(
         rt(
             DecimalOperation::Divide(&left, &right),
@@ -1007,6 +1037,16 @@ fn d24() {
     assert_eq!(loss.exact_numerator(), &Integer::from(2_i64));
     assert_eq!(loss.exact_denominator(), Integer::from(3_i64));
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 5);
+    agreement(
+        "/",
+        "Decimal[2,2;0,0;exact]",
+        "Decimal[3,3;0,0;exact]",
+        "Decimal[0,100;2,2;nearest-even]",
+        two.clone(),
+        three.clone(),
+        &rounded,
+        base,
+    );
     denied(
         rt(
             DecimalOperation::Divide(&two, &three),
