@@ -69,7 +69,11 @@ placement in the controlled layout grants no temporal-root admission or executio
    stack or operand limits stop with the matching resource. An impossible scratch
    reservation preserves state, owner and the old budget; successful replacement
    changes only operating limits. A lazy branch does not invoke its unselected
-   recursive call. A 2,000-level lazy chain executes on a 512 KiB native stack,
+   recursive call. Nested helpers preserve argument order and owning scopes;
+   selected recursion stops at the explicit continuation ceiling. Native argument
+   admission preserves its original work/allocation cause and resolvable path,
+   including combined accounting of live operand slots and native reservations.
+   A 2,000-level lazy chain executes on a 512 KiB native stack,
    while a smaller explicit continuation budget stops it. A Boolean initializer
    body returns a typed invariant with its native invalid-membership cause and
    original source key retained. These controls cover the initial executor interface only;

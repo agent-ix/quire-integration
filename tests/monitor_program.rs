@@ -57,7 +57,7 @@ fn key(name: &str) -> NodeKey {
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
                 "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -185,6 +185,9 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function pass_second using v(s: State, t: State): State pure { t }
+function pass_state using v(s: State): State pure { s }
+function option_probe using v(s: Option<Boolean>): State pure { State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
 function condition using v(): Boolean pure { true }
 function unreached_cycle using v(): Boolean pure { true }
 function foreign_argument using v(): State pure { State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
@@ -202,6 +205,9 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("pass-second", "pass_second"),
+    ("pass-state", "pass_state"),
+    ("option-probe", "option_probe"),
     ("state-text-position", "StateTextPosition"),
     ("step-missing-position", "StepMissingPosition"),
     ("init-missing-position", "missing_position_init"),
@@ -1305,4 +1311,193 @@ fn executor_deep_lazy_chain_uses_bounded_explicit_stack() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-2")]
+#[test]
+fn executor_nested_calls_keep_argument_order_and_owning_scopes() {
+    let mut input = parts();
+    let state = input.layout.state.value_type.clone();
+    let Value::Composite(value) = (match &input.expressions[0].operation {
+        Operation::Literal(value) => value,
+        _ => panic!("initializer literal"),
+    }) else {
+        panic!("State");
+    };
+    let alternate = input
+        .types
+        .record(
+            key("state"),
+            vec![
+                (
+                    "now",
+                    FieldValue::Present(Value::Integer(Integer::from(99_u64))),
+                ),
+                ("history_start", value.slots()[1].clone()),
+                ("activations", value.slots()[2].clone()),
+                ("event_position", value.slots()[3].clone()),
+            ],
+        )
+        .unwrap();
+    input.expressions.extend([
+        Expression {
+            key: key("pass-second"),
+            body_path: vec![0],
+            value_type: state.clone(),
+            operation: Operation::Argument {
+                function: FunctionId(4),
+                position: 1,
+            },
+        },
+        Expression {
+            key: key("pass-state"),
+            body_path: vec![0],
+            value_type: state.clone(),
+            operation: Operation::Argument {
+                function: FunctionId(5),
+                position: 0,
+            },
+        },
+        Expression {
+            key: key("init"),
+            body_path: vec![1],
+            value_type: state.clone(),
+            operation: Operation::Literal(alternate),
+        },
+        Expression {
+            key: key("init"),
+            body_path: vec![2],
+            value_type: state.clone(),
+            operation: Operation::Call {
+                function: FunctionId(5),
+                arguments: vec![ExpressionId(6)],
+            },
+        },
+        Expression {
+            key: key("init"),
+            body_path: vec![3],
+            value_type: state.clone(),
+            operation: Operation::Call {
+                function: FunctionId(4),
+                arguments: vec![ExpressionId(0), ExpressionId(7)],
+            },
+        },
+    ]);
+    input.functions.extend([
+        Function {
+            key: key("pass-second"),
+            parameters: vec![state.clone(), state.clone()],
+            result: state.clone(),
+            body: ExpressionId(4),
+        },
+        Function {
+            key: key("pass-state"),
+            parameters: vec![state.clone()],
+            result: state,
+            body: ExpressionId(5),
+        },
+    ]);
+    input.functions[0].body = ExpressionId(8);
+    let monitor = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let Value::Composite(value) = monitor.state() else {
+        panic!("State after nested helper calls");
+    };
+    let FieldValue::Present(Value::Integer(now)) = &value.slots()[0] else {
+        panic!("integer now");
+    };
+    assert_eq!(
+        now,
+        &Integer::from(99_u64),
+        "second argument survives nested invocation and scope rollback"
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-2")]
+#[test]
+fn executor_selected_recursion_stops_on_the_explicit_stack() {
+    let mut input = parts();
+    input.expressions[0].operation = Operation::Call {
+        function: FunctionId(0),
+        arguments: vec![],
+    };
+    let failure = match build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: StepBudget {
+            stack_frames: 32,
+            ..execution_budget()
+        },
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("selected recursive call cannot finish before its stack stop"),
+    };
+    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(failure.resource.unwrap().resource, StepResource::Stack);
+    assert!(failure.invariant.is_none());
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
+#[test]
+fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
+    let budget = StepBudget {
+        work: 3,
+        ..execution_budget()
+    };
+    let expected = StepResource::Work;
+    let mut input = parts();
+    let option_integer = ValueType::option(ValueType::Integer);
+    input.expressions.push(Expression {
+        key: key("init"),
+        body_path: vec![1],
+        value_type: option_integer,
+        operation: Operation::Literal(quire_exact::OptionValue::from_admitted(
+            ValueType::Integer,
+            Some(Value::Integer(Integer::one())),
+        )),
+    });
+    input.expressions.push(Expression {
+        key: key("init"),
+        body_path: vec![2],
+        value_type: input.layout.state.value_type.clone(),
+        operation: Operation::Call {
+            function: FunctionId(4),
+            arguments: vec![ExpressionId(4)],
+        },
+    });
+    input.functions.push(Function {
+        key: key("option-probe"),
+        parameters: vec![ValueType::option(ValueType::Boolean)],
+        result: input.layout.state.value_type.clone(),
+        body: ExpressionId(0),
+    });
+    input.functions[0].body = ExpressionId(5);
+    let failure = match build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget,
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("native argument admission must stop before invoking the helper"),
+    };
+    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    let stop = failure.resource.unwrap();
+    assert_eq!(stop.resource, expected);
+    let native = failure
+        .admission
+        .expect("original native membership stop retained");
+    match (expected, native.failure) {
+        (
+            StepResource::Work,
+            quire_semantic_value::supplied_membership::SuppliedAdmissionError::Limit {
+                locus, ..
+            },
+        ) => {
+            assert_eq!((stop.spent, stop.requested), (3, 1));
+            assert!(native.arena.resolve(locus).is_some());
+        }
+        _ => panic!("native cause must match the operating stop, without an invariant"),
+    }
+    assert!(failure.invariant.is_none());
 }
