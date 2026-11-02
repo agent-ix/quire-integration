@@ -86,3 +86,26 @@ bindings:
   ac_id: interface-007-AC-2
   trace: correct
 ```
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Verified distinct actual record order, selected values and exact 4/5/6 work thresholds in e81881a; the native edge remains explicitly test-owned. |
+
+Disposition inspected integration e81881a1124afb887376a26bf378203a9616f459 against 55a5360, with the reviewed RT1b7ad105 record implementation unchanged. StateHolderChild is genuinely emitted/strict-IR-read with physical order left_state/right_state, opposite the annotated parent. Its native supertype edge is explicitly test-owned and is not claimed emitted by QSL. The new dynamic control observes left=11/right=99, exact parent success at work 4, dynamic successes at 5/6, and one-below resource stops with spent 4/5 and request 1 while admission/invariant are absent. These exact totals discriminate the charged field visits and actual declaration order; no claim is made that the one-below failure occurs inside the scan rather than the later return continuation.
+
+The original dynamic-record evidence finding is fixed as a native diagnostic. Focused control, all 44 monitor_program tests and touched Clippy pass only on the archived interim cohort (dynamic-interim-Cargo.lock); the committed new cohort was restored before push and remains unqualified. Real producer, our final dependency-head long chain, external coverage acceptance, same-Machine cleanup-after-stop, full phase 2 and IEEE backend/replay remain open. No source edits, Cargo/heavy or proof jobs by reviewer.
+
+Current scoped source/evidence finding is fixed; overall committed-cohort/aggregate readiness remains **CONDITIONAL**. Gap-analysis and its unresolved acceptance findings are unchanged.
+
+```yaml
+dispositions:
+- fnd: FND-001
+  outcome: fixed
+  after_excerpt: "let stop = failure.resource.unwrap();\n        assert_eq!(stop.resource,\
+    \ StepResource::Work);\n        assert_eq!(\n            (stop.spent, stop.requested),\n\
+    \            (u128::from(required_work.checked_sub(1).unwrap()), 1)\n        );\n\
+    \        budget.work = required_work;\n        let monitor = build(BuildPlan {\
+    \ program, budget }).unwrap();\n        assert_now(&monitor, expected);"
+```

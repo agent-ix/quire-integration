@@ -122,6 +122,15 @@ placement in the controlled layout grants no temporal-root admission or executio
    work, using an explicitly test-owned native edge. These controlled parts do not
    qualify the real temporal producer.
 
+10. Execute exact scalar diagnostics. IT-018-SC-10: independent decimal integer
+    expectations beyond host width discriminate addition, subtraction,
+    multiplication and negation; all four order relations have explicit
+    three-way truth rows. Native result-domain refusal retains its typed cause.
+    Required ScalarLimits apply cumulatively, inactive branches do not charge,
+    and operating stops retain exact Integer requests and native source evidence.
+    Canonical computed values consume scratch. These initializer controls do not
+    qualify same-monitor reuse after event dispatch or temporal outcomes.
+
 ## Expected Results
 
 The complete target passes every construction control against the lock-selected RT

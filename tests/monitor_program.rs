@@ -10,7 +10,8 @@ use quire_contract_runtime::monitor::{
 };
 use quire_exact::{
     CollectionKind, CollectionType, FieldValue, Identifier, Integer, IntegerInterval, MemberId,
-    MemberOwner, NodeKey, Presence, Rational, TextProfile, TextType, Value, ValueType,
+    MemberOwner, NodeKey, OrderingOperator, Presence, Rational, ScalarLimits, TextProfile,
+    TextType, Value, ValueType,
 };
 use quire_semantic_value::{
     declaration::{
@@ -57,7 +58,7 @@ fn key(name: &str) -> NodeKey {
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
                 "state-pair-child" | "integer-pair" | "bounded-integer-pair" | "state-pair" | "bool-pair" | "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "record-init" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "scalar-init" | "record-init" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -192,6 +193,7 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function scalar_init using v(): State pure { if 1 + 2 < 4 then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
 function record_init using v(): State pure { let holder = StateHolder { right_state: State { now: 99, history_start: 0, activations: sequence[], event_position: 0 }, left_state: State { now: 11, history_start: 0, activations: sequence[], event_position: 0 } } in holder.left_state }
 function touch_holder_child using v(x: StateHolderChild): StateHolderChild pure { x }
 function touch_holder using v(x: StateHolder): StateHolder pure { x }
@@ -224,6 +226,7 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("scalar-init", "scalar_init"),
     ("state-holder", "StateHolder"),
     ("state-holder-child", "StateHolderChild"),
     ("record-init", "record_init"),
@@ -1181,6 +1184,18 @@ fn state_without_event_position_has_no_compatibility_path() {
 fn execution_budget() -> StepBudget {
     StepBudget {
         work: 100_000,
+        scalar: ScalarLimits {
+            integer_bits: 100_000,
+            decimal_digits: 100_000,
+            scale_expansion: 100_000,
+            text_input_bytes: 100_000,
+            text_scalars: 100_000,
+            normalized_scalars: 100_000,
+            unit_edges: 100_000,
+            value_occurrences: 100_000,
+            work_units: 100_000,
+            result_units: 100_000,
+        },
         stack_frames: 10_000,
         scratch_elements: 10_000,
         scratch_bytes: 1_000_000,
@@ -1580,7 +1595,7 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
                 locus, ..
             },
         ) => {
-            assert_eq!((stop.spent, stop.requested), (3, 1));
+            assert_eq!((stop.spent, stop.requested), (3, Integer::one()));
             assert!(native.arena.resolve(locus).is_some());
         }
         _ => panic!("native cause must match the operating stop, without an invariant"),
@@ -2027,7 +2042,10 @@ fn lexical_deep_chain_charges_live_bindings_and_uses_explicit_stack() {
             };
             let stop = stopped.resource.unwrap();
             assert_eq!(stop.resource, StepResource::ScratchElements);
-            assert_eq!((stop.spent, stop.requested), (depth as u128, 1));
+            assert_eq!(
+                (stop.spent, stop.requested),
+                (depth as u128, Integer::one())
+            );
             let monitor = build(BuildPlan {
                 program,
                 budget: StepBudget {
@@ -2059,7 +2077,10 @@ fn lexical_recursive_shadow_counts_the_retained_caller_operand() {
     };
     let stop = stopped.resource.unwrap();
     assert_eq!(stop.resource, StepResource::ScratchElements);
-    assert_eq!((stop.limit, stop.spent, stop.requested), (Some(4), 4, 1));
+    assert_eq!(
+        (stop.limit, stop.spent, stop.requested),
+        (Some(4), 4, Integer::one())
+    );
     let monitor = build(BuildPlan {
         program,
         budget: StepBudget {
@@ -2380,7 +2401,10 @@ fn tuple_projection_retained_addresses_respect_scratch_budget() {
     };
     let stop = failure.resource.unwrap();
     assert_eq!(stop.resource, StepResource::ScratchElements);
-    assert_eq!((stop.limit, stop.spent, stop.requested), (Some(1), 1, 1));
+    assert_eq!(
+        (stop.limit, stop.spent, stop.requested),
+        (Some(1), 1, Integer::one())
+    );
     let monitor = build(BuildPlan {
         program,
         budget: StepBudget {
@@ -2620,7 +2644,7 @@ fn record_member_addresses_consume_scratch_before_returning_state() {
     .expect("projection and result require separate slots");
     let stop = failure.resource.unwrap();
     assert_eq!(stop.resource, StepResource::ScratchElements);
-    assert_eq!((stop.spent, stop.requested), (1, 1));
+    assert_eq!((stop.spent, stop.requested), (1, Integer::one()));
     budget.scratch_elements = 2;
     let monitor = build(BuildPlan { program, budget }).unwrap();
     assert_now(&monitor, 11);
@@ -2796,7 +2820,10 @@ fn record_dynamic_declaration_uses_its_own_order_and_charges_every_inspected_fie
         assert_eq!(stop.resource, StepResource::Work);
         assert_eq!(
             (stop.spent, stop.requested),
-            (u128::from(required_work.checked_sub(1).unwrap()), 1)
+            (
+                u128::from(required_work.checked_sub(1).unwrap()),
+                Integer::one()
+            )
         );
         budget.work = required_work;
         let monitor = build(BuildPlan { program, budget }).unwrap();
@@ -2811,4 +2838,452 @@ fn record_dynamic_declaration_uses_its_own_order_and_charges_every_inspected_fie
     })
     .unwrap();
     assert_now(&monitor, 11);
+}
+
+fn scalar_literal(input: &mut ProgramParts, value: &str) -> ExpressionId {
+    lexical_expression(
+        input,
+        "scalar-init",
+        ValueType::Integer,
+        Operation::Literal(Value::Integer(value.parse().unwrap())),
+    )
+}
+
+fn scalar_result_parts(case: usize, left: &str, right: &str, expected: &str) -> ProgramParts {
+    let mut input = parts();
+    input.functions[0].key = key("scalar-init");
+    input.expressions[0].key = key("scalar-init");
+    let left = scalar_literal(&mut input, left);
+    let right = scalar_literal(&mut input, right);
+    let operation = match case {
+        0 => Operation::IntegerAdd { left, right },
+        1 => Operation::IntegerSubtract { left, right },
+        2 => Operation::IntegerMultiply { left, right },
+        3 => Operation::IntegerNegate { value: left },
+        _ => panic!("closed arithmetic cases"),
+    };
+    let arithmetic = lexical_expression(&mut input, "scalar-init", ValueType::Integer, operation);
+    let local = LocalId {
+        function: FunctionId(0),
+        position: 0,
+    };
+    let read = lexical_expression(
+        &mut input,
+        "scalar-init",
+        ValueType::Integer,
+        Operation::Local(local),
+    );
+    let expected = scalar_literal(&mut input, expected);
+    let lower = lexical_expression(
+        &mut input,
+        "scalar-init",
+        ValueType::Boolean,
+        Operation::IntegerOrder {
+            operator: OrderingOperator::LessOrEqual,
+            left: read,
+            right: expected,
+        },
+    );
+    let upper = lexical_expression(
+        &mut input,
+        "scalar-init",
+        ValueType::Boolean,
+        Operation::IntegerOrder {
+            operator: OrderingOperator::GreaterOrEqual,
+            left: read,
+            right: expected,
+        },
+    );
+    let equal = lexical_expression(
+        &mut input,
+        "scalar-init",
+        ValueType::Boolean,
+        Operation::BooleanAnd {
+            left: lower,
+            right: upper,
+        },
+    );
+    let state = input.layout.state.value_type.clone();
+    let good = state_at(&input, 99);
+    let good = lexical_expression(
+        &mut input,
+        "scalar-init",
+        state.clone(),
+        Operation::Literal(good),
+    );
+    let result = lexical_expression(
+        &mut input,
+        "scalar-init",
+        state.clone(),
+        Operation::If {
+            condition: equal,
+            when_true: good,
+            when_false: ExpressionId(0),
+        },
+    );
+    let root = lexical_expression(
+        &mut input,
+        "scalar-init",
+        state,
+        Operation::Let {
+            binding: local,
+            value: arithmetic,
+            body: result,
+        },
+    );
+    input.functions[0].body = root;
+    input
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-1")]
+#[test]
+fn integer_arithmetic_uses_exact_independent_values_beyond_host_width() {
+    for (operation, left, right, expected) in [
+        (
+            0,
+            "340282366920938463463374607431768211456",
+            "1",
+            "340282366920938463463374607431768211457",
+        ),
+        (
+            1,
+            "-340282366920938463463374607431768211456",
+            "1",
+            "-340282366920938463463374607431768211457",
+        ),
+        (
+            2,
+            "18446744073709551616",
+            "18446744073709551616",
+            "340282366920938463463374607431768211456",
+        ),
+        (
+            3,
+            "340282366920938463463374607431768211456",
+            "0",
+            "-340282366920938463463374607431768211456",
+        ),
+    ] {
+        let monitor = build(BuildPlan {
+            program: Program::try_new(scalar_result_parts(operation, left, right, expected))
+                .unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap();
+        assert_now(&monitor, 99);
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-2")]
+#[test]
+fn integer_native_shortage_retains_exact_charge_and_original_source_without_a_value() {
+    let input = scalar_result_parts(0, "1", "2", "3");
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.scalar.integer_bits = 0;
+    let failure = build(BuildPlan { program, budget })
+        .err()
+        .expect("native operand charge must stop");
+    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert!(failure.invariant.is_none());
+    let stop = failure.resource.unwrap();
+    assert_eq!(
+        stop.resource,
+        StepResource::Scalar(quire_exact::LimitKind::IntegerBits)
+    );
+    assert_eq!(
+        (stop.limit, stop.spent, stop.requested),
+        (Some(0), 0, Integer::from(2_u64))
+    );
+    let native = failure.scalar.unwrap();
+    assert_eq!(native.source_node(), Some(&key("scalar-init")));
+    let quire_exact::Outcome::Incomplete(cause) = native.outcome else {
+        panic!("original native shortage");
+    };
+    assert_eq!(
+        cause.charge_point,
+        quire_exact::ChargePoint::IntegerArithmeticOperands
+    );
+    assert_eq!(cause.next_charge, Integer::from(2_u64));
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-1")]
+#[test]
+fn integer_order_relations_follow_independent_three_way_truth_rows() {
+    for (left, right, expected) in [
+        ("-9", "7", [true, true, false, false]),
+        (
+            "340282366920938463463374607431768211456",
+            "340282366920938463463374607431768211456",
+            [false, true, false, true],
+        ),
+        (
+            "340282366920938463463374607431768211457",
+            "340282366920938463463374607431768211456",
+            [false, false, true, true],
+        ),
+    ] {
+        for (operator, expected) in [
+            OrderingOperator::Less,
+            OrderingOperator::LessOrEqual,
+            OrderingOperator::Greater,
+            OrderingOperator::GreaterOrEqual,
+        ]
+        .into_iter()
+        .zip(expected)
+        {
+            let mut input = scalar_result_parts(0, "0", "0", "0");
+            let left = scalar_literal(&mut input, left);
+            let right = scalar_literal(&mut input, right);
+            let condition = lexical_expression(
+                &mut input,
+                "scalar-init",
+                ValueType::Boolean,
+                Operation::IntegerOrder {
+                    operator,
+                    left,
+                    right,
+                },
+            );
+            let state = input.layout.state.value_type.clone();
+            let good = state_at(&input, 99);
+            let good = lexical_expression(
+                &mut input,
+                "scalar-init",
+                state.clone(),
+                Operation::Literal(good),
+            );
+            let root = lexical_expression(
+                &mut input,
+                "scalar-init",
+                state,
+                Operation::If {
+                    condition,
+                    when_true: good,
+                    when_false: ExpressionId(0),
+                },
+            );
+            input.functions[0].body = root;
+            let monitor = build(BuildPlan {
+                program: Program::try_new(input).unwrap(),
+                budget: execution_budget(),
+            })
+            .unwrap();
+            assert_now(&monitor, if expected { 99 } else { 0 });
+        }
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-1")]
+#[test]
+fn integer_bounded_result_refusal_preserves_native_cause_as_an_invariant() {
+    let mut input = scalar_result_parts(0, "1", "2", "3");
+    let arithmetic = input
+        .expressions
+        .iter_mut()
+        .find(|node| matches!(node.operation, Operation::IntegerAdd { .. }))
+        .unwrap();
+    arithmetic.value_type =
+        ValueType::Int(IntegerInterval::new(Integer::zero(), Integer::from(2_u64)).unwrap());
+    let failure = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .err()
+    .expect("3 is outside declared [0,2]");
+    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert!(failure.resource.is_none());
+    assert_eq!(
+        failure.invariant.unwrap().code,
+        quire_contract_runtime::monitor::ExecutorInvariantCode::Scalar
+    );
+    let quire_exact::Outcome::Refused(quire_exact::Refusal::IntegerOutOfDomain { target }) =
+        failure.scalar.unwrap().outcome
+    else {
+        panic!("original native domain refusal");
+    };
+    assert_eq!(
+        *target,
+        IntegerInterval::new(Integer::zero(), Integer::from(2_u64)).unwrap()
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-2")]
+#[test]
+fn integer_native_limits_are_cumulative_and_lazy_branches_do_not_charge() {
+    let program = Program::try_new(scalar_result_parts(0, "1", "2", "3")).unwrap();
+    let mut budget = execution_budget();
+    budget.scalar.result_units = 2;
+    let failure = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .err()
+    .expect("arithmetic and two selected comparisons need three retained results");
+    let stop = failure.resource.unwrap();
+    assert_eq!(
+        stop.resource,
+        StepResource::Scalar(quire_exact::LimitKind::ResultUnits)
+    );
+    assert_eq!(
+        (stop.limit, stop.spent, stop.requested),
+        (Some(2), 2, Integer::one())
+    );
+    let quire_exact::Outcome::Incomplete(cause) = failure.scalar.unwrap().outcome else {
+        panic!("native cumulative stop");
+    };
+    assert_eq!(
+        cause.charge_point,
+        quire_exact::ChargePoint::OrderingResultRetain
+    );
+    budget.scalar.result_units = 3;
+    assert_now(&build(BuildPlan { program, budget }).unwrap(), 99);
+
+    let mut input = scalar_result_parts(0, "1", "2", "3");
+    let native_branch = input.functions[0].body;
+    let condition = lexical_expression(
+        &mut input,
+        "scalar-init",
+        ValueType::Boolean,
+        Operation::Literal(Value::Boolean(false)),
+    );
+    let state = input.layout.state.value_type.clone();
+    let root = lexical_expression(
+        &mut input,
+        "scalar-init",
+        state,
+        Operation::If {
+            condition,
+            when_true: native_branch,
+            when_false: ExpressionId(0),
+        },
+    );
+    input.functions[0].body = root;
+    let mut budget = execution_budget();
+    budget.scalar.integer_bits = 0;
+    budget.scalar.work_units = 0;
+    budget.scalar.result_units = 0;
+    assert_now(
+        &build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget,
+        })
+        .unwrap(),
+        0,
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-3")]
+#[test]
+fn integer_computed_canonical_values_consume_explicit_scratch() {
+    let program = Program::try_new(scalar_result_parts(3, "1", "0", "-1")).unwrap();
+    let mut budget = execution_budget();
+    budget.scratch_elements = 1;
+    let failure = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .err()
+    .expect("computed canonical integer and result address need separate slots");
+    assert!(
+        failure.scalar.is_none(),
+        "native arithmetic completed; the address reservation stopped"
+    );
+    assert!(failure.invariant.is_none());
+    let stop = failure.resource.unwrap();
+    assert_eq!(stop.resource, StepResource::ScratchElements);
+    assert_eq!((stop.spent, stop.requested), (1, Integer::one()));
+    assert_now(
+        &build(BuildPlan {
+            program,
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-1")]
+#[test]
+fn integer_operations_refuse_noninteger_operands_and_wrong_result_annotations() {
+    for case in 0..3 {
+        let mut input = scalar_result_parts(0, "1", "2", "3");
+        let invalid = lexical_expression(
+            &mut input,
+            "scalar-init",
+            ValueType::Boolean,
+            Operation::Literal(Value::Boolean(true)),
+        );
+        let arithmetic = input
+            .expressions
+            .iter_mut()
+            .find(|node| matches!(node.operation, Operation::IntegerAdd { .. }))
+            .unwrap();
+        match case {
+            0 => {
+                let Operation::IntegerAdd { left, .. } = &mut arithmetic.operation else {
+                    unreachable!()
+                };
+                *left = invalid;
+            }
+            1 => arithmetic.value_type = ValueType::Boolean,
+            _ => {
+                arithmetic.operation = Operation::IntegerOrder {
+                    operator: OrderingOperator::Less,
+                    left: invalid,
+                    right: invalid,
+                }
+            }
+        }
+        assert_eq!(
+            Program::try_new(input)
+                .err()
+                .expect("bad scalar annotation must refuse before execution")
+                .code,
+            ProgramRefusalCode::TypeMismatch
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-10", "interface-008-AC-2")]
+#[test]
+fn integer_binary_operands_stop_on_the_left_native_operation_before_the_right() {
+    let mut input = scalar_result_parts(0, "1", "2", "3");
+    let one = scalar_literal(&mut input, "1");
+    let large = scalar_literal(&mut input, "1024");
+    let left = lexical_expression(
+        &mut input,
+        "scalar-init",
+        ValueType::Integer,
+        Operation::IntegerNegate { value: one },
+    );
+    let right = lexical_expression(
+        &mut input,
+        "scalar-init",
+        ValueType::Integer,
+        Operation::IntegerNegate { value: large },
+    );
+    let arithmetic = input
+        .expressions
+        .iter_mut()
+        .find(|node| matches!(node.operation, Operation::IntegerAdd { .. }))
+        .unwrap();
+    arithmetic.operation = Operation::IntegerAdd { left, right };
+    let mut budget = execution_budget();
+    budget.scalar.integer_bits = 0;
+    let failure = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget,
+    })
+    .err()
+    .expect("left operand's native operation must stop first");
+    let native = failure.scalar.unwrap();
+    assert_eq!(
+        native.site,
+        quire_contract_runtime::monitor::ExecutionSite::Expression(left)
+    );
+    let quire_exact::Outcome::Incomplete(cause) = native.outcome else {
+        panic!("left native shortage");
+    };
+    assert_eq!(cause.next_charge, Integer::one());
 }
