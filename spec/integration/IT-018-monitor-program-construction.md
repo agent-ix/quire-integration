@@ -117,7 +117,9 @@ placement in the controlled layout grants no temporal-root admission or executio
    identities select distinct State fields despite their declaration order.
    Temporary canonical owners drop, foreign owners and missing members refuse,
    and tuple receivers or wrong result types cannot become record reads. Tight
-   scratch budgets stop before returning a state. These controlled parts do not
+   scratch budgets stop before returning a state. A conforming dynamic record
+   diagnostic reverses physical field order and checks the exact per-field scan
+   work, using an explicitly test-owned native edge. These controlled parts do not
    qualify the real temporal producer.
 
 ## Expected Results

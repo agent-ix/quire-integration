@@ -160,6 +160,7 @@ record Instance { subject: Integer; subformula: Integer; born: Integer; }
 union Outcome { Failed(GapPayload), False, Incomplete(LimitPayload), Indeterminate, Pending, True }
 record Result { instance: Instance; outcome: Outcome; }
 type Results = Sequence<Result>;
+record StateHolderChild { left_state: State; right_state: State; }
 record StateHolder { right_state: State; left_state: State; }
 tuple StatePair(State, State);
 tuple StatePairChild(State, State);
@@ -192,6 +193,7 @@ function entry_event using v(s: State, delta: Integer, captures: Inputs): Step p
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function record_init using v(): State pure { let holder = StateHolder { right_state: State { now: 99, history_start: 0, activations: sequence[], event_position: 0 }, left_state: State { now: 11, history_start: 0, activations: sequence[], event_position: 0 } } in holder.left_state }
+function touch_holder_child using v(x: StateHolderChild): StateHolderChild pure { x }
 function touch_holder using v(x: StateHolder): StateHolder pure { x }
 function state_pair using v(a: State, b: State): StatePair pure { StatePair(a, b) }
 function touch_pair_child using v(x: StatePairChild): StatePairChild pure { x }
@@ -223,6 +225,7 @@ function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
     ("state-holder", "StateHolder"),
+    ("state-holder-child", "StateHolderChild"),
     ("record-init", "record_init"),
     ("state-pair", "StatePair"),
     ("state-pair-child", "StatePairChild"),
@@ -528,6 +531,15 @@ fn parts_for(profile: FixtureState) -> ProgramParts {
                     ("outcome", ValueType::Composite(key("outcome"))),
                 ],
             ),
+            // Diagnostic native edge; the producer supplies the two keys and shapes only.
+            record(
+                "state-holder-child",
+                vec![
+                    ("left_state", ValueType::Composite(key("state"))),
+                    ("right_state", ValueType::Composite(key("state"))),
+                ],
+            )
+            .with_supertypes(vec![key("state-holder")]),
             record(
                 "state-holder",
                 vec![
@@ -2748,4 +2760,55 @@ fn tuple_dynamic_native_conformance_preserves_position_and_checks_nonidentical_s
     })
     .unwrap();
     assert_now(&monitor, 0);
+}
+
+#[trace("TC-098", "IT-018-SC-09", "interface-007-AC-1", "interface-007-AC-3")]
+#[test]
+fn record_dynamic_declaration_uses_its_own_order_and_charges_every_inspected_field() {
+    for (member, expected, required_work) in [("left_state", 11, 5_u64), ("right_state", 99, 6_u64)]
+    {
+        let (mut input, literal) = record_parts(member);
+        // Native edge is controlled; these are the original source-declared shapes.
+        input.expressions[literal.0].operation = Operation::Literal(
+            input
+                .types
+                .record(
+                    key("state-holder-child"),
+                    vec![
+                        ("left_state", FieldValue::Present(state_at(&input, 11))),
+                        ("right_state", FieldValue::Present(state_at(&input, 99))),
+                    ],
+                )
+                .unwrap(),
+        );
+        let program = Program::try_new(input).unwrap();
+        let mut budget = execution_budget();
+        budget.work = required_work.checked_sub(1).unwrap();
+        let failure = build(BuildPlan {
+            program: Rc::clone(&program),
+            budget,
+        })
+        .err()
+        .expect("last scanned field or return is charged");
+        assert!(failure.admission.is_none());
+        assert!(failure.invariant.is_none());
+        let stop = failure.resource.unwrap();
+        assert_eq!(stop.resource, StepResource::Work);
+        assert_eq!(
+            (stop.spent, stop.requested),
+            (u128::from(required_work.checked_sub(1).unwrap()), 1)
+        );
+        budget.work = required_work;
+        let monitor = build(BuildPlan { program, budget }).unwrap();
+        assert_now(&monitor, expected);
+    }
+    let (input, _) = record_parts("left_state");
+    let mut budget = execution_budget();
+    budget.work = 4;
+    let monitor = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget,
+    })
+    .unwrap();
+    assert_now(&monitor, 11);
 }
