@@ -232,3 +232,97 @@ bindings:
   ac_id: interface-012-AC-3
   trace: correct
 ```
+
+## Frozen dispatch fix carry
+
+Disposition verified at unchanged RT65bd26971bbf23a9bce4432ef459536fc1b75dcd / integration0d1bd5ad55e8df8ac088138c6328cbd27b823a47. Actual test diff and preserved logs show ten dispatch controls PASS and touched Clippy PASS ONLY on the explicitly archived interim lock. This is not a whole85 or current-cohort qualification claim. The separately preserved final IR953 dependency-head long-chain control passes100001nodes (61.13s test,63.78s command); that formerly owed narrow run is now evidenced. Candidate committed IT cohort still fails six unchanged driver API adoption errors. Accepted external RT coverage discharge remains unresolved; no expanded114 exception, producer/FR276/full-feature acceptance, final aggregate or IEEE backend claim is granted. No Cargo/backend runs or source/test edits by reviewer.
+
+Boolean retained results use canonical constants rather than the computed arena; the new stopped fold executes IntegerAdd and supplies the computed-arena cleanup evidence. Together these controls establish the original scalar-specific recovery qualification. Existing lexical recovery remains fixed.
+
+### Additional findings from gap clarification
+
+Original review rows are retained; these specific omissions were identified before the fix and are recorded here with their dispositions.
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-002 | medium | The original context refusal test changes only clock_binding; independent package/clause/subject/occurrence/counter/unit/width/profile/order comparisons lack direct controls. | tests/monitor_program.rs |
+| FND-003 | medium | The original watermark regression test does not exercise refusal of a foreign progress_context. | tests/monitor_program.rs |
+| FND-004 | medium | The original Program pointer assertion does not directly distinguish original Results retention after preparation drops or foreign-plan qualification. | tests/monitor_program.rs |
+
+### Dispositions round1
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | The stopped watermark30 preserves committed10; same monitor/budget accepts20 then refuses19. The500-item fold stops on ScratchElements64 and the same machine/budget then computes three-item sum6. Recursive dispatch exhausts native ResultUnits20 after repeated Boolean retention, then the same machine/budget completes later inputs. The fold also populates computed Integer values, so recovery covers both computed storage and native Meter reset. |
+| FND-002 | fixed | Ten independent one-component mismatches assert exact refusal plus unchanged State/baseline; they include package,clause,subject,occurrence,clock,counter,unit,width,profile,order. |
+| FND-003 | fixed | Foreign progress_context refuses with ProgressContext and leaves State unchanged; valid event follows on the same monitor. |
+| FND-004 | fixed | Weak original Results/program owners survive monitor/preparation drops, match returned canonical owners, and expire on final step drop; two separately selected subjects retain distinguishable Program associations. |
+
+```yaml
+findings:
+- fnd: FND-002
+  artifact_id: interface-012-AC-1
+  finding: The original context refusal test changes only clock_binding; independent
+    package/clause/subject/occurrence/counter/unit/width/profile/order comparisons
+    lack direct controls.
+  severity: medium
+  confidence: high
+  check: coverage
+  method: spec-review/evidence
+  related_ids: []
+  path: tests/monitor_program.rs
+  lines: original260cfc3 dispatch controls
+  excerpt: foreign.clock_binding = b"foreign clock";
+- fnd: FND-003
+  artifact_id: interface-012-AC-2
+  finding: The original watermark regression test does not exercise refusal of a foreign
+    progress_context.
+  severity: medium
+  confidence: high
+  check: coverage
+  method: spec-review/evidence
+  related_ids: []
+  path: tests/monitor_program.rs
+  lines: original260cfc3 dispatch controls
+  excerpt: assert_eq!(failure.input, Some(InputRefusal::ProgressRegression));
+- fnd: FND-004
+  artifact_id: interface-012-AC-4
+  finding: The original Program pointer assertion does not directly distinguish original
+    Results retention after preparation drops or foreign-plan qualification.
+  severity: medium
+  confidence: high
+  check: coverage
+  method: spec-review/evidence
+  related_ids: []
+  path: tests/monitor_program.rs
+  lines: original260cfc3 dispatch controls
+  excerpt: assert!(Rc::ptr_eq(step.program(), &program));
+dispositions:
+- fnd: FND-001
+  outcome: fixed
+  after_excerpt: monitor.watermark(watermark(&twenty, &complete)).unwrap();
+  reason: The stopped watermark30 preserves committed10; same monitor/budget accepts20
+    then refuses19. The500-item fold stops on ScratchElements64 and the same machine/budget
+    then computes three-item sum6. Recursive dispatch exhausts native ResultUnits20
+    after repeated Boolean retention, then the same machine/budget completes later
+    inputs. The fold also populates computed Integer values, so recovery covers both
+    computed storage and native Meter reset.
+- fnd: FND-002
+  outcome: fixed
+  after_excerpt: InputRefusal::Package => context.package_lock = b"foreign package",
+  reason: Ten independent one-component mismatches assert exact refusal plus unchanged
+    State/baseline; they include package,clause,subject,occurrence,clock,counter,unit,width,profile,order.
+- fnd: FND-003
+  outcome: fixed
+  after_excerpt: 'progress_context: b"foreign progress",'
+  reason: Foreign progress_context refuses with ProgressContext and leaves State unchanged;
+    valid event follows on the same monitor.
+- fnd: FND-004
+  outcome: fixed
+  after_excerpt: assert!(original.upgrade().is_none());
+  reason: Weak original Results/program owners survive monitor/preparation drops,
+    match returned canonical owners, and expire on final step drop; two separately
+    selected subjects retain distinguishable Program associations.
+```
+
+Current scoped method verdict: **PASS**. Overall merge/feature readiness remains conditional on the explicitly unresolved external gates.

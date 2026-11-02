@@ -127,3 +127,11 @@ scope:
     a replacement identity or temporal verdict.
 bindings: []
 ```
+
+## Frozen dispatch fix carry
+
+Disposition verified at unchanged RT65bd26971bbf23a9bce4432ef459536fc1b75dcd / integration0d1bd5ad55e8df8ac088138c6328cbd27b823a47. Actual test diff and preserved logs show ten dispatch controls PASS and touched Clippy PASS ONLY on the explicitly archived interim lock. This is not a whole85 or current-cohort qualification claim. The separately preserved final IR953 dependency-head long-chain control passes100001nodes (61.13s test,63.78s command); that formerly owed narrow run is now evidenced. Candidate committed IT cohort still fails six unchanged driver API adoption errors. Accepted external RT coverage discharge remains unresolved; no expanded114 exception, producer/FR276/full-feature acceptance, final aggregate or IEEE backend claim is granted. No Cargo/backend runs or source/test edits by reviewer.
+
+Boolean retained results use canonical constants rather than the computed arena; the new stopped fold executes IntegerAdd and supplies the computed-arena cleanup evidence. Together these controls establish the original scalar-specific recovery qualification. Existing lexical recovery remains fixed.
+
+Current scoped method verdict: **PASS**. Overall merge/feature readiness remains conditional on the explicitly unresolved external gates.
