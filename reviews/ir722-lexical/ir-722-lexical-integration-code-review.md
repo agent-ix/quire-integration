@@ -125,3 +125,19 @@ dispositions:
     \ StepBudget {\n            scratch_elements: 5,\n            ..execution_budget()\n\
     \        },\n    })\n    .unwrap();\n    assert_now(&monitor, 99);"
 ```
+
+## Dispatch carry disposition
+
+Previously verified tight recursive shadow accounting plus the frozen260cfc3 recursive event stop/retry now directly qualify both original lexical evidence subclauses. Same monitor/machine and budget survive Work stop, retry commits baseline700 with delta0, then703 gives delta3. Broader producer/current-cohort/coverage acceptance stays open.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Previously verified tight recursive shadow accounting plus the frozen260cfc3 recursive event stop/retry now directly qualify both original lexical evidence subclauses. Same monitor/machine and budget survive Work stop, retry commits baseline700 with delta0, then703 gives delta3. Broader producer/current-cohort/coverage acceptance stays open. |
+
+```yaml
+dispositions:
+- fnd: FND-001
+  outcome: fixed
+  after_excerpt: // Neither monitor nor machine nor limits is replaced between the
+    stop and retry.
+```

@@ -111,3 +111,22 @@ dispositions:
 ```
 
 Current method verdict after the documented disposition: **CONDITIONAL**. All broader qualification blockers remain explicit.
+
+## Dispatch carry disposition
+
+The earlier scalar API-doc fix remains fixed. New recursive dispatch is relevant but does not yet prove scalar computed/native-meter recovery; preserve that existing finding ownership rather than duplicate it in the new review.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | deferred | The new same-Machine recursive dispatch control qualifies lexical/projection cleanup, but executes no computed scalar/native meter charge before stopping. Scalar-specific stopped-computed/native-meter recovery remains unqualified pending authentic dispatch control on the same open IR-722; no AC narrowing or fresh-machine substitution. |
+
+```yaml
+dispositions:
+- fnd: FND-001
+  outcome: deferred
+  reason: The new same-Machine recursive dispatch control qualifies lexical/projection
+    cleanup, but executes no computed scalar/native meter charge before stopping.
+    Scalar-specific stopped-computed/native-meter recovery remains unqualified pending
+    authentic dispatch control on the same open IR-722; no AC narrowing or fresh-machine
+    substitution.
+```

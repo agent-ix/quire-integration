@@ -171,7 +171,11 @@ placement in the controlled layout grants no temporal-root admission or executio
     the event baseline unchanged; modular wrap has an independent delta oracle.
     A recursive lexical resource stop preserves state and the unconsumed baseline,
     and the same machine and budget successfully process a subsequent input. These
-    controlled bodies do not qualify real-producer temporal semantics.
+    controls include native scalar exhaustion, stopped fold re-entry and stopped
+    watermark progress rollback. Every attached context component has an independent
+    negative control; original Results and distinct program associations survive
+    preparation and monitor drop. These controlled bodies do not qualify
+    real-producer temporal semantics.
 
 ## Expected Results
 
