@@ -9,8 +9,8 @@ use quire_contract_runtime::monitor::{
     StepBudget, StepResource, TypeBinding,
 };
 use quire_exact::{
-    CollectionKind, CollectionType, FieldValue, Identifier, Integer, NodeKey, Presence, Rational,
-    TextProfile, TextType, Value, ValueType,
+    CollectionKind, CollectionType, FieldValue, Identifier, Integer, IntegerInterval, MemberId,
+    MemberOwner, NodeKey, Presence, Rational, TextProfile, TextType, Value, ValueType,
 };
 use quire_semantic_value::{
     declaration::{
@@ -56,8 +56,8 @@ fn key(name: &str) -> NodeKey {
                 "Time" | "Length" => "dimension",
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
-                "state-pair" | "bool-pair" | "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "state-pair-child" | "integer-pair" | "bounded-integer-pair" | "state-pair" | "bool-pair" | "step" | "step-buffered" | "step-missing-position" => "tuple",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "record-init" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -160,7 +160,11 @@ record Instance { subject: Integer; subformula: Integer; born: Integer; }
 union Outcome { Failed(GapPayload), False, Incomplete(LimitPayload), Indeterminate, Pending, True }
 record Result { instance: Instance; outcome: Outcome; }
 type Results = Sequence<Result>;
+record StateHolder { right_state: State; left_state: State; }
 tuple StatePair(State, State);
+tuple StatePairChild(State, State);
+tuple IntegerPair(Integer, Boolean);
+tuple BoundedIntegerPair(Int[0, 10], Boolean);
 tuple BoolPair(Boolean, Boolean);
 tuple Step(State, Results);
 tuple StepBuffered(StateBuffered, Results);
@@ -187,7 +191,12 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function record_init using v(): State pure { let holder = StateHolder { right_state: State { now: 99, history_start: 0, activations: sequence[], event_position: 0 }, left_state: State { now: 11, history_start: 0, activations: sequence[], event_position: 0 } } in holder.left_state }
+function touch_holder using v(x: StateHolder): StateHolder pure { x }
 function state_pair using v(a: State, b: State): StatePair pure { StatePair(a, b) }
+function touch_pair_child using v(x: StatePairChild): StatePairChild pure { x }
+function touch_integer_pair using v(x: IntegerPair): IntegerPair pure { x }
+function touch_bounded_pair using v(x: BoundedIntegerPair): BoundedIntegerPair pure { x }
 function bool_pair using v(): BoolPair pure { BoolPair(true, false) }
 function tuple_init using v(): State pure { State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
 function boolean_init using v(): State pure { if not false and (true or false) then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 22, history_start: 0, activations: sequence[], event_position: 0 } }
@@ -213,7 +222,12 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("state-holder", "StateHolder"),
+    ("record-init", "record_init"),
     ("state-pair", "StatePair"),
+    ("state-pair-child", "StatePairChild"),
+    ("integer-pair", "IntegerPair"),
+    ("bounded-integer-pair", "BoundedIntegerPair"),
     ("bool-pair", "BoolPair"),
     ("tuple-init", "tuple_init"),
     ("boolean-init", "boolean_init"),
@@ -514,6 +528,13 @@ fn parts_for(profile: FixtureState) -> ProgramParts {
                     ("outcome", ValueType::Composite(key("outcome"))),
                 ],
             ),
+            record(
+                "state-holder",
+                vec![
+                    ("right_state", ValueType::Composite(key("state"))),
+                    ("left_state", ValueType::Composite(key("state"))),
+                ],
+            ),
             CompositeDeclaration::new(
                 key("state-pair"),
                 "state-pair",
@@ -522,6 +543,32 @@ fn parts_for(profile: FixtureState) -> ProgramParts {
                     ValueType::Composite(key("state")),
                 ]),
             ),
+            // This is a controlled native conformance edge, not an emitted QSL relationship.
+            CompositeDeclaration::new(
+                key("state-pair-child"),
+                "state-pair-child",
+                CompositeShape::Tuple(vec![
+                    ValueType::Composite(key("state")),
+                    ValueType::Composite(key("state")),
+                ]),
+            )
+            .with_supertypes(vec![key("state-pair")]),
+            CompositeDeclaration::new(
+                key("integer-pair"),
+                "integer-pair",
+                CompositeShape::Tuple(vec![ValueType::Integer, ValueType::Boolean]),
+            ),
+            CompositeDeclaration::new(
+                key("bounded-integer-pair"),
+                "bounded-integer-pair",
+                CompositeShape::Tuple(vec![
+                    ValueType::Int(
+                        IntegerInterval::new(Integer::zero(), Integer::from(10_u64)).unwrap(),
+                    ),
+                    ValueType::Boolean,
+                ]),
+            )
+            .with_supertypes(vec![key("integer-pair")]),
             CompositeDeclaration::new(
                 key("bool-pair"),
                 "bool-pair",
@@ -2433,4 +2480,272 @@ fn tuple_deep_projections_use_explicit_continuations_without_subtree_copies() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+fn record_parts(member: &str) -> (ProgramParts, ExpressionId) {
+    let mut input = parts();
+    input.functions[0].key = key("record-init");
+    input.expressions[0].key = key("record-init");
+    let holder = input
+        .types
+        .record(
+            key("state-holder"),
+            vec![
+                ("right_state", FieldValue::Present(state_at(&input, 99))),
+                ("left_state", FieldValue::Present(state_at(&input, 11))),
+            ],
+        )
+        .unwrap();
+    let literal = lexical_expression(
+        &mut input,
+        "record-init",
+        ValueType::Composite(key("state-holder")),
+        Operation::Literal(holder),
+    );
+    let state = input.layout.state.value_type.clone();
+    let root = lexical_expression(
+        &mut input,
+        "record-init",
+        state,
+        Operation::RecordField {
+            value: literal,
+            member: MemberId::new(MemberOwner::Node(key("state-holder")), member).unwrap(),
+        },
+    );
+    input.functions[0].body = root;
+    (input, literal)
+}
+
+#[trace("TC-098", "IT-018-SC-09", "interface-007-AC-1")]
+#[test]
+fn record_members_retain_declared_identity_and_original_value_owners() {
+    for (member, expected) in [("left_state", 11), ("right_state", 99)] {
+        let (input, literal) = record_parts(member);
+        let monitor = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap();
+        assert_now(&monitor, expected);
+        let Operation::Literal(Value::Composite(owner)) =
+            &monitor.program().expression(literal).unwrap().operation
+        else {
+            panic!("retained holder");
+        };
+        assert_eq!(std::sync::Arc::strong_count(owner), 1);
+        let Value::Composite(state) = monitor.state() else {
+            panic!("selected state");
+        };
+        assert_eq!(std::sync::Arc::strong_count(state), 2);
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-09", "interface-007-AC-2")]
+#[test]
+fn record_members_refuse_wrong_owner_missing_member_tuple_and_wrong_result() {
+    for case in 0..4 {
+        let (mut input, literal) = record_parts("left_state");
+        let root = input.functions[0].body;
+        match case {
+            0 => {
+                input.expressions[root.0].operation = Operation::RecordField {
+                    value: literal,
+                    member: MemberId::new(MemberOwner::Node(key("state")), "left_state").unwrap(),
+                }
+            }
+            1 => {
+                input.expressions[root.0].operation = Operation::RecordField {
+                    value: literal,
+                    member: MemberId::new(MemberOwner::Node(key("state-holder")), "missing")
+                        .unwrap(),
+                }
+            }
+            2 => {
+                input.expressions[literal.0].value_type = ValueType::Composite(key("state-pair"));
+                input.expressions[literal.0].operation = Operation::Literal(
+                    input
+                        .types
+                        .tuple(
+                            key("state-pair"),
+                            vec![state_at(&input, 0), state_at(&input, 1)],
+                        )
+                        .unwrap(),
+                );
+                input.expressions[root.0].operation = Operation::RecordField {
+                    value: literal,
+                    member: MemberId::new(MemberOwner::Node(key("state-pair")), "left_state")
+                        .unwrap(),
+                };
+            }
+            _ => input.expressions[root.0].value_type = ValueType::Boolean,
+        }
+        let failure = Program::try_new(input)
+            .err()
+            .expect("invalid member must refuse");
+        assert_eq!(
+            failure.code,
+            if case < 2 {
+                ProgramRefusalCode::InvalidReference
+            } else {
+                ProgramRefusalCode::TypeMismatch
+            }
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-09", "interface-007-AC-3")]
+#[test]
+fn record_member_addresses_consume_scratch_before_returning_state() {
+    let (input, _) = record_parts("left_state");
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.scratch_elements = 1;
+    let failure = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .err()
+    .expect("projection and result require separate slots");
+    let stop = failure.resource.unwrap();
+    assert_eq!(stop.resource, StepResource::ScratchElements);
+    assert_eq!((stop.spent, stop.requested), (1, 1));
+    budget.scratch_elements = 2;
+    let monitor = build(BuildPlan { program, budget }).unwrap();
+    assert_now(&monitor, 11);
+}
+
+#[trace("TC-098", "IT-018-SC-09", "interface-007-AC-2")]
+#[test]
+fn record_required_read_refuses_optional_presence_without_inventing_an_option_value() {
+    let mut input = parts();
+    let source = state_at(&input, 0);
+    let Value::Composite(state) = source else {
+        panic!("state fixture");
+    };
+    let activations = state.slots().get(2).unwrap().clone();
+    let optional = input
+        .types
+        .record(
+            key("state-optional-position"),
+            vec![
+                ("now", FieldValue::Present(Value::Integer(Integer::zero()))),
+                (
+                    "history_start",
+                    FieldValue::Present(Value::Integer(Integer::zero())),
+                ),
+                ("activations", activations),
+                ("event_position", FieldValue::Absent),
+            ],
+        )
+        .unwrap();
+    let literal = lexical_expression(
+        &mut input,
+        "record-init",
+        ValueType::Composite(key("state-optional-position")),
+        Operation::Literal(optional),
+    );
+    lexical_expression(
+        &mut input,
+        "record-init",
+        ValueType::Integer,
+        Operation::RecordField {
+            value: literal,
+            member: MemberId::new(
+                MemberOwner::Node(key("state-optional-position")),
+                "event_position",
+            )
+            .unwrap(),
+        },
+    );
+    assert_eq!(
+        Program::try_new(input)
+            .err()
+            .expect("required projection refuses optional field")
+            .code,
+        ProgramRefusalCode::TypeMismatch
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-08", "interface-006-AC-1")]
+#[test]
+fn tuple_dynamic_native_conformance_preserves_position_and_checks_nonidentical_scalar_slots() {
+    // Declaration keys/shapes come from QSL/IR. The conformance edges above are
+    // controlled native diagnostics, not real-producer temporal qualification.
+    let (mut input, literal) = tuple_parts(1);
+    input.expressions[literal.0].operation = Operation::Literal(
+        input
+            .types
+            .tuple(
+                key("state-pair-child"),
+                vec![state_at(&input, 11), state_at(&input, 99)],
+            )
+            .unwrap(),
+    );
+    let monitor = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+
+    let mut input = parts();
+    input.functions[0].key = key("tuple-init");
+    input.expressions[0].key = key("tuple-init");
+    let pair = input
+        .types
+        .tuple(
+            key("bounded-integer-pair"),
+            vec![Value::Integer(Integer::from(7_u64)), Value::Boolean(true)],
+        )
+        .unwrap();
+    let literal = lexical_expression(
+        &mut input,
+        "tuple-init",
+        ValueType::Composite(key("integer-pair")),
+        Operation::Literal(pair),
+    );
+    let projected = lexical_expression(
+        &mut input,
+        "tuple-init",
+        ValueType::Integer,
+        Operation::TupleElement {
+            value: literal,
+            position: 0,
+        },
+    );
+    let state = input.layout.state.value_type.clone();
+    let root = lexical_expression(
+        &mut input,
+        "tuple-init",
+        state,
+        Operation::Let {
+            binding: LocalId {
+                function: FunctionId(0),
+                position: 0,
+            },
+            value: projected,
+            body: ExpressionId(0),
+        },
+    );
+    input.functions[0].body = root;
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.work = 4;
+    let failure = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .err()
+    .expect("native scalar slot membership must request work");
+    assert!(
+        failure.admission.is_some(),
+        "original native membership cause is retained"
+    );
+    assert_eq!(failure.resource.unwrap().resource, StepResource::Work);
+    let monitor = build(BuildPlan {
+        program,
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_now(&monitor, 0);
 }

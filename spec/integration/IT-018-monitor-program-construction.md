@@ -107,7 +107,18 @@ placement in the controlled layout grants no temporal-root admission or executio
    build returns. Record receivers, unknown positions and wrong result types
    refuse. Tight scratch budgets charge retained projection addresses; a deep
    chain executes on a small native stack and releases every temporary tuple
-   owner without copying a projected subtree. No temporal outcome is qualified.
+   owner without copying a projected subtree. A separate native conformance
+   diagnostic uses QSL/IR declaration keys and shapes with explicitly test-owned
+   supertype edges. It exercises dynamic positional meaning and bounded scalar
+   slot admission, including its native work refusal. This does not assert that
+   QSL emitted those edges. No temporal outcome is qualified.
+
+9. Execute required record diagnostics. IT-018-SC-09: original node-owned member
+   identities select distinct State fields despite their declaration order.
+   Temporary canonical owners drop, foreign owners and missing members refuse,
+   and tuple receivers or wrong result types cannot become record reads. Tight
+   scratch budgets stop before returning a state. These controlled parts do not
+   qualify the real temporal producer.
 
 ## Expected Results
 
