@@ -34,7 +34,10 @@ Author a source containing the declaration identities needed by the construction
 controls. Obtain every key from its uniquely selected admitted declaration. Construct
 controlled ordinary expression arenas and shared nominal values, then vary references,
 types, ownership, source locations and exact premises. These controlled arenas are not
-represented as the temporal program emitted by QSL.
+represented as the temporal program emitted by QSL. Their ordinary diagnostic records
+use `born` and `amount` fields and do not instantiate FR-487 activation/result records.
+A genuinely admitted derived sequence key supplies the nested-key storage probe; its
+placement in the controlled layout grants no temporal-root admission or execution credit.
 
 ## Test Procedure
 
