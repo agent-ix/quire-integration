@@ -70,3 +70,21 @@ dispositions:
 
     unit affine_tick : Time = rational(1, 1) * root_tick + rational(7, 1);'
 ```
+
+## QSpec 595 amendment carry
+
+QSpec #595 amendment carry inspected RT 8e0ff8fb57d5d24f7fe88d3619149e011de8e95d and integration 7ee2876a342446bf4a9b963c9cfa764a10e6b908 against the prior reviewed construction slice. Canonical source ruling now appends event_position to State; seventeen root bindings and public Layout/API remain unchanged. The outer State validator borrows the shared record, requires exact ordered required fields, Integer now/history_start/event_position, canonical buffer_0..n Sequence fields matching capacity count, and Sequence activations. It returns TypeMismatch at the State key; no compatibility default or host counter mirror appears. Source admission still owns activation/result internals.
+
+Reviewed actual QSL State variants and matching shared declarations, valid zero/two-buffer cohorts, typed missing-position closure, malformed outer fields, State-specific refusal assertions, and retained literal zero. Supplied evidence is 14 passing controls, all-target Clippy pass, and intended red/green for the complete missing-position closure. These establish construction only. FR-276-AC-11 event increments and watermark/poll/gap preservation remain open execution obligations, together with AC-1..10. No genuine temporal producer or execution acceptance is granted. Previous code findings remain fixed; full-delivery gap remains deferred/open. Pending consumer acknowledgement, strict coverage authorization and incomplete heavy IEEE proof remain explicit; no merge-ready or all-gates-green claim is made. Reviewer ran no Cargo/Kani and changed no source.
+
+No new defect in this method. A separate EARS method records the newly compound SHALL sentence; its disposition is still required.
+
+## Integration link fix (round 4)
+
+Inspected efe9b3c6b67f80e25e476de633ded1c19b86a084 against 7ee2876a342446bf4a9b963c9cfa764a10e6b908: the only product/spec delta is IT-018 verifies target changing from interface-002 to the exact declared artifact id interface_002. Criterion IDs and all code/tests are unchanged. Dependency FND-002 is fixed; all earlier integration findings remain fixed. Supplied changed-doc Quire validation passes. Construction amendment review is PASS; final ordinary aggregate remains for the lead to run. RT EARS finding remains pending a separate RT fix. No temporal producer/execution credit, Cargo/Kani invocation, source edit or merge performed by reviewer.
+
+Current method verdict: **PASS** for construction carry.
+
+```yaml
+dispositions: []
+```

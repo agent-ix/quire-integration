@@ -54,6 +54,8 @@ scope:
 
 | FND | outcome | reason |
 | --- | --- | --- |
+| FND-002 | still-open | The current frozen IT-018 frontmatter still uses interface-002. Correct the relationship target to the declared interface_002 artifact id; criterion IDs remain unchanged. |
+| FND-002 | fixed | Verified exact relationship target at efe9b3c6b67f80e25e476de633ded1c19b86a084; criterion IDs unchanged. |
 
 No findings required disposition in this method.
 
@@ -65,4 +67,62 @@ Current construction carry verdict: **PASS**. Repository aggregate gates remain 
 
 ```yaml
 dispositions: []
+```
+
+## QSpec 595 amendment carry
+
+QSpec #595 amendment carry inspected RT 8e0ff8fb57d5d24f7fe88d3619149e011de8e95d and integration 7ee2876a342446bf4a9b963c9cfa764a10e6b908 against the prior reviewed construction slice. Canonical source ruling now appends event_position to State; seventeen root bindings and public Layout/API remain unchanged. The outer State validator borrows the shared record, requires exact ordered required fields, Integer now/history_start/event_position, canonical buffer_0..n Sequence fields matching capacity count, and Sequence activations. It returns TypeMismatch at the State key; no compatibility default or host counter mirror appears. Source admission still owns activation/result internals.
+
+Reviewed actual QSL State variants and matching shared declarations, valid zero/two-buffer cohorts, typed missing-position closure, malformed outer fields, State-specific refusal assertions, and retained literal zero. Supplied evidence is 14 passing controls, all-target Clippy pass, and intended red/green for the complete missing-position closure. These establish construction only. FR-276-AC-11 event increments and watermark/poll/gap preservation remain open execution obligations, together with AC-1..10. No genuine temporal producer or execution acceptance is granted. Previous code findings remain fixed; full-delivery gap remains deferred/open. Pending consumer acknowledgement, strict coverage authorization and incomplete heavy IEEE proof remain explicit; no merge-ready or all-gates-green claim is made. Reviewer ran no Cargo/Kani and changed no source.
+
+No new defect in this method. A separate EARS method records the newly compound SHALL sentence; its disposition is still required.
+
+## New findings (disposition pass 3)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-002 | medium | The verifies relationship uses interface-002, but the RT interface artifact id is interface_002. Quire preserves artifact IDs and URI terminal segments verbatim, so this edge names a different artifact; use interface_002 while retaining the hyphenated criterion IDs. | spec/integration/IT-018-monitor-program-construction.md:6 |
+
+Grounded by RT interface frontmatter at 8e0ff8fb (id: interface_002), and Quire corpus resolution: artifact_key returns doc.id.clone(); extract_target_id returns the terminal URI segment without hyphen/underscore normalization; resolution uses exact by_id.contains_key. This is independent of an external artifact being absent from a local corpus. The existing RT TC-209 already uses interface_002. No source/spec edit performed by reviewer.
+
+
+```yaml
+new_findings:
+- fnd: FND-002
+  severity: medium
+  confidence: high
+  method: spec-review/dependency
+  check: other
+  artifact_id: IT-018
+  related_ids:
+  - interface_002
+  path: spec/integration/IT-018-monitor-program-construction.md
+  lines: '6'
+  excerpt: '  - target: ix://agent-ix/quire-contract-runtime/interface-002'
+  finding: The verifies relationship uses interface-002, but the RT interface artifact
+    id is interface_002. Quire preserves artifact IDs and URI terminal segments verbatim,
+    so this edge names a different artifact; use interface_002 while retaining the
+    hyphenated criterion IDs.
+dispositions:
+- fnd: FND-002
+  outcome: still-open
+  reason: The current frozen IT-018 frontmatter still uses interface-002. Correct
+    the relationship target to the declared interface_002 artifact id; criterion IDs
+    remain unchanged.
+```
+
+Current dependency verdict: **CONDITIONAL**.
+
+## Integration link fix (round 4)
+
+Inspected efe9b3c6b67f80e25e476de633ded1c19b86a084 against 7ee2876a342446bf4a9b963c9cfa764a10e6b908: the only product/spec delta is IT-018 verifies target changing from interface-002 to the exact declared artifact id interface_002. Criterion IDs and all code/tests are unchanged. Dependency FND-002 is fixed; all earlier integration findings remain fixed. Supplied changed-doc Quire validation passes. Construction amendment review is PASS; final ordinary aggregate remains for the lead to run. RT EARS finding remains pending a separate RT fix. No temporal producer/execution credit, Cargo/Kani invocation, source edit or merge performed by reviewer.
+
+Current method verdict: **PASS** for construction carry.
+
+```yaml
+dispositions:
+- fnd: FND-002
+  outcome: fixed
+  after_excerpt: "  - target: ix://agent-ix/quire-contract-runtime/interface_002\n\
+    \    type: verifies"
 ```
