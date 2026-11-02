@@ -1,0 +1,100 @@
+---
+id: SR-20261102072241
+title: "IR-722 lexical quire-integration code-review"
+type: SpecReview
+analysis: code-review
+scope: "agent-ix/quire-integration; IR-722; frozen lexical amendment; interface_004, IT-018-SC-06, monitor source and companion tests"
+review_set: subset
+---
+
+## Summary
+
+No concrete runtime, type-cache, ownership, allocation-bound or panic defect was found in the frozen amendment. Code-test alignment remains conditional on the recorded AC-4 evidence gap.
+
+Frozen lexical amendment of the original IR-722 PRs: RT193 2ec49a0c372a418b67d78388a098ce6623fde2c6 over 14b1767, integration35 742bff7417163bcf19d93398acabf1ec0d088520 over 31c384a. Superseded PR195/36 history is context only. All previous SR artifacts are retained untouched by this pass. Read actual frozen Git snapshots, applicable repository guidance, code-review/Rust style and selected scoped spec methods. No source edits, Cargo, proof/heavy jobs, merge/closure or permission actions performed. No applicable AssuranceProfile found.
+
+Public shape changes are LocalId, Operation::Local/Let and typed InvalidBinding/Binding failure variants. ProgramParts/Layout/Function/Expression fields remain unchanged. Bindings::prepare derives a compact private address index in linear construction work; unique in-range positions among N declarations imply dense positions without host-size semantic caps. Validation propagates function ownership and rejects mixed/foreign binding closures. Local type facts derive from the retained initializer annotation; shared bounded admission handles a different Local result annotation and Let result edges. No mirrored Value/source-key type, synthetic function, callback, parser or new plan wire appears.
+
+VM dataflow was traced: bound operands are canonical literal/supplied addresses; invocation tokens derive from already charged monotonic work, separating recursive invocations. Restore runs after the scoped body and before Let conformance, restoring caller activation and decrementing the active count. The active count includes shadowed operands saved in Restore frames and is included in slot/native reservation accounting. Touched flags cap cleanup to actually activated unique slots; both normal and stopped run results execute cleanup. These source traces are evidence of implementation structure, not substitutes for the missing AC-4 controls.
+
+Supplied evidence: seven lexical controls and all twenty-nine monitor_program tests pass, and touched integration Clippy passes ONLY with the preserved interim old-leaf lock and current RT source. RT all-target/all-feature Clippy passes on Exact a3052598 / QSV 25535387. The committed new integration cohort remains blocked by counterpart driver adoption/CG707 integration; the requested final IR long chain has not run. Root IEEE owner evidence is source/compile-only, not CBMC replay. Prior coverage/cross-repository acceptance and final aggregate remain unresolved. Ordinary constructor/arithmetic/sequence/fold operations and event/watermark/gap execution remain unfinished outside this scoped lexical claim; no full FR-276 or temporal producer qualification is granted.
+
+Plan completion: not assessed
+
+## Verdict
+
+**CONDITIONAL** — Findings require an explicit fix or scope disposition; committed-cohort/aggregate blockers remain.
+
+## Findings
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-001 | medium | AC-4 remains only partly controlled: the deep-chain scratch test counts distinct active bindings, but no tight-budget recursive-shadow control distinguishes counting the retained caller operand from counting only occupied slots. Each stopped/successful build also creates a fresh Machine, so cleanup before a subsequent invocation of the same Machine is not publicly exercised. Keep these subclauses open until appropriate controls exist; no public API widening or fake temporal acceptance is requested. | tests/monitor_program.rs:1910-1960 |
+
+## Examined scope
+
+```yaml
+scope:
+- id: IT-018-SC-06
+  path: spec/integration/IT-018-monitor-program-construction.md
+  role: examined
+  excerpt: "Execute lexical diagnostics. IT-018-SC-06: compact function-qualified\
+    \ slots\n   support scoped reads, exact continuation counts and lazy branches."
+- id: tests/monitor_program.rs
+  path: tests/monitor_program.rs
+  role: examined
+  excerpt: The controlled executable parts exercise construction, not temporal producer/executor
+    qualification.
+- id: Cargo.lock
+  path: Cargo.lock
+  role: examined
+  excerpt: name = "quire-contract-runtime"
+- id: interface-004-AC-1
+  path: spec/monitor/functional/interface-004-monitor-lexical-bindings.md
+  role: examined
+  excerpt: Missing, duplicate, sparse and foreign local declarations refuse construction,
+    while compact function-qualified bindings retain their original source locations.
+- id: interface-004-AC-2
+  path: spec/monitor/functional/interface-004-monitor-lexical-bindings.md
+  role: examined
+  excerpt: A selected Let evaluates its value once and returns its scoped body's result;
+    a lazy unselected binding is not activated. A differently annotated local uses
+    shared admission and preserves its native failure.
+- id: interface-004-AC-3
+  path: spec/monitor/functional/interface-004-monitor-lexical-bindings.md
+  role: examined
+  excerpt: Nested calls and recursive invocations cannot read an outer invocation's
+    local as their own. A bind restores the prior invocation's slot on return, and
+    an inactive read is a typed invariant failure.
+- id: interface-004-AC-4
+  path: spec/monitor/functional/interface-004-monitor-lexical-bindings.md
+  role: examined
+  excerpt: Binding operands respect the scratch ceiling, including a shadowed outer
+    operand. A stopped invocation clears only touched slots and cannot leak a binding
+    into a subsequent invocation; deep binding chains use the explicit stack.
+bindings:
+- test_id: lexical_value_is_evaluated_once_within_its_scoped_body
+  ac_id: interface-004-AC-2
+  trace: correct
+- test_id: lexical_missing_duplicate_sparse_and_foreign_declarations_refuse
+  ac_id: interface-004-AC-1
+  trace: correct
+- test_id: lexical_unselected_branch_does_not_activate_a_local
+  ac_id: interface-004-AC-2
+  trace: correct
+- test_id: lexical_unselected_branch_does_not_activate_a_local
+  ac_id: interface-004-AC-3
+  trace: correct
+- test_id: lexical_different_annotation_preserves_native_membership_failure
+  ac_id: interface-004-AC-2
+  trace: correct
+- test_id: lexical_recursive_return_restores_the_outer_binding
+  ac_id: interface-004-AC-3
+  trace: correct
+- test_id: lexical_recursive_invocation_cannot_capture_a_callers_active_local
+  ac_id: interface-004-AC-3
+  trace: correct
+- test_id: lexical_deep_chain_charges_live_bindings_and_uses_explicit_stack
+  ac_id: interface-004-AC-4
+  trace: correct
+```

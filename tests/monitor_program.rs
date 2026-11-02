@@ -57,7 +57,7 @@ fn key(name: &str) -> NodeKey {
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
                 "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -185,6 +185,7 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function boolean_init using v(): State pure { if not false and (true or false) then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 22, history_start: 0, activations: sequence[], event_position: 0 } }
 function lexical_init using v(): State pure { let saved = State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } in saved }
 function lexical_helper using v(flag: Boolean): State pure { let saved = State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } in if flag then saved else saved }
 function pass_second using v(s: State, t: State): State pure { t }
@@ -207,6 +208,7 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("boolean-init", "boolean_init"),
     ("lexical-init", "lexical_init"),
     ("lexical-helper", "lexical_helper"),
     ("pass-second", "pass_second"),
@@ -1959,4 +1961,226 @@ fn lexical_deep_chain_charges_live_bindings_and_uses_explicit_stack() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-4")]
+#[test]
+fn lexical_recursive_shadow_counts_the_retained_caller_operand() {
+    let program = Program::try_new(recursive_local_parts(false)).unwrap();
+    let stopped = match build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: StepBudget {
+            scratch_elements: 4,
+            ..execution_budget()
+        },
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("recursive shadow retains the outer operand beside its own"),
+    };
+    let stop = stopped.resource.unwrap();
+    assert_eq!(stop.resource, StepResource::ScratchElements);
+    assert_eq!((stop.limit, stop.spent, stop.requested), (Some(4), 4, 1));
+    let monitor = build(BuildPlan {
+        program,
+        budget: StepBudget {
+            scratch_elements: 5,
+            ..execution_budget()
+        },
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+}
+
+#[derive(Clone, Copy)]
+enum BooleanProbe {
+    Not,
+    And,
+    Or,
+}
+
+fn boolean_parts(which: BooleanProbe, left: bool, right: bool) -> (ProgramParts, ExpressionId) {
+    let mut input = parts();
+    input.functions[0].key = key("boolean-init");
+    input.expressions[0].key = key("boolean-init");
+    let state = input.layout.state.value_type.clone();
+    let yes = state_at(&input, 99);
+    let no = state_at(&input, 22);
+    let owner = "boolean-init";
+    let left = lexical_expression(
+        &mut input,
+        owner,
+        ValueType::Boolean,
+        Operation::Literal(Value::Boolean(left)),
+    );
+    let right = lexical_expression(
+        &mut input,
+        owner,
+        ValueType::Boolean,
+        Operation::Literal(Value::Boolean(right)),
+    );
+    let operation = match which {
+        BooleanProbe::Not => Operation::BooleanNot { value: left },
+        BooleanProbe::And => Operation::BooleanAnd { left, right },
+        BooleanProbe::Or => Operation::BooleanOr { left, right },
+    };
+    let result = lexical_expression(&mut input, owner, ValueType::Boolean, operation);
+    let yes = lexical_expression(&mut input, owner, state.clone(), Operation::Literal(yes));
+    let no = lexical_expression(&mut input, owner, state.clone(), Operation::Literal(no));
+    let root = lexical_expression(
+        &mut input,
+        owner,
+        state,
+        Operation::If {
+            condition: result,
+            when_true: yes,
+            when_false: no,
+        },
+    );
+    input.functions[0].body = root;
+    (input, result)
+}
+
+#[trace("TC-098", "IT-018-SC-07", "interface-005-AC-1")]
+#[test]
+fn boolean_native_values_follow_independent_truth_tables() {
+    for (which, left, right, expected) in [
+        (BooleanProbe::Not, false, false, true),
+        (BooleanProbe::Not, true, false, false),
+        (BooleanProbe::And, false, false, false),
+        (BooleanProbe::And, false, true, false),
+        (BooleanProbe::And, true, false, false),
+        (BooleanProbe::And, true, true, true),
+        (BooleanProbe::Or, false, false, false),
+        (BooleanProbe::Or, false, true, true),
+        (BooleanProbe::Or, true, false, true),
+        (BooleanProbe::Or, true, true, true),
+    ] {
+        let (input, _) = boolean_parts(which, left, right);
+        let monitor = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap();
+        assert_now(&monitor, if expected { 99 } else { 22 });
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-07", "interface-005-AC-2")]
+#[test]
+fn boolean_right_recursion_is_observable_only_when_selected() {
+    for (which, left, selected, expected) in [
+        (BooleanProbe::And, false, false, 22),
+        (BooleanProbe::And, true, true, 0),
+        (BooleanProbe::Or, true, false, 99),
+        (BooleanProbe::Or, false, true, 0),
+    ] {
+        let (mut input, result) = boolean_parts(which, left, false);
+        let recursive = lexical_expression(
+            &mut input,
+            "condition",
+            ValueType::Boolean,
+            Operation::Call {
+                function: FunctionId(4),
+                arguments: vec![],
+            },
+        );
+        input.functions.push(Function {
+            key: key("condition"),
+            parameters: vec![],
+            result: ValueType::Boolean,
+            body: recursive,
+        });
+        match &mut input.expressions[result.0].operation {
+            Operation::BooleanAnd { right, .. } | Operation::BooleanOr { right, .. } => {
+                *right = recursive
+            }
+            _ => panic!("binary probe"),
+        }
+        let outcome = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: StepBudget {
+                stack_frames: 32,
+                ..execution_budget()
+            },
+        });
+        if selected {
+            let failure = match outcome {
+                Err(failure) => failure,
+                Ok(_) => panic!("selected recursion must hit its explicit ceiling"),
+            };
+            assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+            assert_eq!(failure.resource.unwrap().resource, StepResource::Stack);
+        } else {
+            assert_now(&outcome.unwrap(), expected);
+        }
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-07", "interface-005-AC-3")]
+#[test]
+fn boolean_non_boolean_operands_and_result_refuse_before_execution() {
+    for case in 0..3 {
+        let (mut input, result) = boolean_parts(BooleanProbe::And, true, true);
+        match case {
+            0 => {
+                input.expressions[result.0].operation = Operation::BooleanNot {
+                    value: ExpressionId(0),
+                }
+            }
+            1 => {
+                let Operation::BooleanAnd { right, .. } =
+                    &mut input.expressions[result.0].operation
+                else {
+                    panic!("and");
+                };
+                *right = ExpressionId(0);
+            }
+            2 => {
+                input.expressions[result.0].value_type = input.layout.state.value_type.clone();
+                input.functions[0].body = result;
+            }
+            _ => unreachable!(),
+        }
+        refused(input, ProgramRefusalCode::TypeMismatch);
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-07", "interface-005-AC-3")]
+#[test]
+fn boolean_operating_stops_are_never_boolean_results() {
+    for (budget, expected) in [
+        (
+            StepBudget {
+                work: 5,
+                ..execution_budget()
+            },
+            StepResource::Work,
+        ),
+        (
+            StepBudget {
+                stack_frames: 3,
+                ..execution_budget()
+            },
+            StepResource::Stack,
+        ),
+        (
+            StepBudget {
+                scratch_elements: 0,
+                ..execution_budget()
+            },
+            StepResource::ScratchElements,
+        ),
+    ] {
+        let (input, _) = boolean_parts(BooleanProbe::Not, true, false);
+        let failure = match build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget,
+        }) {
+            Err(failure) => failure,
+            Ok(_) => panic!("insufficient operating resources cannot become a false result"),
+        };
+        assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+        assert_eq!(failure.resource.unwrap().resource, expected);
+        assert!(failure.invariant.is_none());
+    }
 }

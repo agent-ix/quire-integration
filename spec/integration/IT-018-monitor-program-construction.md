@@ -5,6 +5,8 @@ type: IT
 relationships:
   - target: ix://agent-ix/quire-contract-runtime/interface_002
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_005
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_004
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_003
@@ -86,8 +88,17 @@ placement in the controlled layout grants no temporal-root admission or executio
    duplicate, sparse and foreign declarations refuse. A recursive call restores
    its caller's binding and cannot capture an inactive binding from that caller.
    A mismatched local annotation preserves native membership failure. A deep
-   chain on a small native stack charges every active binding operand. These
+   chain on a small native stack charges every active binding operand. A tight
+   recursive-shadow budget stops at four slots and succeeds at five, retaining
+   the caller's operand while the recursive slot is active. These
    diagnostic arenas do not qualify temporal entries or the real monitor producer.
+
+7. Execute ordinary Boolean diagnostics. IT-018-SC-07: both unary rows and all
+   eight binary truth-table rows yield their independent expected native Boolean.
+   False And and true Or skip a recursive right operand; the opposite left values
+   reach its explicit stack stop. Non-Boolean operands/results refuse at build,
+   and selected operating stops retain the resource channel. These tests do not
+   qualify temporal operators or a monitor's temporal outcomes.
 
 ## Expected Results
 
