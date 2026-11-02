@@ -4,12 +4,12 @@
 
 use ix_trace_rs::trace;
 use quire_contract_runtime::monitor::{
-    Entries, Expression, ExpressionId, Function, FunctionId, Layout, Operation, Program,
+    Buffer, Entries, Expression, ExpressionId, Function, FunctionId, Layout, Operation, Program,
     ProgramParts, ProgramRefusalCode, TypeBinding,
 };
 use quire_exact::{
     CollectionKind, CollectionType, FieldValue, Identifier, Integer, NodeKey, Presence, Rational,
-    Value, ValueType,
+    TextProfile, TextType, Value, ValueType,
 };
 use quire_semantic_value::{
     declaration::{
@@ -55,8 +55,8 @@ fn key(name: &str) -> NodeKey {
                 "Time" | "Length" => "dimension",
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
-                "step" => "tuple",
-                "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "step" | "step-buffered" | "step-missing-position" => "tuple",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -141,7 +141,16 @@ unit affine_tick : Time = rational(1, 1) * root_tick + rational(7, 1);
 dimension Length;
 unit metre : Length = rational(1, 1);
 record Activation { subformula: Integer; born: Integer; status: Boolean; }
-record State { now: Integer; history_start: Integer; activations: Sequence<Activation>; }
+record State { now: Integer; history_start: Integer; activations: Sequence<Activation>; event_position: Integer; }
+record StateBuffered { now: Integer; history_start: Integer; buffer_0: Sequence<Activation>; buffer_1: Sequence<Activation>; activations: Sequence<Activation>; event_position: Integer; }
+record StateMissingPosition { now: Integer; history_start: Integer; activations: Sequence<Activation>; }
+record StateTextPosition { now: Integer; history_start: Integer; activations: Sequence<Activation>; event_position: Text[0, 8; nfc]; }
+record StateBooleanPosition { now: Integer; history_start: Integer; activations: Sequence<Activation>; event_position: Boolean; }
+record StateMisorderedPosition { now: Integer; history_start: Integer; event_position: Integer; activations: Sequence<Activation>; }
+record StateExtraField { now: Integer; history_start: Integer; activations: Sequence<Activation>; event_position: Integer; spare: Boolean; }
+record StateOptionalPosition { now: Integer; history_start: Integer; activations: Sequence<Activation>; event_position: Integer?; }
+record StateBadBufferName { now: Integer; history_start: Integer; buffer_00: Sequence<Activation>; activations: Sequence<Activation>; event_position: Integer; }
+record StateBadBufferType { now: Integer; history_start: Integer; buffer_0: Integer; activations: Sequence<Activation>; event_position: Integer; }
 record Inputs { enabled: Boolean; }
 record Scope { enabled: Boolean; }
 record GapPayload { gap: Integer; max_reading_gap: Integer; }
@@ -151,13 +160,33 @@ union Outcome { Failed(GapPayload), False, Incomplete(LimitPayload), Indetermina
 record Result { instance: Instance; outcome: Outcome; }
 type Results = Sequence<Result>;
 tuple Step(State, Results);
-function entry_init using v(): State pure { State { now: 0, history_start: 0, activations: sequence[] } }
-function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[] }, sequence[]) }
-function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[] }, sequence[]) }
-function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[] }, sequence[]) }
+tuple StepBuffered(StateBuffered, Results);
+tuple StepMissingPosition(StateMissingPosition, Results);
+function missing_position_init using v(): StateMissingPosition pure { StateMissingPosition { now: 0, history_start: 0, activations: sequence[] } }
+function missing_position_event using v(s: StateMissingPosition, delta: Integer, captures: Inputs): StepMissingPosition pure { StepMissingPosition(StateMissingPosition { now: 0, history_start: 0, activations: sequence[] }, sequence[]) }
+function missing_position_watermark using v(s: StateMissingPosition, boundary: Integer, progress_scope: Scope): StepMissingPosition pure { StepMissingPosition(StateMissingPosition { now: 0, history_start: 0, activations: sequence[] }, sequence[]) }
+function missing_position_gap using v(s: StateMissingPosition, delta: Integer): StepMissingPosition pure { StepMissingPosition(StateMissingPosition { now: 0, history_start: 0, activations: sequence[] }, sequence[]) }
+function retain_text_position using v(s: StateTextPosition): StateTextPosition pure { s }
+function buffered_init using v(): StateBuffered pure { StateBuffered { now: 0, history_start: 0, buffer_0: sequence[], buffer_1: sequence[], activations: sequence[], event_position: 0 } }
+function buffered_event using v(s: StateBuffered, delta: Integer, captures: Inputs): StepBuffered pure { StepBuffered(StateBuffered { now: 0, history_start: 0, buffer_0: sequence[], buffer_1: sequence[], activations: sequence[], event_position: 0 }, sequence[]) }
+function buffered_watermark using v(s: StateBuffered, boundary: Integer, progress_scope: Scope): StepBuffered pure { StepBuffered(StateBuffered { now: 0, history_start: 0, buffer_0: sequence[], buffer_1: sequence[], activations: sequence[], event_position: 0 }, sequence[]) }
+function buffered_gap using v(s: StateBuffered, delta: Integer): StepBuffered pure { StepBuffered(StateBuffered { now: 0, history_start: 0, buffer_0: sequence[], buffer_1: sequence[], activations: sequence[], event_position: 0 }, sequence[]) }
+function retain_state_0 using v(s: StateBuffered): StateBuffered pure { s }
+function retain_state_1 using v(s: StateMissingPosition): StateMissingPosition pure { s }
+function retain_state_2 using v(s: StateBooleanPosition): StateBooleanPosition pure { s }
+function retain_state_3 using v(s: StateMisorderedPosition): StateMisorderedPosition pure { s }
+function retain_state_4 using v(s: StateExtraField): StateExtraField pure { s }
+function retain_state_5 using v(s: StateOptionalPosition): StateOptionalPosition pure { s }
+function retain_state_6 using v(s: StateBadBufferName): StateBadBufferName pure { s }
+function retain_state_7 using v(s: StateBadBufferType): StateBadBufferType pure { s }
+
+function entry_init using v(): State pure { State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
+function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function condition using v(): Boolean pure { true }
 function unreached_cycle using v(): Boolean pure { true }
-function foreign_argument using v(): State pure { State { now: 0, history_start: 0, activations: sequence[] } }
+function foreign_argument using v(): State pure { State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
 function bad_if using v(): Boolean pure { true }
 function clause using v(): Boolean pure { true }
 function touch_tick using v(x: Quantity<tick>): Quantity<tick> pure { x }
@@ -172,6 +201,25 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("state-text-position", "StateTextPosition"),
+    ("step-missing-position", "StepMissingPosition"),
+    ("init-missing-position", "missing_position_init"),
+    ("event-missing-position", "missing_position_event"),
+    ("watermark-missing-position", "missing_position_watermark"),
+    ("gap-missing-position", "missing_position_gap"),
+    ("state-buffered", "StateBuffered"),
+    ("state-missing-position", "StateMissingPosition"),
+    ("state-boolean-position", "StateBooleanPosition"),
+    ("state-misordered-position", "StateMisorderedPosition"),
+    ("state-extra-field", "StateExtraField"),
+    ("state-optional-position", "StateOptionalPosition"),
+    ("state-bad-buffer-name", "StateBadBufferName"),
+    ("state-bad-buffer-type", "StateBadBufferType"),
+    ("step-buffered", "StepBuffered"),
+    ("init-buffered", "buffered_init"),
+    ("event-buffered", "buffered_event"),
+    ("watermark-buffered", "buffered_watermark"),
+    ("gap-buffered", "buffered_gap"),
     ("state", "State"),
     ("activation", "Activation"),
     ("inputs", "Inputs"),
@@ -211,8 +259,152 @@ fn record(name: &str, fields: Vec<(&str, ValueType)>) -> CompositeDeclaration {
         ),
     )
 }
+fn state_probe_declarations(
+    activations: &ValueType,
+    results: &ValueType,
+) -> Vec<CompositeDeclaration> {
+    let base = || {
+        vec![
+            ("now", ValueType::Integer),
+            ("history_start", ValueType::Integer),
+        ]
+    };
+    let suffix = || {
+        vec![
+            ("activations", activations.clone()),
+            ("event_position", ValueType::Integer),
+        ]
+    };
+    let mut declarations = Vec::new();
+    for (name, extra, ending) in [
+        (
+            "state-buffered",
+            vec![
+                ("buffer_0", activations.clone()),
+                ("buffer_1", activations.clone()),
+            ],
+            suffix(),
+        ),
+        (
+            "state-missing-position",
+            vec![],
+            vec![("activations", activations.clone())],
+        ),
+        (
+            "state-text-position",
+            vec![],
+            vec![
+                ("activations", activations.clone()),
+                (
+                    "event_position",
+                    ValueType::Text(TextType::new(0, 8, TextProfile::Nfc).unwrap()),
+                ),
+            ],
+        ),
+        (
+            "state-boolean-position",
+            vec![],
+            vec![
+                ("activations", activations.clone()),
+                ("event_position", ValueType::Boolean),
+            ],
+        ),
+        (
+            "state-misordered-position",
+            vec![],
+            vec![
+                ("event_position", ValueType::Integer),
+                ("activations", activations.clone()),
+            ],
+        ),
+        (
+            "state-extra-field",
+            vec![],
+            vec![
+                ("activations", activations.clone()),
+                ("event_position", ValueType::Integer),
+                ("spare", ValueType::Boolean),
+            ],
+        ),
+        (
+            "state-bad-buffer-name",
+            vec![("buffer_00", activations.clone())],
+            suffix(),
+        ),
+        (
+            "state-bad-buffer-type",
+            vec![("buffer_0", ValueType::Integer)],
+            suffix(),
+        ),
+    ] {
+        let mut fields = base();
+        fields.extend(extra);
+        fields.extend(ending);
+        declarations.push(record(name, fields));
+    }
+    let fields = base()
+        .into_iter()
+        .chain(suffix())
+        .map(|(name, ty)| {
+            FieldDeclaration::new(
+                name,
+                ty,
+                if name == "event_position" {
+                    Presence::Optional
+                } else {
+                    Presence::Required
+                },
+            )
+        })
+        .collect();
+    declarations.push(CompositeDeclaration::new(
+        key("state-optional-position"),
+        "state-optional-position",
+        CompositeShape::Record(fields),
+    ));
+    declarations.push(CompositeDeclaration::new(
+        key("step-buffered"),
+        "step-buffered",
+        CompositeShape::Tuple(vec![
+            ValueType::Composite(key("state-buffered")),
+            results.clone(),
+        ]),
+    ));
+    declarations.push(CompositeDeclaration::new(
+        key("step-missing-position"),
+        "step-missing-position",
+        CompositeShape::Tuple(vec![
+            ValueType::Composite(key("state-missing-position")),
+            results.clone(),
+        ]),
+    ));
+    declarations
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum FixtureState {
+    Current,
+    Buffered,
+    MissingPosition,
+}
+
 fn parts() -> ProgramParts {
-    let state = ValueType::Composite(key("state"));
+    parts_for(FixtureState::Current)
+}
+fn parts_for(profile: FixtureState) -> ProgramParts {
+    let buffered = profile == FixtureState::Buffered;
+    let state_name = match profile {
+        FixtureState::Current => "state",
+        FixtureState::Buffered => "state-buffered",
+        FixtureState::MissingPosition => "state-missing-position",
+    };
+    let step_name = match profile {
+        FixtureState::Current => "step",
+        FixtureState::Buffered => "step-buffered",
+        FixtureState::MissingPosition => "step-missing-position",
+    };
+
+    let state = ValueType::Composite(key(state_name));
     let inputs = ValueType::Composite(key("inputs"));
     let scope = ValueType::Composite(key("scope"));
     let results_type = CollectionType::new(
@@ -221,7 +413,7 @@ fn parts() -> ProgramParts {
         None,
     );
     let results = ValueType::collection(results_type.clone());
-    let step_result = ValueType::Composite(key("step"));
+    let step_result = ValueType::Composite(key(step_name));
     let activation_type = CollectionType::new(
         CollectionKind::Sequence,
         ValueType::Composite(key("activation")),
@@ -235,7 +427,8 @@ fn parts() -> ProgramParts {
                 vec![
                     ("now", ValueType::Integer),
                     ("history_start", ValueType::Integer),
-                    ("activations", activations),
+                    ("activations", activations.clone()),
+                    ("event_position", ValueType::Integer),
                 ],
             ),
             record(
@@ -303,36 +496,63 @@ fn parts() -> ProgramParts {
             CompositeDeclaration::new(
                 key("step"),
                 "step",
-                CompositeShape::Tuple(vec![state.clone(), results.clone()]),
+                CompositeShape::Tuple(vec![ValueType::Composite(key("state")), results.clone()]),
             ),
-        ],
+        ]
+        .into_iter()
+        .chain(state_probe_declarations(&activations, &results)),
         [],
     )
     .expect("admit diagnostic nominal declarations");
     let zero = Rational::from_integer(Integer::zero());
     let one = Rational::from_integer(Integer::one());
     let types = types.with_units(admitted_time_units());
-    let state_value = types
-        .record(
-            key("state"),
-            vec![
-                ("now", FieldValue::Present(Value::Integer(Integer::zero()))),
-                (
-                    "history_start",
-                    FieldValue::Present(Value::Integer(Integer::zero())),
-                ),
-                (
-                    "activations",
-                    FieldValue::Present(quire_exact::from_admitted(activation_type, vec![])),
-                ),
-            ],
-        )
-        .unwrap();
+    let mut fields = vec![
+        ("now", FieldValue::Present(Value::Integer(Integer::zero()))),
+        (
+            "history_start",
+            FieldValue::Present(Value::Integer(Integer::zero())),
+        ),
+    ];
+    if buffered {
+        for name in ["buffer_0", "buffer_1"] {
+            fields.push((
+                name,
+                FieldValue::Present(quire_exact::from_admitted(activation_type.clone(), vec![])),
+            ));
+        }
+    }
+    fields.push((
+        "activations",
+        FieldValue::Present(quire_exact::from_admitted(activation_type, vec![])),
+    ));
+    if profile != FixtureState::MissingPosition {
+        fields.push((
+            "event_position",
+            FieldValue::Present(Value::Integer(Integer::zero())),
+        ));
+    }
+    let state_value = types.record(key(state_name), fields).unwrap();
     let result_value = quire_exact::from_admitted(results_type, vec![]);
     let step_value = types
-        .tuple(key("step"), vec![state_value.clone(), result_value])
+        .tuple(key(step_name), vec![state_value.clone(), result_value])
         .unwrap();
-    let function_keys = [key("init"), key("event"), key("watermark"), key("gap")];
+    let names = match profile {
+        FixtureState::Current => ["init", "event", "watermark", "gap"],
+        FixtureState::Buffered => [
+            "init-buffered",
+            "event-buffered",
+            "watermark-buffered",
+            "gap-buffered",
+        ],
+        FixtureState::MissingPosition => [
+            "init-missing-position",
+            "event-missing-position",
+            "watermark-missing-position",
+            "gap-missing-position",
+        ],
+    };
+    let function_keys = names.map(key);
     let signatures = [
         vec![],
         vec![state.clone(), ValueType::Integer, inputs.clone()],
@@ -372,11 +592,11 @@ fn parts() -> ProgramParts {
             subject: "selected-subject".into(),
             occurrence: Box::from(&b"occurrence"[..]),
             profile: "timestamped-event".into(),
-            state: binding("state", state),
+            state: binding(state_name, state),
             inputs: binding("inputs", inputs),
             scope: binding("scope", scope),
             results: binding("results", results),
-            step_result: binding("step", step_result),
+            step_result: binding(step_name, step_result),
             entries: Entries {
                 init: FunctionId(0),
                 on_event: FunctionId(1),
@@ -390,7 +610,20 @@ fn parts() -> ProgramParts {
             max_reading_gap: 100,
             max_event_rate: one,
             uncertainty: zero,
-            buffers: vec![],
+            buffers: if buffered {
+                vec![
+                    Buffer {
+                        owner: key("clause"),
+                        capacity: Integer::one(),
+                    },
+                    Buffer {
+                        owner: key("condition"),
+                        capacity: Integer::from(2_u64),
+                    },
+                ]
+            } else {
+                vec![]
+            },
             activation_capacity: Integer::zero(),
         },
         types,
@@ -410,13 +643,14 @@ fn assert_state_contents(value: &Value) {
         panic!("retained State record");
     };
     assert_eq!(state.declaration(), &key("state"));
-    let [FieldValue::Present(Value::Integer(now)), FieldValue::Present(Value::Integer(history_start)), FieldValue::Present(Value::Collection(activations))] =
+    let [FieldValue::Present(Value::Integer(now)), FieldValue::Present(Value::Integer(history_start)), FieldValue::Present(Value::Collection(activations)), FieldValue::Present(Value::Integer(event_position))] =
         state.slots()
     else {
-        panic!("now/history_start/activations state contents");
+        panic!("now/history_start/activations/event_position state contents");
     };
     assert_eq!(now, &Integer::zero());
     assert_eq!(history_start, &Integer::zero());
+    assert_eq!(event_position, &Integer::zero());
     assert_eq!(
         activations.collection_type().kind(),
         CollectionKind::Sequence
@@ -762,4 +996,91 @@ fn declared_time_units_retain_nonzero_scales_and_affine_offsets() {
         );
         assert_eq!(retained.is_affine(), affine);
     }
+}
+
+#[trace("TC-098", "IT-018-SC-02", "interface-002-AC-2")]
+#[test]
+fn closed_state_retains_event_position_after_ordered_buffers() {
+    let program = Program::try_new(parts_for(FixtureState::Buffered)).unwrap();
+    let CompositeShape::Record(fields) = program
+        .types()
+        .composite(key("state-buffered"))
+        .unwrap()
+        .shape()
+    else {
+        panic!("State record");
+    };
+    assert_eq!(
+        fields.iter().map(|field| field.name()).collect::<Vec<_>>(),
+        [
+            "now",
+            "history_start",
+            "buffer_0",
+            "buffer_1",
+            "activations",
+            "event_position"
+        ]
+    );
+    let body = program
+        .expression(
+            program
+                .function(program.layout().entries.init)
+                .unwrap()
+                .body,
+        )
+        .unwrap();
+    let Operation::Literal(Value::Composite(value)) = &body.operation else {
+        panic!("retained initializer value");
+    };
+    let Some(FieldValue::Present(Value::Integer(position))) = value.slots().last() else {
+        panic!("last value is the event position");
+    };
+    assert_eq!(position, &Integer::zero());
+}
+
+#[trace("TC-098", "IT-018-SC-02", "interface-002-AC-2")]
+#[test]
+fn closed_state_refuses_missing_optional_mistyped_extra_and_misordered_fields() {
+    for (name, buffers) in [
+        ("state-missing-position", 0),
+        ("state-boolean-position", 0),
+        ("state-text-position", 0),
+        ("state-misordered-position", 0),
+        ("state-extra-field", 0),
+        ("state-optional-position", 0),
+        ("state-buffered", 0),
+        ("state-bad-buffer-name", 1),
+        ("state-bad-buffer-type", 1),
+    ] {
+        let mut input = parts();
+        input.layout.state = TypeBinding {
+            key: key(name),
+            value_type: ValueType::Composite(key(name)),
+        };
+        if buffers == 1 {
+            input.layout.buffers = vec![Buffer {
+                owner: key("clause"),
+                capacity: Integer::one(),
+            }];
+        }
+        let Err(error) = Program::try_new(input) else {
+            panic!("malformed State must refuse: {name}");
+        };
+        assert_eq!(error.code, ProgramRefusalCode::TypeMismatch, "{name}");
+        assert_eq!(
+            error.node,
+            Some(key(name)),
+            "State must fail before later entry-signature checks: {name}"
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-02", "interface-002-AC-2")]
+#[test]
+fn state_without_event_position_has_no_compatibility_path() {
+    let Err(error) = Program::try_new(parts_for(FixtureState::MissingPosition)) else {
+        panic!("a fully typed closure without event_position must refuse");
+    };
+    assert_eq!(error.code, ProgramRefusalCode::TypeMismatch);
+    assert_eq!(error.node, Some(key("state-missing-position")));
 }

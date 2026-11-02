@@ -47,7 +47,13 @@ placement in the controlled layout grants no temporal-root admission or executio
 2. Vary exact premises. IT-018-SC-02: width 64, nonnegative activation capacity including
    zero and values above host width, and admitted affine/negative-scale Time units retain
    their values; invalid widths, out-of-width gaps, negative uncertainty/capacity and a
-   foreign dimension refuse construction.
+   foreign dimension refuse construction. Retain the required final Integer
+   event_position with initial literal value 0 under QSpec #595, including after
+   two ordered buffers. Missing, Boolean/text, optional, extra or misordered State
+   fields, noncanonical buffer names/types and buffer-count mismatches refuse at
+   State before later entry-signature checks. A complete otherwise valid closure
+   without event_position also refuses; no compatibility branch supplies it.
+   These are construction observations, not event-count execution acceptance.
 3. Vary executable edges and argument ownership. IT-018-SC-03: duplicate keys/locations,
    unknown addresses, cycles, foreign arguments and missing or mistyped fourth entries
    return the expected typed refusal before execution. Shared DAGs and distinct inline
