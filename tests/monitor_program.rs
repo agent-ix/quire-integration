@@ -58,7 +58,7 @@ fn key(name: &str) -> NodeKey {
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
                 "state-pair-child" | "integer-pair" | "bounded-integer-pair" | "state-pair" | "bool-pair" | "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "scalar-init" | "record-init" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "construct-init" | "scalar-init" | "record-init" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -193,6 +193,7 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function construct_init using v(): State pure { State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } }
 function scalar_init using v(): State pure { if 1 + 2 < 4 then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
 function record_init using v(): State pure { let holder = StateHolder { right_state: State { now: 99, history_start: 0, activations: sequence[], event_position: 0 }, left_state: State { now: 11, history_start: 0, activations: sequence[], event_position: 0 } } in holder.left_state }
 function touch_holder_child using v(x: StateHolderChild): StateHolderChild pure { x }
@@ -226,6 +227,7 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("construct-init", "construct_init"),
     ("scalar-init", "scalar_init"),
     ("state-holder", "StateHolder"),
     ("state-holder-child", "StateHolderChild"),
@@ -3286,4 +3288,415 @@ fn integer_binary_operands_stop_on_the_left_native_operation_before_the_right() 
         panic!("left native shortage");
     };
     assert_eq!(cause.next_charge, Integer::one());
+}
+
+fn constructed_state_parts() -> (ProgramParts, ExpressionId) {
+    let mut input = parts();
+    input.functions[0].key = key("construct-init");
+    input.expressions[0].key = key("construct-init");
+    let now = lexical_expression(
+        &mut input,
+        "construct-init",
+        ValueType::Integer,
+        Operation::Literal(Value::Integer(Integer::from(99_u64))),
+    );
+    let zero = lexical_expression(
+        &mut input,
+        "construct-init",
+        ValueType::Integer,
+        Operation::Literal(Value::Integer(Integer::zero())),
+    );
+    let Operation::Literal(Value::Composite(state)) = &input.expressions[0].operation else {
+        panic!("original state literal");
+    };
+    let FieldValue::Present(activations) = state.slots().get(2).unwrap() else {
+        panic!("original activations");
+    };
+    let activations = activations.clone();
+    let Value::Collection(collection) = &activations else {
+        panic!("activation sequence");
+    };
+    let activation_type = ValueType::collection(collection.collection_type().clone());
+    let activations = lexical_expression(
+        &mut input,
+        "construct-init",
+        activation_type,
+        Operation::Literal(activations),
+    );
+    let member = |name| MemberId::new(MemberOwner::Node(key("state")), name).unwrap();
+    let state = input.layout.state.value_type.clone();
+    let root = lexical_expression(
+        &mut input,
+        "construct-init",
+        state,
+        Operation::Record {
+            fields: vec![
+                (member("event_position"), zero),
+                (member("activations"), activations),
+                (member("history_start"), zero),
+                (member("now"), now),
+            ],
+        },
+    );
+    input.functions[0].body = root;
+    (input, activations)
+}
+
+#[trace("TC-098", "IT-018-SC-11", "interface-009-AC-1")]
+#[test]
+fn constructed_records_and_tuples_keep_canonical_child_owners_and_declared_slots() {
+    let (input, activations) = constructed_state_parts();
+    let monitor = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+    let Value::Composite(state) = monitor.state() else {
+        panic!("canonical constructed state");
+    };
+    let Some(FieldValue::Present(Value::Collection(result))) = state.slots().get(2) else {
+        panic!("canonical activations slot");
+    };
+    let Operation::Literal(Value::Collection(original)) =
+        &monitor.program().expression(activations).unwrap().operation
+    else {
+        panic!("original sequence");
+    };
+    assert!(
+        std::sync::Arc::ptr_eq(result, original),
+        "constructing a record retains the original immutable child"
+    );
+
+    let (mut input, pair) = tuple_parts(1);
+    let state = input.layout.state.value_type.clone();
+    let first = state_at(&input, 11);
+    let second = state_at(&input, 99);
+    let first = lexical_expression(
+        &mut input,
+        "tuple-init",
+        state.clone(),
+        Operation::Literal(first),
+    );
+    let second = lexical_expression(&mut input, "tuple-init", state, Operation::Literal(second));
+    input.expressions[pair.0].operation = Operation::Tuple {
+        positions: vec![first, second],
+    };
+    let monitor = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+    let Value::Composite(result) = monitor.state() else {
+        panic!("selected canonical state");
+    };
+    let Operation::Literal(Value::Composite(original)) =
+        &monitor.program().expression(second).unwrap().operation
+    else {
+        panic!("original state");
+    };
+    assert!(std::sync::Arc::ptr_eq(result, original));
+}
+
+#[trace("TC-098", "IT-018-SC-11", "interface-009-AC-2")]
+#[test]
+fn record_construction_refuses_missing_duplicate_foreign_unknown_optional_and_wrong_shapes() {
+    for case in 0..6 {
+        let (mut input, _) = constructed_state_parts();
+        let root = input.functions[0].body;
+        let Operation::Record { fields } = &mut input.expressions[root.0].operation else {
+            panic!("record construction");
+        };
+        match case {
+            0 => {
+                fields.pop();
+            }
+            1 => fields[0].0 = fields[3].0.clone(),
+            2 => {
+                fields[0].0 =
+                    MemberId::new(MemberOwner::Node(key("scope")), "event_position").unwrap()
+            }
+            3 => fields[0].0 = MemberId::new(MemberOwner::Node(key("state")), "missing").unwrap(),
+            4 => {
+                for (member, _) in fields.iter_mut() {
+                    *member = MemberId::new(
+                        MemberOwner::Node(key("state-optional-position")),
+                        member.member(),
+                    )
+                    .unwrap();
+                }
+                input.expressions[root.0].value_type =
+                    ValueType::Composite(key("state-optional-position"));
+            }
+            _ => input.expressions[root.0].value_type = ValueType::Composite(key("state-pair")),
+        }
+        let code = Program::try_new(input)
+            .err()
+            .expect("malformed constructor must not execute")
+            .code;
+        assert_eq!(
+            code,
+            if matches!(case, 1..=3) {
+                ProgramRefusalCode::InvalidReference
+            } else {
+                ProgramRefusalCode::TypeMismatch
+            }
+        );
+    }
+    for wrong_shape in [false, true] {
+        let (mut input, pair) = tuple_parts(0);
+        input.expressions[pair.0].operation = Operation::Tuple { positions: vec![] };
+        if wrong_shape {
+            input.expressions[pair.0].value_type = input.layout.state.value_type.clone();
+        }
+        assert_eq!(
+            Program::try_new(input)
+                .err()
+                .expect("tuple arity and result shape are checked")
+                .code,
+            ProgramRefusalCode::TypeMismatch
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-11", "interface-009-AC-1", "interface-009-AC-3")]
+#[test]
+fn record_operands_execute_in_declaration_order_before_later_source_fields() {
+    let (mut input, _) = constructed_state_parts();
+    let one = scalar_literal(&mut input, "1");
+    let large = scalar_literal(&mut input, "1024");
+    let now = lexical_expression(
+        &mut input,
+        "construct-init",
+        ValueType::Integer,
+        Operation::IntegerNegate { value: one },
+    );
+    let history = lexical_expression(
+        &mut input,
+        "construct-init",
+        ValueType::Integer,
+        Operation::IntegerNegate { value: large },
+    );
+    let root = input.functions[0].body;
+    let Operation::Record { fields } = &mut input.expressions[root.0].operation else {
+        panic!("record construction");
+    };
+    for (member, value) in fields {
+        match member.member() {
+            "now" => *value = now,
+            "history_start" => *value = history,
+            _ => {}
+        }
+    }
+    let mut budget = execution_budget();
+    budget.scalar.integer_bits = 0;
+    let failure = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget,
+    })
+    .err()
+    .expect("first declared member stops before the earlier supplied history field");
+    let native = failure.scalar.unwrap();
+    assert_eq!(
+        native.site,
+        quire_contract_runtime::monitor::ExecutionSite::Expression(now)
+    );
+    let quire_exact::Outcome::Incomplete(cause) = native.outcome else {
+        panic!("original native shortage");
+    };
+    assert_eq!(cause.next_charge, Integer::one());
+}
+
+#[trace("TC-098", "IT-018-SC-11", "interface-009-AC-3")]
+#[test]
+fn composite_slot_and_retention_stops_preserve_actual_units_without_a_partial_state() {
+    let (input, _) = constructed_state_parts();
+    let program = Program::try_new(input).unwrap();
+    for case in 0..3 {
+        let mut budget = execution_budget();
+        match case {
+            0 => budget.scratch_elements = 7,
+            1 => budget.scratch_bytes = 0,
+            _ => budget.scalar.result_units = 4,
+        }
+        let failure = build(BuildPlan {
+            program: Rc::clone(&program),
+            budget,
+        })
+        .err()
+        .expect("new slots or native retained value must stop");
+        assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+        assert!(failure.invariant.is_none());
+        let stop = failure.resource.unwrap();
+        match case {
+            0 => {
+                assert_eq!(stop.resource, StepResource::ScratchElements);
+                assert_eq!((stop.spent, stop.requested), (4, Integer::from(4_u64)));
+                assert!(failure.scalar.is_none());
+            }
+            1 => {
+                assert_eq!(stop.resource, StepResource::ScratchBytes);
+                assert_eq!(
+                    stop.requested,
+                    Integer::from(core::mem::size_of::<FieldValue>().checked_mul(4).unwrap())
+                );
+                assert!(failure.scalar.is_none());
+            }
+            _ => {
+                assert_eq!(
+                    stop.resource,
+                    StepResource::Scalar(quire_exact::LimitKind::ResultUnits)
+                );
+                assert_eq!((stop.spent, stop.requested), (0, Integer::from(5_u64)));
+                let quire_exact::Outcome::Incomplete(cause) = failure.scalar.unwrap().outcome
+                else {
+                    panic!("original composite retention shortage");
+                };
+                assert_eq!(
+                    cause.charge_point,
+                    quire_exact::ChargePoint::CompositeResultRetain
+                );
+            }
+        }
+    }
+    let mut budget = execution_budget();
+    budget.scratch_elements = 8;
+    assert_now(&build(BuildPlan { program, budget }).unwrap(), 99);
+}
+
+#[trace("TC-098", "IT-018-SC-11", "interface-009-AC-3")]
+#[test]
+fn composite_checks_each_operand_before_evaluating_a_later_recursive_member() {
+    for invalid in [false, true] {
+        let (mut input, _) = constructed_state_parts();
+        let now = if invalid {
+            lexical_expression(
+                &mut input,
+                "construct-init",
+                ValueType::Boolean,
+                Operation::Literal(Value::Boolean(true)),
+            )
+        } else {
+            lexical_expression(
+                &mut input,
+                "construct-init",
+                ValueType::Int(
+                    IntegerInterval::new(Integer::zero(), Integer::from(100_u64)).unwrap(),
+                ),
+                Operation::Literal(Value::Integer(Integer::from(99_u64))),
+            )
+        };
+        let state = input.layout.state.value_type.clone();
+        let later = lexical_expression(
+            &mut input,
+            "construct-init",
+            state,
+            Operation::Call {
+                function: FunctionId(0),
+                arguments: vec![],
+            },
+        );
+        let root = input.functions[0].body;
+        let Operation::Record { fields } = &mut input.expressions[root.0].operation else {
+            panic!("record construction");
+        };
+        for (member, value) in fields {
+            match member.member() {
+                "now" => *value = now,
+                "history_start" => *value = later,
+                _ => {}
+            }
+        }
+        let program = Program::try_new(input).unwrap();
+        let mut budget = execution_budget();
+        budget.stack_frames = 32;
+        if !invalid {
+            budget.work = 3;
+        }
+        let failure = build(BuildPlan {
+            program: Rc::clone(&program),
+            budget,
+        })
+        .err()
+        .expect("first member conformance stops before recursion");
+        let native = failure.admission.unwrap();
+        assert_eq!(
+            native.site,
+            quire_contract_runtime::monitor::ExecutionSite::Expression(now)
+        );
+        if invalid {
+            assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+            assert!(failure.resource.is_none());
+            assert!(matches!(
+                native.failure,
+                quire_semantic_value::supplied_membership::SuppliedAdmissionError::Invalid { .. }
+            ));
+        } else {
+            assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+            let stop = failure.resource.unwrap();
+            assert_eq!(stop.resource, StepResource::Work);
+            assert_eq!((stop.spent, stop.requested), (3, Integer::one()));
+            budget.work = 100_000;
+            let later_failure = build(BuildPlan { program, budget })
+                .err()
+                .expect("successful first check reaches the recursive second member");
+            assert_eq!(
+                later_failure.resource.unwrap().resource,
+                StepResource::Stack
+            );
+        }
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-11", "interface-009-AC-1", "interface-009-AC-3")]
+#[test]
+fn deep_composite_construction_uses_continuations_on_a_small_native_stack() {
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let (mut input, _) = tuple_parts(0);
+            let depth = 2_000_usize;
+            let state = input.layout.state.value_type.clone();
+            let other = state_at(&input, 99);
+            let other = lexical_expression(
+                &mut input,
+                "tuple-init",
+                state.clone(),
+                Operation::Literal(other),
+            );
+            let mut selected = ExpressionId(0);
+            for _ in 0..depth {
+                let pair = lexical_expression(
+                    &mut input,
+                    "tuple-init",
+                    ValueType::Composite(key("state-pair")),
+                    Operation::Tuple {
+                        positions: vec![selected, other],
+                    },
+                );
+                selected = lexical_expression(
+                    &mut input,
+                    "tuple-init",
+                    state.clone(),
+                    Operation::TupleElement {
+                        value: pair,
+                        position: 0,
+                    },
+                );
+            }
+            input.functions[0].body = selected;
+            let mut budget = execution_budget();
+            budget.stack_frames = depth.checked_mul(8).unwrap();
+            budget.scratch_elements = depth.checked_mul(8).unwrap();
+            let monitor = build(BuildPlan {
+                program: Program::try_new(input).unwrap(),
+                budget,
+            })
+            .unwrap();
+            assert_now(&monitor, 0);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }

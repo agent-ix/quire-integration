@@ -15,6 +15,12 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-012
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_007
+    type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_008
+    type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_009
+    type: verifies
 ---
 # IT-018: Retain monitor construction parts with producer-origin identities
 
@@ -130,6 +136,14 @@ placement in the controlled layout grants no temporal-root admission or executio
     and operating stops retain exact Integer requests and native source evidence.
     Canonical computed values consume scratch. These initializer controls do not
     qualify same-monitor reuse after event dispatch or temporal outcomes.
+
+11. Execute canonical construction diagnostics. IT-018-SC-11: required record
+    members run in declaration order, tuples run in position order and shared
+    child owners remain canonical. Malformed member sets and result shapes
+    refuse. Earlier native or conformance stops prevent later recursive members
+    from running; exact scratch units and native retention causes are retained.
+    A deep chain uses explicit continuations on a small native stack. These
+    initializer controls do not qualify temporal entries or same-monitor replay.
 
 ## Expected Results
 
