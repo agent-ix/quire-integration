@@ -11,13 +11,14 @@ use quire_contract_runtime::monitor::{
 use quire_exact::{
     CollectionKind, CollectionType, FieldValue, Identifier, Integer, IntegerInterval, MemberId,
     MemberOwner, NodeKey, OrderingOperator, Presence, Rational, ScalarLimits, TextProfile,
-    TextType, Value, ValueType,
+    TextType, UnionMember, Value, ValueType,
 };
 use quire_semantic_value::{
     declaration::{
-        CompositeDeclaration, CompositeShape, FieldDeclaration, TypeEnvironment,
-        UnionMemberDeclaration,
+        CompositeDeclaration, CompositeShape, EqualityOperand, EqualityOperator, FieldDeclaration,
+        TypeEnvironment, UnionMemberDeclaration,
     },
+    enumeration::EnumMemberIndex,
     quantity::UnitTable,
     unit::{DimensionNode, NominalDeclaration, UnitGraph, UnitNode},
 };
@@ -56,9 +57,10 @@ fn key(name: &str) -> NodeKey {
             let expected_form = match *label {
                 "Time" | "Length" => "dimension",
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
-                "outcome" => "union",
+                "state-choice" | "outcome" => "union",
+                "capture-mode" => "enum",
                 "state-pair-child" | "integer-pair" | "bounded-integer-pair" | "state-pair" | "bool-pair" | "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "construct-init" | "scalar-init" | "record-init" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "sequence-init" | "fold-init" | "fold-helper" | "union-init" | "equality-init" | "construct-init" | "scalar-init" | "record-init" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -142,6 +144,7 @@ unit negative_tick : Time = rational(-1, 1) * root_tick;
 unit affine_tick : Time = rational(1, 1) * root_tick + rational(7, 1);
 dimension Length;
 unit metre : Length = rational(1, 1);
+ordered enum CaptureMode { Idle, Busy }
 record Activation { subformula: Integer; born: Integer; status: Boolean; }
 record State { now: Integer; history_start: Integer; activations: Sequence<Activation>; event_position: Integer; }
 record StateBuffered { now: Integer; history_start: Integer; buffer_0: Sequence<Activation>; buffer_1: Sequence<Activation>; activations: Sequence<Activation>; event_position: Integer; }
@@ -158,6 +161,7 @@ record Scope { enabled: Boolean; }
 record GapPayload { gap: Integer; max_reading_gap: Integer; }
 record LimitPayload { limit: Integer; amount: Integer; setting: Integer; }
 record Instance { subject: Integer; subformula: Integer; born: Integer; }
+union StateChoice { Chosen(State), Empty, Pair(State, State) }
 union Outcome { Failed(GapPayload), False, Incomplete(LimitPayload), Indeterminate, Pending, True }
 record Result { instance: Instance; outcome: Outcome; }
 type Results = Sequence<Result>;
@@ -193,6 +197,15 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+type FoldTotal = Integer;
+function typed_sequence using v(s: Sequence<Integer>): Sequence<Integer> pure { s }
+function sequence_init using v(): State pure { let xs = typed_sequence(sequence[3, 1, 3]) in if size(xs) > 0 then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
+function fold_init using v(): State pure { let n = fold<FoldTotal>(a, x in typed_sequence(sequence[1, 2, 3]): a * 10 + x, identity: 4) in if n > 0 then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
+function fold_helper using v(flag: Boolean): Integer pure { fold<FoldTotal>(a, x in typed_sequence(sequence[1, 2]): a + x, identity: 10) }
+function touch_mode using v(x: CaptureMode): CaptureMode pure { x }
+function touch_state_choice using v(x: StateChoice): StateChoice pure { x }
+function union_init using v(): State pure { State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } }
+function equality_init using v(): State pure { State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } }
 function construct_init using v(): State pure { State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } }
 function scalar_init using v(): State pure { if 1 + 2 < 4 then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
 function record_init using v(): State pure { let holder = StateHolder { right_state: State { now: 99, history_start: 0, activations: sequence[], event_position: 0 }, left_state: State { now: 11, history_start: 0, activations: sequence[], event_position: 0 } } in holder.left_state }
@@ -227,6 +240,11 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("sequence-init", "sequence_init"),
+    ("fold-init", "fold_init"),
+    ("fold-helper", "fold_helper"),
+    ("union-init", "union_init"),
+    ("equality-init", "equality_init"),
     ("construct-init", "construct_init"),
     ("scalar-init", "scalar_init"),
     ("state-holder", "StateHolder"),
@@ -271,6 +289,8 @@ const IDENTITIES: &[(&str, &str)] = &[
     ("limit_payload", "LimitPayload"),
     ("instance", "Instance"),
     ("outcome", "Outcome"),
+    ("state-choice", "StateChoice"),
+    ("capture-mode", "CaptureMode"),
     ("result", "Result"),
     ("step", "Step"),
     ("Time", "Time"),
@@ -506,6 +526,24 @@ fn parts_for(profile: FixtureState) -> ProgramParts {
                     ("subformula", ValueType::Integer),
                     ("born", ValueType::Integer),
                 ],
+            ),
+            CompositeDeclaration::new(
+                key("state-choice"),
+                "state-choice",
+                CompositeShape::Union(vec![
+                    UnionMemberDeclaration::resolved(
+                        Identifier::new("Chosen").unwrap(),
+                        vec![ValueType::Composite(key("state"))],
+                    ),
+                    UnionMemberDeclaration::resolved(Identifier::new("Empty").unwrap(), vec![]),
+                    UnionMemberDeclaration::resolved(
+                        Identifier::new("Pair").unwrap(),
+                        vec![
+                            ValueType::Composite(key("state")),
+                            ValueType::Composite(key("state")),
+                        ],
+                    ),
+                ]),
             ),
             CompositeDeclaration::new(
                 key("outcome"),
@@ -3138,7 +3176,7 @@ fn integer_native_limits_are_cumulative_and_lazy_branches_do_not_charge() {
         cause.charge_point,
         quire_exact::ChargePoint::OrderingResultRetain
     );
-    budget.scalar.result_units = 3;
+    budget.scalar.result_units = 4;
     assert_now(&build(BuildPlan { program, budget }).unwrap(), 99);
 
     let mut input = scalar_result_parts(0, "1", "2", "3");
@@ -3699,4 +3737,1510 @@ fn deep_composite_construction_uses_continuations_on_a_small_native_stack() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+fn integer_sequence_type() -> ValueType {
+    ValueType::collection(CollectionType::new(
+        CollectionKind::Sequence,
+        ValueType::Integer,
+        None,
+    ))
+}
+
+fn standard_parts(name: &str) -> ProgramParts {
+    let mut input = parts();
+    input.functions[0].key = key(name);
+    input.expressions[0].key = key(name);
+    input
+}
+
+fn standard_literal(
+    input: &mut ProgramParts,
+    name: &str,
+    ty: ValueType,
+    value: Value,
+) -> ExpressionId {
+    lexical_expression(input, name, ty, Operation::Literal(value))
+}
+
+fn finish_integer_equal(
+    input: &mut ProgramParts,
+    name: &str,
+    actual: ExpressionId,
+    expected: &str,
+) {
+    let expected = standard_literal(
+        input,
+        name,
+        ValueType::Integer,
+        Value::Integer(expected.parse().unwrap()),
+    );
+    let checked = input
+        .types
+        .check_equality(
+            EqualityOperator::Equal,
+            EqualityOperand::typed(ValueType::Integer),
+            EqualityOperand::typed(ValueType::Integer),
+            &EnumMemberIndex::default(),
+        )
+        .unwrap();
+    let condition = lexical_expression(
+        input,
+        name,
+        ValueType::Boolean,
+        Operation::Equality {
+            left: actual,
+            right: expected,
+            checked: Box::new(checked),
+        },
+    );
+    let state = input.layout.state.value_type.clone();
+    let good = state_at(input, 99);
+    let good = standard_literal(input, name, state.clone(), good);
+    let root = lexical_expression(
+        input,
+        name,
+        state,
+        Operation::If {
+            condition,
+            when_true: good,
+            when_false: ExpressionId(0),
+        },
+    );
+    input.functions[0].body = root;
+}
+
+fn sequence_literals(input: &mut ProgramParts, name: &str, numbers: &[i64]) -> ExpressionId {
+    let elements = numbers
+        .iter()
+        .map(|number| {
+            standard_literal(
+                input,
+                name,
+                ValueType::Integer,
+                Value::Integer(Integer::from(*number)),
+            )
+        })
+        .collect();
+    lexical_expression(
+        input,
+        name,
+        integer_sequence_type(),
+        Operation::Sequence { elements },
+    )
+}
+
+fn digits_fold(
+    input: &mut ProgramParts,
+    name: &str,
+    sequence: ExpressionId,
+    seed: i64,
+    slot: usize,
+) -> ExpressionId {
+    let initial = standard_literal(
+        input,
+        name,
+        ValueType::Integer,
+        Value::Integer(Integer::from(seed)),
+    );
+    let accumulator = LocalId {
+        function: FunctionId(0),
+        position: slot,
+    };
+    let item = LocalId {
+        function: FunctionId(0),
+        position: slot.checked_add(1).unwrap(),
+    };
+    let acc = lexical_expression(
+        input,
+        name,
+        ValueType::Integer,
+        Operation::Local(accumulator),
+    );
+    let element = lexical_expression(input, name, ValueType::Integer, Operation::Local(item));
+    let ten = standard_literal(
+        input,
+        name,
+        ValueType::Integer,
+        Value::Integer(Integer::from(10_u64)),
+    );
+    let product = lexical_expression(
+        input,
+        name,
+        ValueType::Integer,
+        Operation::IntegerMultiply {
+            left: acc,
+            right: ten,
+        },
+    );
+    let body = lexical_expression(
+        input,
+        name,
+        ValueType::Integer,
+        Operation::IntegerAdd {
+            left: product,
+            right: element,
+        },
+    );
+    lexical_expression(
+        input,
+        name,
+        ValueType::Integer,
+        Operation::SequenceFold {
+            sequence,
+            initial,
+            accumulator,
+            item,
+            body,
+        },
+    )
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-1", "interface-010-AC-2")]
+#[test]
+fn sequence_construction_size_flatten_and_fold_preserve_duplicate_occurrence_order() {
+    for flatten in [false, true] {
+        let mut input = standard_parts("sequence-init");
+        let sequence = if flatten {
+            let first = sequence_literals(&mut input, "sequence-init", &[3, 1]);
+            let second = sequence_literals(&mut input, "sequence-init", &[3]);
+            let outer = ValueType::collection(CollectionType::new(
+                CollectionKind::Sequence,
+                integer_sequence_type(),
+                None,
+            ));
+            let outer = lexical_expression(
+                &mut input,
+                "sequence-init",
+                outer,
+                Operation::Sequence {
+                    elements: vec![first, second],
+                },
+            );
+            lexical_expression(
+                &mut input,
+                "sequence-init",
+                integer_sequence_type(),
+                Operation::SequenceFlatten { value: outer },
+            )
+        } else {
+            sequence_literals(&mut input, "sequence-init", &[3, 1, 3])
+        };
+        let digits = digits_fold(&mut input, "sequence-init", sequence, 0, 0);
+        finish_integer_equal(&mut input, "sequence-init", digits, "313");
+        assert_now(
+            &build(BuildPlan {
+                program: Program::try_new(input).unwrap(),
+                budget: execution_budget(),
+            })
+            .unwrap(),
+            99,
+        );
+    }
+    let mut input = standard_parts("sequence-init");
+    let sequence = sequence_literals(&mut input, "sequence-init", &[3, 1, 3]);
+    let size = lexical_expression(
+        &mut input,
+        "sequence-init",
+        ValueType::Integer,
+        Operation::SequenceSize { value: sequence },
+    );
+    finish_integer_equal(&mut input, "sequence-init", size, "3");
+    assert_now(
+        &build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-2")]
+#[test]
+fn sequence_fold_empty_returns_declared_identity_without_executing_its_body() {
+    let mut input = standard_parts("fold-init");
+    let sequence = sequence_literals(&mut input, "fold-init", &[]);
+    let folded = digits_fold(&mut input, "fold-init", sequence, 47, 0);
+    let body = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::Local(LocalId {
+            function: FunctionId(0),
+            position: 1,
+        }),
+    );
+    let Operation::SequenceFold { body: step, .. } = &mut input.expressions[folded.0].operation
+    else {
+        panic!("fold")
+    };
+    *step = body;
+    finish_integer_equal(&mut input, "fold-init", folded, "47");
+    assert_now(
+        &build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-2")]
+#[test]
+fn sequence_fold_reads_lexical_captures_without_rebinding_outer_slots() {
+    let mut input = standard_parts("fold-init");
+    let sequence = sequence_literals(&mut input, "fold-init", &[1, 2, 3]);
+    let ten = standard_literal(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Value::Integer(Integer::from(10_u64)),
+    );
+    let factor = LocalId {
+        function: FunctionId(0),
+        position: 0,
+    };
+    let folded = digits_fold(&mut input, "fold-init", sequence, 4, 1);
+    let read = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::Local(factor),
+    );
+    let product = input
+        .expressions
+        .iter_mut()
+        .find(|node| matches!(node.operation, Operation::IntegerMultiply { .. }))
+        .unwrap();
+    let Operation::IntegerMultiply { right, .. } = &mut product.operation else {
+        unreachable!()
+    };
+    *right = read;
+    let wrapped = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::Let {
+            binding: factor,
+            value: ten,
+            body: folded,
+        },
+    );
+    finish_integer_equal(&mut input, "fold-init", wrapped, "4123");
+    assert_now(
+        &build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
+}
+
+fn verified_union(input: &mut ProgramParts, name: &str) -> Vec<UnionMember> {
+    let declaration = input.types.composite(key(name)).unwrap();
+    let CompositeShape::Union(members) = declaration.shape() else {
+        panic!("original union")
+    };
+    let bindings = members
+        .iter()
+        .map(|member| UnionMember::from_admitted(key(name), member.identifier()).unwrap())
+        .collect::<Vec<_>>();
+    input
+        .types
+        .seal_union_verified(key(name), key(name), bindings.clone())
+        .unwrap();
+    bindings
+}
+
+fn verified_outcome(input: &mut ProgramParts) -> Vec<UnionMember> {
+    verified_union(input, "outcome")
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-1")]
+#[test]
+fn verified_union_case_and_payload_keep_original_member_and_child_owners() {
+    let mut input = standard_parts("union-init");
+    let bindings = verified_outcome(&mut input);
+    let failed = bindings
+        .iter()
+        .find(|member| member.identifier() == "Failed")
+        .unwrap()
+        .variant()
+        .clone();
+    let payload = input
+        .types
+        .record(
+            key("gap_payload"),
+            vec![
+                (
+                    "gap",
+                    FieldValue::Present(Value::Integer(Integer::from(99_u64))),
+                ),
+                (
+                    "max_reading_gap",
+                    FieldValue::Present(Value::Integer(Integer::from(100_u64))),
+                ),
+            ],
+        )
+        .unwrap();
+    let payload = standard_literal(
+        &mut input,
+        "union-init",
+        ValueType::Composite(key("gap_payload")),
+        payload,
+    );
+    let union = lexical_expression(
+        &mut input,
+        "union-init",
+        ValueType::Composite(key("outcome")),
+        Operation::Union {
+            variant: failed.clone(),
+            positions: vec![payload],
+        },
+    );
+    let projected = lexical_expression(
+        &mut input,
+        "union-init",
+        ValueType::Composite(key("gap_payload")),
+        Operation::UnionPayload {
+            value: union,
+            variant: failed.clone(),
+            position: 0,
+        },
+    );
+    let gap = lexical_expression(
+        &mut input,
+        "union-init",
+        ValueType::Integer,
+        Operation::RecordField {
+            value: projected,
+            member: MemberId::new(MemberOwner::Node(key("gap_payload")), "gap").unwrap(),
+        },
+    );
+    finish_integer_equal(&mut input, "union-init", gap, "99");
+    let state = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_now(&state, 99);
+
+    for positive in [true, false] {
+        let mut input = standard_parts("union-init");
+        let bindings = verified_outcome(&mut input);
+        let pending = bindings
+            .iter()
+            .find(|member| member.identifier() == "Pending")
+            .unwrap()
+            .variant()
+            .clone();
+        let other = bindings
+            .iter()
+            .find(|member| member.identifier() == "True")
+            .unwrap()
+            .variant()
+            .clone();
+        let value = lexical_expression(
+            &mut input,
+            "union-init",
+            ValueType::Composite(key("outcome")),
+            Operation::Union {
+                variant: pending.clone(),
+                positions: vec![],
+            },
+        );
+        let condition = lexical_expression(
+            &mut input,
+            "union-init",
+            ValueType::Boolean,
+            Operation::UnionIs {
+                value,
+                variant: if positive { pending } else { other },
+            },
+        );
+        let state = input.layout.state.value_type.clone();
+        let good = state_at(&input, 99);
+        let good = standard_literal(&mut input, "union-init", state.clone(), good);
+        let root = lexical_expression(
+            &mut input,
+            "union-init",
+            state,
+            Operation::If {
+                condition,
+                when_true: good,
+                when_false: ExpressionId(0),
+            },
+        );
+        input.functions[0].body = root;
+        let monitor = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap();
+        assert_now(&monitor, if positive { 99 } else { 0 });
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-1")]
+#[test]
+fn union_construction_refuses_unsealed_foreign_and_wrong_payload_bindings() {
+    for case in 0..3 {
+        let mut input = standard_parts("union-init");
+        let bindings = if case == 0 {
+            vec![UnionMember::from_admitted(key("outcome"), "Pending").unwrap()]
+        } else {
+            verified_outcome(&mut input)
+        };
+        let pending = bindings
+            .iter()
+            .find(|member| member.identifier() == "Pending")
+            .unwrap()
+            .variant()
+            .clone();
+        let variant = if case == 1 {
+            quire_exact::VariantId::new(key("state"), "Pending").unwrap()
+        } else {
+            pending
+        };
+        let positions = if case == 2 {
+            vec![ExpressionId(0)]
+        } else {
+            vec![]
+        };
+        lexical_expression(
+            &mut input,
+            "union-init",
+            ValueType::Composite(key("outcome")),
+            Operation::Union { variant, positions },
+        );
+        assert_eq!(
+            Program::try_new(input)
+                .err()
+                .expect("unverified or malformed member cannot execute")
+                .code,
+            if case == 2 {
+                ProgramRefusalCode::TypeMismatch
+            } else {
+                ProgramRefusalCode::InvalidReference
+            }
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-1")]
+#[test]
+fn union_payload_shares_its_original_state_and_inactive_reads_do_not_invent_values() {
+    for guarded in [false, true] {
+        let mut input = standard_parts("union-init");
+        let members = verified_union(&mut input, "state-choice");
+        let state = input.layout.state.value_type.clone();
+        let original = state_at(&input, 99);
+        let original = standard_literal(&mut input, "union-init", state.clone(), original);
+        let chosen = lexical_expression(
+            &mut input,
+            "union-init",
+            ValueType::Composite(key("state-choice")),
+            Operation::Union {
+                variant: members[0].variant().clone(),
+                positions: vec![original],
+            },
+        );
+        let projected = lexical_expression(
+            &mut input,
+            "union-init",
+            state.clone(),
+            Operation::UnionPayload {
+                value: chosen,
+                variant: members[0].variant().clone(),
+                position: 0,
+            },
+        );
+        input.functions[0].body = projected;
+        let monitor = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap();
+        let Value::Composite(result) = monitor.state() else {
+            panic!("projected State")
+        };
+        let Operation::Literal(Value::Composite(source)) =
+            &monitor.program().expression(original).unwrap().operation
+        else {
+            panic!("original State")
+        };
+        assert!(std::sync::Arc::ptr_eq(result, source));
+        assert_eq!(std::sync::Arc::strong_count(result), 2);
+
+        let mut input = standard_parts("union-init");
+        input
+            .types
+            .seal_union_verified(key("state-choice"), key("state-choice"), members.clone())
+            .unwrap();
+        let empty = lexical_expression(
+            &mut input,
+            "union-init",
+            ValueType::Composite(key("state-choice")),
+            Operation::Union {
+                variant: members[1].variant().clone(),
+                positions: vec![],
+            },
+        );
+        let projected = lexical_expression(
+            &mut input,
+            "union-init",
+            state.clone(),
+            Operation::UnionPayload {
+                value: empty,
+                variant: members[0].variant().clone(),
+                position: 0,
+            },
+        );
+        input.functions[0].body = if guarded {
+            let condition = lexical_expression(
+                &mut input,
+                "union-init",
+                ValueType::Boolean,
+                Operation::UnionIs {
+                    value: empty,
+                    variant: members[0].variant().clone(),
+                },
+            );
+            lexical_expression(
+                &mut input,
+                "union-init",
+                state.clone(),
+                Operation::If {
+                    condition,
+                    when_true: projected,
+                    when_false: ExpressionId(0),
+                },
+            )
+        } else {
+            projected
+        };
+        let result = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        });
+        if guarded {
+            assert_now(&result.unwrap(), 0)
+        } else {
+            let failure = result
+                .err()
+                .expect("inactive payload read is an invariant, never a default State");
+            assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+            assert_eq!(
+                failure.invariant.unwrap().code,
+                quire_contract_runtime::monitor::ExecutorInvariantCode::Projection
+            );
+        }
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-2")]
+#[test]
+fn recursive_sequence_fold_restores_the_callers_accumulator_and_item_slots() {
+    let mut input = standard_parts("fold-init");
+    let helper = FunctionId(input.functions.len());
+    input.functions.push(Function {
+        key: key("fold-helper"),
+        parameters: vec![ValueType::Boolean],
+        result: ValueType::Integer,
+        body: ExpressionId(0),
+    });
+    let sequence = sequence_literals(&mut input, "fold-helper", &[1, 2]);
+    let initial = standard_literal(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Value::Integer(Integer::from(10_u64)),
+    );
+    let accumulator = LocalId {
+        function: helper,
+        position: 0,
+    };
+    let item = LocalId {
+        function: helper,
+        position: 1,
+    };
+    let acc = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::Local(accumulator),
+    );
+    let element = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::Local(item),
+    );
+    let flag = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Boolean,
+        Operation::Argument {
+            function: helper,
+            position: 0,
+        },
+    );
+    let no = standard_literal(
+        &mut input,
+        "fold-helper",
+        ValueType::Boolean,
+        Value::Boolean(false),
+    );
+    let recurse = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::Call {
+            function: helper,
+            arguments: vec![no],
+        },
+    );
+    let with_inner = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::IntegerAdd {
+            left: recurse,
+            right: acc,
+        },
+    );
+    let outer = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::IntegerAdd {
+            left: with_inner,
+            right: element,
+        },
+    );
+    let plain = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::IntegerAdd {
+            left: acc,
+            right: element,
+        },
+    );
+    let body = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::If {
+            condition: flag,
+            when_true: outer,
+            when_false: plain,
+        },
+    );
+    let folded = lexical_expression(
+        &mut input,
+        "fold-helper",
+        ValueType::Integer,
+        Operation::SequenceFold {
+            sequence,
+            initial,
+            accumulator,
+            item,
+            body,
+        },
+    );
+    input.functions[helper.0].body = folded;
+    let yes = standard_literal(
+        &mut input,
+        "fold-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let result = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::Call {
+            function: helper,
+            arguments: vec![yes],
+        },
+    );
+    finish_integer_equal(&mut input, "fold-init", result, "39");
+    assert_now(
+        &build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-1")]
+#[test]
+fn sequence_fold_refuses_duplicate_sparse_or_foreign_lexical_addresses() {
+    for case in 0..3 {
+        let mut input = standard_parts("fold-init");
+        let sequence = sequence_literals(&mut input, "fold-init", &[1, 2]);
+        let folded = digits_fold(&mut input, "fold-init", sequence, 4, 0);
+        let Operation::SequenceFold {
+            accumulator, item, ..
+        } = &mut input.expressions[folded.0].operation
+        else {
+            panic!("fold")
+        };
+        match case {
+            0 => *item = *accumulator,
+            1 => item.position = 20,
+            _ => item.function = FunctionId(1),
+        }
+        finish_integer_equal(&mut input, "fold-init", folded, "412");
+        assert_eq!(
+            Program::try_new(input)
+                .err()
+                .expect("invalid lexical declarations cannot execute")
+                .code,
+            ProgramRefusalCode::InvalidBinding
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-3")]
+#[test]
+fn sequence_visit_and_formation_stops_retain_native_causes_without_a_partial_value() {
+    let mut input = standard_parts("fold-init");
+    let native_sequence = quire_exact::from_admitted(
+        CollectionType::new(CollectionKind::Sequence, ValueType::Integer, None),
+        vec![Value::Integer(Integer::one())],
+    );
+    let sequence = standard_literal(
+        &mut input,
+        "fold-init",
+        integer_sequence_type(),
+        native_sequence,
+    );
+    let folded = digits_fold(&mut input, "fold-init", sequence, 4, 0);
+    finish_integer_equal(&mut input, "fold-init", folded, "41");
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.scalar.work_units = 0;
+    let failure = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .err()
+    .expect("first native visit must stop");
+    let quire_exact::Outcome::Incomplete(cause) = failure.scalar.unwrap().outcome else {
+        panic!("native visit stop")
+    };
+    assert_eq!(
+        cause.charge_point,
+        quire_exact::ChargePoint::CollectionVisit
+    );
+    assert_eq!(cause.limit_kind, quire_exact::LimitKind::WorkUnits);
+    assert_eq!(cause.next_charge, Integer::one());
+    assert_now(
+        &build(BuildPlan {
+            program,
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
+
+    let mut input = standard_parts("sequence-init");
+    let sequence = sequence_literals(&mut input, "sequence-init", &[1, 2, 3]);
+    let size = lexical_expression(
+        &mut input,
+        "sequence-init",
+        ValueType::Integer,
+        Operation::SequenceSize { value: sequence },
+    );
+    finish_integer_equal(&mut input, "sequence-init", size, "3");
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.scalar.work_units = 0;
+    let failure = build(BuildPlan { program, budget })
+        .err()
+        .expect("first element charge occurs before evaluating the element");
+    let quire_exact::Outcome::Incomplete(cause) = failure.scalar.unwrap().outcome else {
+        panic!("native element stop")
+    };
+    assert_eq!(
+        cause.charge_point,
+        quire_exact::ChargePoint::CollectionElement
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-07", "interface-005-AC-3", "interface-008-AC-2")]
+#[test]
+fn short_circuit_boolean_native_retention_stops_without_evaluating_the_skipped_recursion() {
+    for selected in [false, true] {
+        let (mut input, conjunction) = boolean_parts(BooleanProbe::And, selected, true);
+        let helper = FunctionId(input.functions.len());
+        let recursive = lexical_expression(
+            &mut input,
+            "condition",
+            ValueType::Boolean,
+            Operation::Call {
+                function: helper,
+                arguments: vec![],
+            },
+        );
+        input.functions.push(Function {
+            key: key("condition"),
+            parameters: vec![],
+            result: ValueType::Boolean,
+            body: recursive,
+        });
+        let Operation::BooleanAnd { right, .. } = &mut input.expressions[conjunction.0].operation
+        else {
+            panic!("conjunction")
+        };
+        *right = recursive;
+        let mut budget = execution_budget();
+        budget.stack_frames = 32;
+        budget.scalar.result_units = 0;
+        let failure = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget,
+        })
+        .err()
+        .expect("selected operating stop");
+        if selected {
+            assert_eq!(failure.resource.unwrap().resource, StepResource::Stack)
+        } else {
+            assert_eq!(
+                failure.resource.unwrap().resource,
+                StepResource::Scalar(quire_exact::LimitKind::ResultUnits)
+            );
+            let quire_exact::Outcome::Incomplete(cause) = failure.scalar.unwrap().outcome else {
+                panic!("native Boolean retain")
+            };
+            assert_eq!(
+                cause.charge_point,
+                quire_exact::ChargePoint::BooleanResultRetain
+            );
+        }
+    }
+}
+
+fn finish_boolean_condition(input: &mut ProgramParts, name: &str, condition: ExpressionId) {
+    let state = input.layout.state.value_type.clone();
+    let good = state_at(input, 99);
+    let good = standard_literal(input, name, state.clone(), good);
+    let root = lexical_expression(
+        input,
+        name,
+        state,
+        Operation::If {
+            condition,
+            when_true: good,
+            when_false: ExpressionId(0),
+        },
+    );
+    input.functions[0].body = root;
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-2")]
+#[test]
+fn checked_equality_preserves_native_conversion_and_quantity_unit_facts() {
+    for equal in [true, false] {
+        let mut input = standard_parts("equality-init");
+        let bounded =
+            ValueType::Int(IntegerInterval::new(Integer::zero(), Integer::from(10_u64)).unwrap());
+        let left = standard_literal(
+            &mut input,
+            "equality-init",
+            bounded.clone(),
+            Value::Integer(Integer::from(7_u64)),
+        );
+        let right = standard_literal(
+            &mut input,
+            "equality-init",
+            ValueType::Integer,
+            Value::Integer(Integer::from(if equal { 7_u64 } else { 8_u64 })),
+        );
+        let checked = input
+            .types
+            .check_equality(
+                EqualityOperator::Equal,
+                EqualityOperand::converted(bounded, ValueType::Integer),
+                EqualityOperand::typed(ValueType::Integer),
+                &EnumMemberIndex::default(),
+            )
+            .unwrap();
+        let condition = lexical_expression(
+            &mut input,
+            "equality-init",
+            ValueType::Boolean,
+            Operation::Equality {
+                left,
+                right,
+                checked: Box::new(checked),
+            },
+        );
+        finish_boolean_condition(&mut input, "equality-init", condition);
+        assert_now(
+            &build(BuildPlan {
+                program: Program::try_new(input).unwrap(),
+                budget: execution_budget(),
+            })
+            .unwrap(),
+            if equal { 99 } else { 0 },
+        );
+    }
+    let mut input = standard_parts("equality-init");
+    let tick = input
+        .types
+        .units()
+        .ids()
+        .find(|unit| unit.declared_key() == Some(&key("tick")))
+        .unwrap()
+        .clone();
+    let root = input
+        .types
+        .units()
+        .ids()
+        .find(|unit| unit.declared_key() == Some(&key("root-tick")))
+        .unwrap()
+        .clone();
+    let left_type = ValueType::Quantity(tick.clone());
+    let right_type = ValueType::Quantity(root.clone());
+    let left = standard_literal(
+        &mut input,
+        "equality-init",
+        left_type.clone(),
+        Value::Quantity(quire_exact::Quantity::new(
+            Rational::from_integer(Integer::one()),
+            tick,
+        )),
+    );
+    let right = standard_literal(
+        &mut input,
+        "equality-init",
+        right_type.clone(),
+        Value::Quantity(quire_exact::Quantity::new(
+            Rational::from_integer(Integer::one()),
+            root,
+        )),
+    );
+    let checked = input
+        .types
+        .check_equality(
+            EqualityOperator::Equal,
+            EqualityOperand::converted(left_type, right_type.clone()),
+            EqualityOperand::typed(right_type),
+            &EnumMemberIndex::default(),
+        )
+        .unwrap();
+    assert_eq!(
+        checked.schedule(),
+        quire_semantic_value::declaration::EqualitySchedule::Quantity
+    );
+    let condition = lexical_expression(
+        &mut input,
+        "equality-init",
+        ValueType::Boolean,
+        Operation::Equality {
+            left,
+            right,
+            checked: Box::new(checked),
+        },
+    );
+    finish_boolean_condition(&mut input, "equality-init", condition);
+    assert_now(
+        &build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-2")]
+#[test]
+fn checked_equality_keeps_original_enum_index_after_preparation_drops() {
+    let declaration = quire_semantic_value::enumeration::EnumDeclaration::new(
+        key("capture-mode"),
+        true,
+        vec!["Idle".to_owned(), "Busy".to_owned()],
+    )
+    .unwrap();
+    let mut index = EnumMemberIndex::default();
+    let mut values = Vec::new();
+    for name in ["Idle", "Busy"] {
+        let nodes = admitted()
+            .graph()
+            .nodes
+            .iter()
+            .filter(|node| {
+                node.semantic_form.as_ref() == "enum_value"
+                    && serde_json::to_value(&node.body).unwrap()["value"] == name
+            })
+            .collect::<Vec<_>>();
+        let [node] = nodes.as_slice() else {
+            panic!("one original enum member {name}")
+        };
+        let original = serde_json::to_value(node).unwrap();
+        assert_eq!(
+            qsl_foundation::node_wire::node_key_from_json(&original["semantic_type"]).unwrap(),
+            key("capture-mode")
+        );
+        let member = qsl_foundation::node_wire::node_key_from_json(&original["node_id"]).unwrap();
+        let value = declaration.member(name, member).unwrap();
+        index.record(value.clone());
+        values.push(value);
+    }
+    let shape = quire_exact::EnumShape::new(true, values.iter().map(|value| value.variant()));
+    let ty = ValueType::Enum(shape.clone());
+    let mut programs = Vec::new();
+    for same in [false, true] {
+        let mut input = standard_parts("equality-init");
+        let variant = values[0].variant();
+        let first = Value::Enum(quire_exact::EnumMember::new(
+            variant.clone(),
+            shape.rank(&variant).unwrap(),
+        ));
+        let variant = values[if same { 0 } else { 1 }].variant();
+        let other = Value::Enum(quire_exact::EnumMember::new(
+            variant.clone(),
+            shape.rank(&variant).unwrap(),
+        ));
+        let left = standard_literal(&mut input, "equality-init", ty.clone(), first);
+        let right = standard_literal(&mut input, "equality-init", ty.clone(), other);
+        let checked = input
+            .types
+            .check_equality(
+                EqualityOperator::Equal,
+                EqualityOperand::typed(ty.clone()),
+                EqualityOperand::typed(ty.clone()),
+                &index,
+            )
+            .unwrap();
+        assert_eq!(
+            checked.schedule(),
+            quire_semantic_value::declaration::EqualitySchedule::Enum
+        );
+        let condition = lexical_expression(
+            &mut input,
+            "equality-init",
+            ValueType::Boolean,
+            Operation::Equality {
+                left,
+                right,
+                checked: Box::new(checked),
+            },
+        );
+        finish_boolean_condition(&mut input, "equality-init", condition);
+        programs.push((Program::try_new(input).unwrap(), same));
+    }
+    drop(index);
+    drop(values);
+    drop(declaration);
+    for (program, same) in programs {
+        assert_now(
+            &build(BuildPlan {
+                program,
+                budget: execution_budget(),
+            })
+            .unwrap(),
+            if same { 99 } else { 0 },
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
+#[test]
+fn checked_equality_and_union_retention_keep_native_operating_shortages() {
+    let mut input = standard_parts("equality-init");
+    let left = standard_literal(
+        &mut input,
+        "equality-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let right = standard_literal(
+        &mut input,
+        "equality-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let checked = input
+        .types
+        .check_equality(
+            EqualityOperator::Equal,
+            EqualityOperand::typed(ValueType::Boolean),
+            EqualityOperand::typed(ValueType::Boolean),
+            &EnumMemberIndex::default(),
+        )
+        .unwrap();
+    let equality = lexical_expression(
+        &mut input,
+        "equality-init",
+        ValueType::Boolean,
+        Operation::Equality {
+            left,
+            right,
+            checked: Box::new(checked),
+        },
+    );
+    finish_boolean_condition(&mut input, "equality-init", equality);
+    let mut budget = execution_budget();
+    budget.scalar.value_occurrences = 0;
+    let failure = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget,
+    })
+    .err()
+    .expect("native equality must stop before returning a relation");
+    assert_eq!(
+        failure.resource.unwrap().resource,
+        StepResource::Scalar(quire_exact::LimitKind::ValueOccurrences)
+    );
+    let native = failure.scalar.unwrap();
+    assert_eq!(
+        native.site,
+        quire_contract_runtime::monitor::ExecutionSite::Expression(equality)
+    );
+    let quire_exact::Outcome::Incomplete(cause) = native.outcome else {
+        panic!("original equality shortage")
+    };
+    assert_eq!(
+        cause.charge_point,
+        quire_exact::ChargePoint::EqualityPlanForm
+    );
+    assert_eq!(cause.next_charge, Integer::one());
+
+    let mut input = standard_parts("union-init");
+    let members = verified_union(&mut input, "state-choice");
+    let variant = members
+        .iter()
+        .find(|member| member.identifier() == "Empty")
+        .unwrap()
+        .variant()
+        .clone();
+    let empty = lexical_expression(
+        &mut input,
+        "union-init",
+        ValueType::Composite(key("state-choice")),
+        Operation::Union {
+            variant: variant.clone(),
+            positions: vec![],
+        },
+    );
+    let condition = lexical_expression(
+        &mut input,
+        "union-init",
+        ValueType::Boolean,
+        Operation::UnionIs {
+            value: empty,
+            variant,
+        },
+    );
+    finish_boolean_condition(&mut input, "union-init", condition);
+    let mut budget = execution_budget();
+    budget.scalar.result_units = 0;
+    let failure = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget,
+    })
+    .err()
+    .expect("nullary member still has one native retained occurrence");
+    assert_eq!(
+        failure.resource.unwrap().resource,
+        StepResource::Scalar(quire_exact::LimitKind::ResultUnits)
+    );
+    let quire_exact::Outcome::Incomplete(cause) = failure.scalar.unwrap().outcome else {
+        panic!("original union retention shortage")
+    };
+    assert_eq!(
+        cause.charge_point,
+        quire_exact::ChargePoint::CompositeResultRetain
+    );
+    assert_eq!(cause.next_charge, Integer::one());
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
+#[test]
+fn union_payloads_stop_in_declaration_order_before_a_later_native_denial() {
+    let mut input = standard_parts("union-init");
+    let members = verified_union(&mut input, "state-choice");
+    let variant = members
+        .iter()
+        .find(|member| member.identifier() == "Pair")
+        .unwrap()
+        .variant()
+        .clone();
+    let state = input.layout.state.value_type.clone();
+    let first = lexical_expression(
+        &mut input,
+        "union-init",
+        state.clone(),
+        Operation::Call {
+            function: FunctionId(0),
+            arguments: vec![],
+        },
+    );
+    let literal = standard_literal(
+        &mut input,
+        "union-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let later = lexical_expression(
+        &mut input,
+        "union-init",
+        ValueType::Boolean,
+        Operation::BooleanNot { value: literal },
+    );
+    let second = lexical_expression(
+        &mut input,
+        "union-init",
+        state.clone(),
+        Operation::If {
+            condition: later,
+            when_true: ExpressionId(0),
+            when_false: ExpressionId(0),
+        },
+    );
+    let pair = lexical_expression(
+        &mut input,
+        "union-init",
+        ValueType::Composite(key("state-choice")),
+        Operation::Union {
+            variant: variant.clone(),
+            positions: vec![first, second],
+        },
+    );
+    let root = lexical_expression(
+        &mut input,
+        "union-init",
+        state,
+        Operation::UnionPayload {
+            value: pair,
+            variant,
+            position: 0,
+        },
+    );
+    input.functions[0].body = root;
+    let mut budget = execution_budget();
+    budget.stack_frames = 32;
+    budget.scalar.result_units = 0;
+    let failure = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget,
+    })
+    .err()
+    .expect("first payload recursion must precede the later Boolean retention denial");
+    assert_eq!(failure.resource.unwrap().resource, StepResource::Stack);
+    assert!(failure.scalar.is_none());
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-1")]
+#[test]
+fn sequence_fold_returning_an_element_keeps_the_original_canonical_owner() {
+    let mut input = standard_parts("fold-init");
+    let state = input.layout.state.value_type.clone();
+    let first = state_at(&input, 11);
+    let last = state_at(&input, 99);
+    let first = standard_literal(&mut input, "fold-init", state.clone(), first);
+    let last = standard_literal(&mut input, "fold-init", state.clone(), last);
+    let sequence_type = ValueType::collection(CollectionType::new(
+        CollectionKind::Sequence,
+        state.clone(),
+        None,
+    ));
+    let sequence = lexical_expression(
+        &mut input,
+        "fold-init",
+        sequence_type,
+        Operation::Sequence {
+            elements: vec![first, last],
+        },
+    );
+    let accumulator = LocalId {
+        function: FunctionId(0),
+        position: 0,
+    };
+    let item = LocalId {
+        function: FunctionId(0),
+        position: 1,
+    };
+    let body = lexical_expression(
+        &mut input,
+        "fold-init",
+        state.clone(),
+        Operation::Local(item),
+    );
+    let root = lexical_expression(
+        &mut input,
+        "fold-init",
+        state,
+        Operation::SequenceFold {
+            sequence,
+            initial: ExpressionId(0),
+            accumulator,
+            item,
+            body,
+        },
+    );
+    input.functions[0].body = root;
+    let monitor = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+    let Value::Composite(result) = monitor.state() else {
+        panic!("canonical State")
+    };
+    let Operation::Literal(Value::Composite(original)) =
+        &monitor.program().expression(last).unwrap().operation
+    else {
+        panic!("original element")
+    };
+    assert!(std::sync::Arc::ptr_eq(result, original));
+    assert_eq!(std::sync::Arc::strong_count(result), 2);
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-1", "interface-010-AC-3")]
+#[test]
+fn sequence_kind_and_authored_bound_are_not_reinterpreted_or_replaced_by_scratch_limits() {
+    let mut input = standard_parts("sequence-init");
+    let elements = vec![standard_literal(
+        &mut input,
+        "sequence-init",
+        ValueType::Integer,
+        Value::Integer(Integer::one()),
+    )];
+    lexical_expression(
+        &mut input,
+        "sequence-init",
+        ValueType::collection(CollectionType::new(
+            CollectionKind::OrderedSet,
+            ValueType::Integer,
+            None,
+        )),
+        Operation::Sequence { elements },
+    );
+    assert_eq!(
+        Program::try_new(input)
+            .err()
+            .expect("sequence capability cannot stand for OrderedSet")
+            .code,
+        ProgramRefusalCode::TypeMismatch
+    );
+    let mut input = standard_parts("sequence-init");
+    let sequence = sequence_literals(&mut input, "sequence-init", &[1, 2, 3]);
+    input.expressions[sequence.0].value_type = ValueType::collection(CollectionType::new(
+        CollectionKind::Sequence,
+        ValueType::Integer,
+        Some(quire_exact::CardinalityBound::new(0, 2).unwrap()),
+    ));
+    let size = lexical_expression(
+        &mut input,
+        "sequence-init",
+        ValueType::Integer,
+        Operation::SequenceSize { value: sequence },
+    );
+    finish_integer_equal(&mut input, "sequence-init", size, "3");
+    let failure = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .err()
+    .expect("native authored cardinality bound must refuse");
+    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert!(failure.resource.is_none());
+    assert!(matches!(
+        failure.scalar.unwrap().outcome,
+        quire_exact::Outcome::Refused(_)
+    ));
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-3")]
+#[test]
+fn sequence_fold_temporary_addresses_are_bounded_by_explicit_scratch() {
+    let mut input = standard_parts("fold-init");
+    let source = quire_exact::from_admitted(
+        CollectionType::new(CollectionKind::Sequence, ValueType::Integer, None),
+        (0..500).map(|_| Value::Integer(Integer::one())).collect(),
+    );
+    let sequence = standard_literal(&mut input, "fold-init", integer_sequence_type(), source);
+    let initial = standard_literal(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Value::Integer(Integer::zero()),
+    );
+    let accumulator = LocalId {
+        function: FunctionId(0),
+        position: 0,
+    };
+    let item = LocalId {
+        function: FunctionId(0),
+        position: 1,
+    };
+    let acc = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::Local(accumulator),
+    );
+    let element = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::Local(item),
+    );
+    let body = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::IntegerAdd {
+            left: acc,
+            right: element,
+        },
+    );
+    let folded = lexical_expression(
+        &mut input,
+        "fold-init",
+        ValueType::Integer,
+        Operation::SequenceFold {
+            sequence,
+            initial,
+            accumulator,
+            item,
+            body,
+        },
+    );
+    finish_integer_equal(&mut input, "fold-init", folded, "500");
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.scratch_elements = 64;
+    let failure = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .err()
+    .expect("temporary canonical operands cannot grow beyond the operating limit");
+    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(
+        failure.resource.unwrap().resource,
+        StepResource::ScratchElements
+    );
+    assert!(failure.invariant.is_none());
+    assert_now(
+        &build(BuildPlan {
+            program,
+            budget: execution_budget(),
+        })
+        .unwrap(),
+        99,
+    );
 }

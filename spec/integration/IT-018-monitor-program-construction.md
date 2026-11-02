@@ -21,6 +21,10 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_009
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_010
+    type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_011
+    type: verifies
 ---
 # IT-018: Retain monitor construction parts with producer-origin identities
 
@@ -144,6 +148,21 @@ placement in the controlled layout grants no temporal-root admission or executio
     from running; exact scratch units and native retention causes are retained.
     A deep chain uses explicit continuations on a small native stack. These
     initializer controls do not qualify temporal entries or same-monitor replay.
+
+12. Execute sequence and fold diagnostics. IT-018-SC-12: construction, size and
+    outer/inner flatten order preserve duplicates; noncommutative folds, empty
+    identities, lexical captures and recursive slot restoration have independent
+    expectations. Returned elements retain their canonical owners. Wrong kinds
+    and lexical addresses refuse, authored bounds remain native bounds, and
+    native visits, formation and scratch exhaustion expose no partial value.
+
+13. Execute verified union and checked-equality diagnostics. IT-018-SC-13:
+    original sealed member identities and payloads survive temporary-owner drop;
+    foreign/unsealed/ill-shaped members refuse and inactive payloads never become
+    defaults. Earlier payload stops prevent later native work. Equality uses its
+    original native conversion, unit and enum-index metadata after preparation
+    drops. Exact native shortages remain operating failures. These controls do
+    not qualify temporal entries or same-monitor stopped-input replay.
 
 ## Expected Results
 
