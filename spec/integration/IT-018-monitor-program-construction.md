@@ -5,6 +5,8 @@ type: IT
 relationships:
   - target: ix://agent-ix/quire-contract-runtime/interface_002
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_004
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_003
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-012
@@ -78,6 +80,14 @@ placement in the controlled layout grants no temporal-root admission or executio
    body returns a typed invariant with its native invalid-membership cause and
    original source key retained. These controls cover the initial executor interface only;
    they do not qualify temporal on_event, on_watermark or on_gap semantics.
+
+6. Execute lexical diagnostics. IT-018-SC-06: compact function-qualified slots
+   support scoped reads, exact continuation counts and lazy branches. Missing,
+   duplicate, sparse and foreign declarations refuse. A recursive call restores
+   its caller's binding and cannot capture an inactive binding from that caller.
+   A mismatched local annotation preserves native membership failure. A deep
+   chain on a small native stack charges every active binding operand. These
+   diagnostic arenas do not qualify temporal entries or the real monitor producer.
 
 ## Expected Results
 

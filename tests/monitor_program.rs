@@ -5,8 +5,8 @@
 use ix_trace_rs::trace;
 use quire_contract_runtime::monitor::{
     build, Buffer, BuildPlan, Entries, Expression, ExpressionId, Function, FunctionId, Layout,
-    MonitorBuildFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode, StepBudget,
-    StepResource, TypeBinding,
+    LocalId, MonitorBuildFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode,
+    StepBudget, StepResource, TypeBinding,
 };
 use quire_exact::{
     CollectionKind, CollectionType, FieldValue, Identifier, Integer, NodeKey, Presence, Rational,
@@ -57,7 +57,7 @@ fn key(name: &str) -> NodeKey {
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
                 "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -185,6 +185,8 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function lexical_init using v(): State pure { let saved = State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } in saved }
+function lexical_helper using v(flag: Boolean): State pure { let saved = State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } in if flag then saved else saved }
 function pass_second using v(s: State, t: State): State pure { t }
 function pass_state using v(s: State): State pure { s }
 function option_probe using v(s: Option<Boolean>): State pure { State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
@@ -205,6 +207,8 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("lexical-init", "lexical_init"),
+    ("lexical-helper", "lexical_helper"),
     ("pass-second", "pass_second"),
     ("pass-state", "pass_state"),
     ("option-probe", "option_probe"),
@@ -1500,4 +1504,459 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
         _ => panic!("native cause must match the operating stop, without an invariant"),
     }
     assert!(failure.invariant.is_none());
+}
+
+fn lexical_base() -> ProgramParts {
+    let mut input = parts();
+    input.functions[0].key = key("lexical-init");
+    input.expressions[0].key = key("lexical-init");
+    input
+}
+
+fn lexical_expression(
+    input: &mut ProgramParts,
+    owner: &str,
+    value_type: ValueType,
+    operation: Operation,
+) -> ExpressionId {
+    let id = ExpressionId(input.expressions.len());
+    input.expressions.push(Expression {
+        key: key(owner),
+        body_path: vec![id.0 + 100],
+        value_type,
+        operation,
+    });
+    id
+}
+
+fn state_at(input: &ProgramParts, now: u64) -> Value {
+    let Operation::Literal(Value::Composite(state)) = &input.expressions[0].operation else {
+        panic!("state literal");
+    };
+    input
+        .types
+        .record(
+            key("state"),
+            vec![
+                (
+                    "now",
+                    FieldValue::Present(Value::Integer(Integer::from(now))),
+                ),
+                ("history_start", state.slots()[1].clone()),
+                ("activations", state.slots()[2].clone()),
+                ("event_position", state.slots()[3].clone()),
+            ],
+        )
+        .unwrap()
+}
+
+fn assert_now(monitor: &quire_contract_runtime::monitor::Monitor, expected: u64) {
+    let Value::Composite(state) = monitor.state() else {
+        panic!("state");
+    };
+    let FieldValue::Present(Value::Integer(now)) = &state.slots()[0] else {
+        panic!("now");
+    };
+    assert_eq!(now, &Integer::from(expected));
+}
+
+fn one_lexical_binding() -> ProgramParts {
+    let mut input = lexical_base();
+    let value = state_at(&input, 99);
+    input.expressions[0].operation = Operation::Literal(value);
+    let state = input.layout.state.value_type.clone();
+    let binding = LocalId {
+        function: FunctionId(0),
+        position: 0,
+    };
+    let read = lexical_expression(
+        &mut input,
+        "lexical-init",
+        state.clone(),
+        Operation::Local(binding),
+    );
+    let body = lexical_expression(
+        &mut input,
+        "lexical-init",
+        state,
+        Operation::Let {
+            binding,
+            value: ExpressionId(0),
+            body: read,
+        },
+    );
+    input.functions[0].body = body;
+    input
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-2")]
+#[test]
+fn lexical_value_is_evaluated_once_within_its_scoped_body() {
+    let program = Program::try_new(one_lexical_binding()).unwrap();
+    let monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: StepBudget {
+            work: 7,
+            ..execution_budget()
+        },
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+    let failure = match build(BuildPlan {
+        program,
+        budget: StepBudget {
+            work: 6,
+            ..execution_budget()
+        },
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("seven required continuations cannot fit six units"),
+    };
+    assert_eq!(failure.resource.unwrap().resource, StepResource::Work);
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-1")]
+#[test]
+fn lexical_missing_duplicate_sparse_and_foreign_declarations_refuse() {
+    for case in 0..4 {
+        let mut input = one_lexical_binding();
+        match case {
+            0 => {
+                input.expressions.pop();
+                input.functions[0].body = ExpressionId(4);
+            }
+            1 => {
+                let state = input.layout.state.value_type.clone();
+                lexical_expression(
+                    &mut input,
+                    "lexical-init",
+                    state,
+                    Operation::Let {
+                        binding: LocalId {
+                            function: FunctionId(0),
+                            position: 0,
+                        },
+                        value: ExpressionId(0),
+                        body: ExpressionId(4),
+                    },
+                );
+            }
+            2 | 3 => {
+                let binding = LocalId {
+                    function: FunctionId(if case == 3 { 1 } else { 0 }),
+                    position: if case == 2 { usize::MAX } else { 0 },
+                };
+                input.expressions[4].operation = Operation::Local(binding);
+                input.expressions[5].operation = Operation::Let {
+                    binding,
+                    value: ExpressionId(0),
+                    body: ExpressionId(4),
+                };
+            }
+            _ => unreachable!(),
+        }
+        refused(input, ProgramRefusalCode::InvalidBinding);
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-2", "interface-004-AC-3")]
+#[test]
+fn lexical_unselected_branch_does_not_activate_a_local() {
+    for selected in [true, false] {
+        let mut input = one_lexical_binding();
+        let state = input.layout.state.value_type.clone();
+        let condition = lexical_expression(
+            &mut input,
+            "lexical-init",
+            ValueType::Boolean,
+            Operation::Literal(Value::Boolean(selected)),
+        );
+        let read = lexical_expression(
+            &mut input,
+            "lexical-init",
+            state.clone(),
+            Operation::Local(LocalId {
+                function: FunctionId(0),
+                position: 0,
+            }),
+        );
+        let root = lexical_expression(
+            &mut input,
+            "lexical-init",
+            state,
+            Operation::If {
+                condition,
+                when_true: ExpressionId(5),
+                when_false: read,
+            },
+        );
+        input.functions[0].body = root;
+        let result = build(BuildPlan {
+            program: Program::try_new(input).unwrap(),
+            budget: execution_budget(),
+        });
+        if selected {
+            assert_now(&result.unwrap(), 99);
+        } else {
+            let failure = match result {
+                Err(failure) => failure,
+                Ok(_) => panic!("an inactive branch cannot supply its local"),
+            };
+            assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+            assert_eq!(
+                failure.invariant.unwrap().code,
+                quire_contract_runtime::monitor::ExecutorInvariantCode::Binding
+            );
+        }
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-2")]
+#[test]
+fn lexical_different_annotation_preserves_native_membership_failure() {
+    let mut input = one_lexical_binding();
+    input.expressions[0].value_type = ValueType::Boolean;
+    input.expressions[0].operation = Operation::Literal(Value::Boolean(true));
+    let failure = match build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("Boolean local cannot become State by annotation"),
+    };
+    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert_eq!(
+        failure.invariant.unwrap().code,
+        quire_contract_runtime::monitor::ExecutorInvariantCode::Membership
+    );
+    let native = failure.admission.unwrap();
+    assert!(matches!(
+        native.failure,
+        quire_semantic_value::supplied_membership::SuppliedAdmissionError::Invalid { .. }
+    ));
+    assert_eq!(native.source_node(), Some(&key("lexical-init")));
+}
+
+fn recursive_local_parts(isolation: bool) -> ProgramParts {
+    let mut input = lexical_base();
+    let state = input.layout.state.value_type.clone();
+    let outer_value = state_at(&input, 99);
+    let inner_value = state_at(&input, 22);
+    let owner = "lexical-helper";
+    let binding = LocalId {
+        function: FunctionId(4),
+        position: 0,
+    };
+    let argument = lexical_expression(
+        &mut input,
+        owner,
+        ValueType::Boolean,
+        Operation::Argument {
+            function: FunctionId(4),
+            position: 0,
+        },
+    );
+    let outer = lexical_expression(
+        &mut input,
+        owner,
+        state.clone(),
+        Operation::Literal(outer_value),
+    );
+    let inner = lexical_expression(
+        &mut input,
+        owner,
+        state.clone(),
+        Operation::Literal(inner_value),
+    );
+    let selected = lexical_expression(
+        &mut input,
+        owner,
+        state.clone(),
+        Operation::If {
+            condition: argument,
+            when_true: outer,
+            when_false: inner,
+        },
+    );
+    let read = lexical_expression(&mut input, owner, state.clone(), Operation::Local(binding));
+    let no = lexical_expression(
+        &mut input,
+        owner,
+        ValueType::Boolean,
+        Operation::Literal(Value::Boolean(false)),
+    );
+    let recursive = lexical_expression(
+        &mut input,
+        owner,
+        state.clone(),
+        Operation::Call {
+            function: FunctionId(4),
+            arguments: vec![no],
+        },
+    );
+    let body = if isolation {
+        let bound = lexical_expression(
+            &mut input,
+            owner,
+            state.clone(),
+            Operation::Let {
+                binding,
+                value: selected,
+                body: recursive,
+            },
+        );
+        lexical_expression(
+            &mut input,
+            owner,
+            state.clone(),
+            Operation::If {
+                condition: argument,
+                when_true: bound,
+                when_false: read,
+            },
+        )
+    } else {
+        let ignored = lexical_expression(
+            &mut input,
+            owner,
+            state.clone(),
+            Operation::Let {
+                binding: LocalId {
+                    function: FunctionId(4),
+                    position: 1,
+                },
+                value: recursive,
+                body: read,
+            },
+        );
+        let continuation = lexical_expression(
+            &mut input,
+            owner,
+            state.clone(),
+            Operation::If {
+                condition: argument,
+                when_true: ignored,
+                when_false: read,
+            },
+        );
+        lexical_expression(
+            &mut input,
+            owner,
+            state.clone(),
+            Operation::Let {
+                binding,
+                value: selected,
+                body: continuation,
+            },
+        )
+    };
+    input.functions.push(Function {
+        key: key(owner),
+        parameters: vec![ValueType::Boolean],
+        result: state.clone(),
+        body,
+    });
+    let yes = lexical_expression(
+        &mut input,
+        "lexical-init",
+        ValueType::Boolean,
+        Operation::Literal(Value::Boolean(true)),
+    );
+    let root = lexical_expression(
+        &mut input,
+        "lexical-init",
+        state,
+        Operation::Call {
+            function: FunctionId(4),
+            arguments: vec![yes],
+        },
+    );
+    input.functions[0].body = root;
+    input
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-3")]
+#[test]
+fn lexical_recursive_return_restores_the_outer_binding() {
+    let monitor = build(BuildPlan {
+        program: Program::try_new(recursive_local_parts(false)).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-3")]
+#[test]
+fn lexical_recursive_invocation_cannot_capture_a_callers_active_local() {
+    let failure = match build(BuildPlan {
+        program: Program::try_new(recursive_local_parts(true)).unwrap(),
+        budget: execution_budget(),
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("callee without its own activation cannot read caller's local"),
+    };
+    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    let invariant = failure.invariant.unwrap();
+    assert_eq!(
+        invariant.code,
+        quire_contract_runtime::monitor::ExecutorInvariantCode::Binding
+    );
+    assert_eq!(invariant.source_node(), Some(&key("lexical-helper")));
+}
+
+#[trace("TC-098", "IT-018-SC-06", "interface-004-AC-4")]
+#[test]
+fn lexical_deep_chain_charges_live_bindings_and_uses_explicit_stack() {
+    let _ = key("lexical-init");
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let depth = 2_000;
+            let mut input = lexical_base();
+            let state = input.layout.state.value_type.clone();
+            let mut previous = ExpressionId(0);
+            for position in 0..depth {
+                previous = lexical_expression(
+                    &mut input,
+                    "lexical-init",
+                    state.clone(),
+                    Operation::Let {
+                        binding: LocalId {
+                            function: FunctionId(0),
+                            position,
+                        },
+                        value: ExpressionId(0),
+                        body: previous,
+                    },
+                );
+            }
+            input.functions[0].body = previous;
+            let program = Program::try_new(input).unwrap();
+            let stopped = match build(BuildPlan {
+                program: Rc::clone(&program),
+                budget: StepBudget {
+                    scratch_elements: depth,
+                    ..execution_budget()
+                },
+            }) {
+                Err(failure) => failure,
+                Ok(_) => panic!("the body result needs a slot beside every active binding"),
+            };
+            let stop = stopped.resource.unwrap();
+            assert_eq!(stop.resource, StepResource::ScratchElements);
+            assert_eq!((stop.spent, stop.requested), (depth as u128, 1));
+            let monitor = build(BuildPlan {
+                program,
+                budget: StepBudget {
+                    scratch_elements: depth + 1,
+                    ..execution_budget()
+                },
+            })
+            .unwrap();
+            assert_now(&monitor, 0);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }
