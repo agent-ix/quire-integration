@@ -5,8 +5,8 @@
 use ix_trace_rs::trace;
 use quire_contract_runtime::monitor::{
     build, Buffer, BuildPlan, Entries, Expression, ExpressionId, Function, FunctionId, Layout,
-    LocalId, MonitorBuildFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode,
-    StepBudget, StepResource, TypeBinding,
+    LocalId, MonitorFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode, StepBudget,
+    StepResource, TypeBinding,
 };
 use quire_exact::{
     CollectionKind, CollectionType, FieldValue, Identifier, Integer, IntegerInterval, MemberId,
@@ -728,6 +728,9 @@ fn parts_for(profile: FixtureState) -> ProgramParts {
             subject: "selected-subject".into(),
             occurrence: Box::from(&b"occurrence"[..]),
             profile: "timestamped-event".into(),
+            clock_binding: Box::from(&b"diagnostic-clock-value"[..]),
+            admitted_order: Box::from(&b"diagnostic-order-value"[..]),
+            progress_context: Box::from(&b"diagnostic-progress-value"[..]),
             state: binding(state_name, state),
             inputs: binding("inputs", inputs),
             scope: binding("scope", scope),
@@ -1299,7 +1302,7 @@ fn executor_operating_stops_and_budget_replacement_are_typed_and_atomic() {
             Err(failure) => failure,
             Ok(_) => panic!("zero operating resource must stop init"),
         };
-        assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+        assert_eq!(failure.code, MonitorFailureCode::Resource);
         assert_eq!(failure.resource.unwrap().resource, resource);
     }
     let mut monitor = build(BuildPlan {
@@ -1314,7 +1317,7 @@ fn executor_operating_stops_and_budget_replacement_are_typed_and_atomic() {
         ..execution_budget()
     };
     let failure = monitor.set_step_budget(impossible).unwrap_err();
-    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
     assert_eq!(failure.resource.unwrap().resource, StepResource::Storage);
     assert_eq!(monitor.step_budget(), execution_budget());
     assert_eq!(monitor.state() as *const Value, state);
@@ -1382,7 +1385,7 @@ fn executor_wrong_initializer_result_preserves_native_membership_failure() {
         Err(failure) => failure,
         Ok(_) => panic!("a Boolean body cannot initialize nominal State"),
     };
-    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
     let invariant = failure.invariant.unwrap();
     assert_eq!(
         invariant.code,
@@ -1575,7 +1578,7 @@ fn executor_selected_recursion_stops_on_the_explicit_stack() {
         Err(failure) => failure,
         Ok(_) => panic!("selected recursive call cannot finish before its stack stop"),
     };
-    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
     assert_eq!(failure.resource.unwrap().resource, StepResource::Stack);
     assert!(failure.invariant.is_none());
 }
@@ -1622,7 +1625,7 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
         Err(failure) => failure,
         Ok(_) => panic!("native argument admission must stop before invoking the helper"),
     };
-    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
     let stop = failure.resource.unwrap();
     assert_eq!(stop.resource, expected);
     let native = failure
@@ -1839,7 +1842,7 @@ fn lexical_unselected_branch_does_not_activate_a_local() {
                 Err(failure) => failure,
                 Ok(_) => panic!("an inactive branch cannot supply its local"),
             };
-            assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+            assert_eq!(failure.code, MonitorFailureCode::Invariant);
             assert_eq!(
                 failure.invariant.unwrap().code,
                 quire_contract_runtime::monitor::ExecutorInvariantCode::Binding
@@ -1861,7 +1864,7 @@ fn lexical_different_annotation_preserves_native_membership_failure() {
         Err(failure) => failure,
         Ok(_) => panic!("Boolean local cannot become State by annotation"),
     };
-    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
     assert_eq!(
         failure.invariant.unwrap().code,
         quire_contract_runtime::monitor::ExecutorInvariantCode::Membership
@@ -2033,7 +2036,7 @@ fn lexical_recursive_invocation_cannot_capture_a_callers_active_local() {
         Err(failure) => failure,
         Ok(_) => panic!("callee without its own activation cannot read caller's local"),
     };
-    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
     let invariant = failure.invariant.unwrap();
     assert_eq!(
         invariant.code,
@@ -2249,7 +2252,7 @@ fn boolean_right_recursion_is_observable_only_when_selected() {
                 Err(failure) => failure,
                 Ok(_) => panic!("selected recursion must hit its explicit ceiling"),
             };
-            assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+            assert_eq!(failure.code, MonitorFailureCode::Resource);
             assert_eq!(failure.resource.unwrap().resource, StepResource::Stack);
         } else {
             assert_now(&outcome.unwrap(), expected);
@@ -2320,7 +2323,7 @@ fn boolean_operating_stops_are_never_boolean_results() {
             Err(failure) => failure,
             Ok(_) => panic!("insufficient operating resources cannot become a false result"),
         };
-        assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+        assert_eq!(failure.code, MonitorFailureCode::Resource);
         assert_eq!(failure.resource.unwrap().resource, expected);
         assert!(failure.invariant.is_none());
     }
@@ -3024,7 +3027,7 @@ fn integer_native_shortage_retains_exact_charge_and_original_source_without_a_va
     let failure = build(BuildPlan { program, budget })
         .err()
         .expect("native operand charge must stop");
-    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
     assert!(failure.invariant.is_none());
     let stop = failure.resource.unwrap();
     assert_eq!(
@@ -3131,7 +3134,7 @@ fn integer_bounded_result_refusal_preserves_native_cause_as_an_invariant() {
     })
     .err()
     .expect("3 is outside declared [0,2]");
-    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
     assert!(failure.resource.is_none());
     assert_eq!(
         failure.invariant.unwrap().code,
@@ -3564,7 +3567,7 @@ fn composite_slot_and_retention_stops_preserve_actual_units_without_a_partial_st
         })
         .err()
         .expect("new slots or native retained value must stop");
-        assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+        assert_eq!(failure.code, MonitorFailureCode::Resource);
         assert!(failure.invariant.is_none());
         let stop = failure.resource.unwrap();
         match case {
@@ -3664,14 +3667,14 @@ fn composite_checks_each_operand_before_evaluating_a_later_recursive_member() {
             quire_contract_runtime::monitor::ExecutionSite::Expression(now)
         );
         if invalid {
-            assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+            assert_eq!(failure.code, MonitorFailureCode::Invariant);
             assert!(failure.resource.is_none());
             assert!(matches!(
                 native.failure,
                 quire_semantic_value::supplied_membership::SuppliedAdmissionError::Invalid { .. }
             ));
         } else {
-            assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+            assert_eq!(failure.code, MonitorFailureCode::Resource);
             let stop = failure.resource.unwrap();
             assert_eq!(stop.resource, StepResource::Work);
             assert_eq!((stop.spent, stop.requested), (3, Integer::one()));
@@ -4332,7 +4335,7 @@ fn union_payload_shares_its_original_state_and_inactive_reads_do_not_invent_valu
             let failure = result
                 .err()
                 .expect("inactive payload read is an invariant, never a default State");
-            assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+            assert_eq!(failure.code, MonitorFailureCode::Invariant);
             assert_eq!(
                 failure.invariant.unwrap().code,
                 quire_contract_runtime::monitor::ExecutorInvariantCode::Projection
@@ -5155,7 +5158,7 @@ fn sequence_kind_and_authored_bound_are_not_reinterpreted_or_replaced_by_scratch
     })
     .err()
     .expect("native authored cardinality bound must refuse");
-    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
     assert!(failure.resource.is_none());
     assert!(matches!(
         failure.scalar.unwrap().outcome,
@@ -5229,7 +5232,7 @@ fn sequence_fold_temporary_addresses_are_bounded_by_explicit_scratch() {
     })
     .err()
     .expect("temporary canonical operands cannot grow beyond the operating limit");
-    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
     assert_eq!(
         failure.resource.unwrap().resource,
         StepResource::ScratchElements
@@ -5243,4 +5246,477 @@ fn sequence_fold_temporary_addresses_are_bounded_by_explicit_scratch() {
         .unwrap(),
         99,
     );
+}
+
+// These associations and bodies are diagnostic controls, not a driver admission claim.
+fn dispatch_context(program: &Program) -> quire_contract_runtime::monitor::InputContext<'_> {
+    let layout = program.layout();
+    quire_contract_runtime::monitor::InputContext {
+        package_lock: &layout.package_lock,
+        clause: &layout.clause,
+        subject: &layout.subject,
+        occurrence: &layout.occurrence,
+        clock_binding: &layout.clock_binding,
+        counter: &layout.counter,
+        tick_unit: &layout.tick_unit,
+        counter_width_bits: layout.counter_width_bits,
+        profile: &layout.profile,
+        admitted_order: &layout.admitted_order,
+    }
+}
+
+fn dispatch_parts() -> ProgramParts {
+    let mut input = parts();
+    for (index, owner) in [(1, "event"), (2, "watermark"), (3, "gap")] {
+        let now = lexical_expression(
+            &mut input,
+            owner,
+            ValueType::Integer,
+            Operation::Argument {
+                function: FunctionId(index),
+                position: 1,
+            },
+        );
+        let now = if index == 3 {
+            let marker = lexical_expression(
+                &mut input,
+                owner,
+                ValueType::Integer,
+                Operation::Literal(Value::Integer(Integer::from(1000_u64))),
+            );
+            lexical_expression(
+                &mut input,
+                owner,
+                ValueType::Integer,
+                Operation::IntegerAdd {
+                    left: now,
+                    right: marker,
+                },
+            )
+        } else {
+            now
+        };
+        let Value::Composite(state) = state_at(&input, 0) else {
+            panic!("state");
+        };
+        let mut fields = Vec::new();
+        for (position, name) in ["now", "history_start", "activations", "event_position"]
+            .iter()
+            .enumerate()
+        {
+            let value = if position == 0 {
+                now
+            } else {
+                let FieldValue::Present(value) = &state.slots()[position] else {
+                    panic!("slot");
+                };
+                let ty = if position == 2 {
+                    let Value::Collection(collection) = value else {
+                        panic!("activations");
+                    };
+                    ValueType::collection(collection.collection_type().clone())
+                } else {
+                    ValueType::Integer
+                };
+                lexical_expression(&mut input, owner, ty, Operation::Literal(value.clone()))
+            };
+            fields.push((
+                MemberId::new(MemberOwner::Node(key("state")), *name).unwrap(),
+                value,
+            ));
+        }
+        let state_type = input.layout.state.value_type.clone();
+        let state = lexical_expression(&mut input, owner, state_type, Operation::Record { fields });
+        let Operation::Literal(Value::Composite(step)) = &input.expressions[index].operation else {
+            panic!("step");
+        };
+        let FieldValue::Present(results) = &step.slots()[1] else {
+            panic!("results");
+        };
+        let results = results.clone();
+        let results_type = input.layout.results.value_type.clone();
+        let results =
+            lexical_expression(&mut input, owner, results_type, Operation::Literal(results));
+        let step_type = input.layout.step_result.value_type.clone();
+        let body = lexical_expression(
+            &mut input,
+            owner,
+            step_type,
+            Operation::Tuple {
+                positions: vec![state, results],
+            },
+        );
+        input.functions[index].body = body;
+    }
+    input
+}
+
+#[test]
+#[trace("IT-018-SC-14", "interface-012-AC-1", "interface-012-AC-2")]
+fn dispatch_poll_and_watermark_do_not_move_event_baseline() {
+    use quire_contract_runtime::monitor::{Event, Reading, Watermark};
+    let input = dispatch_parts();
+    let captures = input
+        .types
+        .record(
+            key("inputs"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let scope = input
+        .types
+        .record(
+            key("scope"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let program = Program::try_new(input).unwrap();
+    let mut monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let context = dispatch_context(&program);
+    monitor
+        .poll(Reading {
+            context,
+            value: 65000,
+        })
+        .unwrap();
+    assert_eq!(monitor.baseline(), None);
+    monitor
+        .event(Event {
+            reading: Reading {
+                context,
+                value: 65534,
+            },
+            inputs: &captures,
+        })
+        .unwrap();
+    assert_now(&monitor, 0);
+    assert_eq!(monitor.baseline(), Some(65534));
+    let boundary = Integer::from(31_u64);
+    let step = monitor
+        .watermark(Watermark {
+            context,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted assertion",
+            inclusive_boundary: &boundary,
+            scope: &scope,
+        })
+        .unwrap();
+    assert!(Rc::ptr_eq(step.program(), &program));
+    assert_now(&monitor, 31);
+    assert_eq!(monitor.baseline(), Some(65534));
+    monitor
+        .event(Event {
+            reading: Reading { context, value: 1 },
+            inputs: &captures,
+        })
+        .unwrap();
+    assert_now(&monitor, 3);
+    assert_eq!(monitor.baseline(), Some(1));
+}
+
+#[test]
+#[trace("IT-018-SC-14", "interface-012-AC-1", "interface-012-AC-2")]
+fn dispatch_refuses_foreign_associations_ranges_and_regressing_progress_atomically() {
+    use quire_contract_runtime::monitor::{Event, InputRefusal, Reading, Watermark};
+    let input = dispatch_parts();
+    let captures = input
+        .types
+        .record(
+            key("inputs"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let scope = input
+        .types
+        .record(
+            key("scope"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let program = Program::try_new(input).unwrap();
+    let mut monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let context = dispatch_context(&program);
+    let mut foreign = context;
+    foreign.clock_binding = b"foreign clock";
+    let failure = monitor
+        .event(Event {
+            reading: Reading {
+                context: foreign,
+                value: 9,
+            },
+            inputs: &captures,
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.input, Some(InputRefusal::ClockBinding));
+    let failure = monitor
+        .event(Event {
+            reading: Reading {
+                context,
+                value: 65536,
+            },
+            inputs: &captures,
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.input, Some(InputRefusal::ReadingRange));
+    assert_eq!(monitor.baseline(), None);
+    assert_now(&monitor, 0);
+    let boundary = Integer::from(31_u64);
+    monitor
+        .watermark(Watermark {
+            context,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted assertion",
+            inclusive_boundary: &boundary,
+            scope: &scope,
+        })
+        .unwrap();
+    let previous = Integer::from(30_u64);
+    let failure = monitor
+        .watermark(Watermark {
+            context,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted assertion",
+            inclusive_boundary: &previous,
+            scope: &scope,
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.input, Some(InputRefusal::ProgressRegression));
+    assert_now(&monitor, 31);
+    assert_eq!(monitor.baseline(), None);
+}
+
+#[test]
+#[trace("IT-018-SC-14", "interface-012-AC-3", "interface-004-AC-4")]
+fn dispatch_resource_stop_reuses_the_same_machine_and_preserves_unconsumed_baseline() {
+    use quire_contract_runtime::monitor::{Event, Reading};
+    let mut input = dispatch_parts();
+    let state_type = input.layout.state.value_type.clone();
+    let input_type = input.layout.inputs.value_type.clone();
+    let step_type = input.layout.step_result.value_type.clone();
+    let argument = |input: &mut ProgramParts, position, ty| {
+        lexical_expression(
+            input,
+            "event",
+            ty,
+            Operation::Argument {
+                function: FunctionId(1),
+                position,
+            },
+        )
+    };
+    let state = argument(&mut input, 0, state_type.clone());
+    let delta = argument(&mut input, 1, ValueType::Integer);
+    let captures = argument(&mut input, 2, input_type);
+    let enabled = lexical_expression(
+        &mut input,
+        "event",
+        ValueType::Boolean,
+        Operation::RecordField {
+            value: captures,
+            member: MemberId::new(MemberOwner::Node(key("inputs")), "enabled").unwrap(),
+        },
+    );
+    let binding = LocalId {
+        function: FunctionId(1),
+        position: 0,
+    };
+    let local = lexical_expression(&mut input, "event", state_type, Operation::Local(binding));
+    let recursive = lexical_expression(
+        &mut input,
+        "event",
+        step_type.clone(),
+        Operation::Call {
+            function: FunctionId(1),
+            arguments: vec![local, delta, captures],
+        },
+    );
+    let completed = input.functions[1].body;
+    let branch = lexical_expression(
+        &mut input,
+        "event",
+        step_type.clone(),
+        Operation::If {
+            condition: enabled,
+            when_true: recursive,
+            when_false: completed,
+        },
+    );
+    let body = lexical_expression(
+        &mut input,
+        "event",
+        step_type,
+        Operation::Let {
+            binding,
+            value: state,
+            body: branch,
+        },
+    );
+    input.functions[1].body = body;
+    let captures = |enabled| {
+        input
+            .types
+            .record(
+                key("inputs"),
+                vec![("enabled", FieldValue::Present(Value::Boolean(enabled)))],
+            )
+            .unwrap()
+    };
+    let recurse = captures(true);
+    let complete = captures(false);
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.work = 300;
+    let mut monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .unwrap();
+    let context = dispatch_context(&program);
+    let failure = monitor
+        .event(Event {
+            reading: Reading {
+                context,
+                value: 500,
+            },
+            inputs: &recurse,
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    assert_eq!(monitor.baseline(), None);
+    assert_now(&monitor, 0);
+    // Neither monitor nor machine nor limits is replaced between the stop and retry.
+    monitor
+        .event(Event {
+            reading: Reading {
+                context,
+                value: 700,
+            },
+            inputs: &complete,
+        })
+        .unwrap();
+    assert_eq!(monitor.baseline(), Some(700));
+    assert_now(&monitor, 0);
+    monitor
+        .event(Event {
+            reading: Reading {
+                context,
+                value: 703,
+            },
+            inputs: &complete,
+        })
+        .unwrap();
+    assert_now(&monitor, 3);
+}
+
+#[test]
+#[trace("IT-018-SC-14", "interface-012-AC-4")]
+fn dispatch_gap_selects_the_gap_entry_and_commits_its_reading_as_the_new_baseline() {
+    use quire_contract_runtime::monitor::{Event, Reading};
+    let mut input = dispatch_parts();
+    input.layout.counter_width_bits = 64;
+    let captures = input
+        .types
+        .record(
+            key("inputs"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let program = Program::try_new(input).unwrap();
+    let mut monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let context = dispatch_context(&program);
+    let event = |value| Event {
+        reading: Reading { context, value },
+        inputs: &captures,
+    };
+    monitor.event(event(u64::MAX - 2)).unwrap();
+    assert_now(&monitor, 0);
+    monitor.event(event(1)).unwrap();
+    assert_now(&monitor, 4);
+    monitor.event(event(200)).unwrap();
+    // Only the diagnostic gap body adds 1000; the unchanged modular gap is 199.
+    assert_now(&monitor, 1199);
+    assert_eq!(monitor.baseline(), Some(200));
+    monitor.event(event(201)).unwrap();
+    assert_now(&monitor, 1);
+}
+
+#[test]
+#[trace("IT-018-SC-14", "interface-012-AC-3", "interface-012-AC-4")]
+fn dispatch_gap_resource_stop_keeps_the_previous_reading_and_machine_reusable() {
+    use quire_contract_runtime::monitor::{Event, Reading};
+    let mut input = dispatch_parts();
+    let state_type = input.layout.state.value_type.clone();
+    let state = lexical_expression(
+        &mut input,
+        "gap",
+        state_type,
+        Operation::Argument {
+            function: FunctionId(3),
+            position: 0,
+        },
+    );
+    let delta = lexical_expression(
+        &mut input,
+        "gap",
+        ValueType::Integer,
+        Operation::Argument {
+            function: FunctionId(3),
+            position: 1,
+        },
+    );
+    let step_type = input.layout.step_result.value_type.clone();
+    let body = lexical_expression(
+        &mut input,
+        "gap",
+        step_type,
+        Operation::Call {
+            function: FunctionId(3),
+            arguments: vec![state, delta],
+        },
+    );
+    input.functions[3].body = body;
+    let captures = input
+        .types
+        .record(
+            key("inputs"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let program = Program::try_new(input).unwrap();
+    let mut budget = execution_budget();
+    budget.work = 300;
+    let mut monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget,
+    })
+    .unwrap();
+    let context = dispatch_context(&program);
+    let event = |value| Event {
+        reading: Reading { context, value },
+        inputs: &captures,
+    };
+    monitor.event(event(100)).unwrap();
+    let failure = monitor.event(event(500)).err().unwrap();
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    assert_eq!(monitor.baseline(), Some(100));
+    assert_now(&monitor, 0);
+    monitor.event(event(105)).unwrap();
+    assert_eq!(monitor.baseline(), Some(105));
+    assert_now(&monitor, 5);
 }

@@ -23,6 +23,8 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_010
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_012
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_011
     type: verifies
 ---
@@ -163,6 +165,13 @@ placement in the controlled layout grants no temporal-root admission or executio
     original native conversion, unit and enum-index metadata after preparation
     drops. Exact native shortages remain operating failures. These controls do
     not qualify temporal entries or same-monitor stopped-input replay.
+
+14. Execute atomic entry-dispatch diagnostics. IT-018-SC-14: independently attached
+    associations and raw widths refuse before execution; poll and watermark leave
+    the event baseline unchanged; modular wrap has an independent delta oracle.
+    A recursive lexical resource stop preserves state and the unconsumed baseline,
+    and the same machine and budget successfully process a subsequent input. These
+    controlled bodies do not qualify real-producer temporal semantics.
 
 ## Expected Results
 
