@@ -5457,6 +5457,16 @@ fn dispatch_refuses_foreign_associations_ranges_and_regressing_progress_atomical
         .err()
         .unwrap();
     assert_eq!(failure.input, Some(InputRefusal::ClockBinding));
+    let invalid = Value::Integer(Integer::zero());
+    let failure = monitor
+        .event(Event {
+            reading: Reading { context, value: 9 },
+            inputs: &invalid,
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.code, MonitorFailureCode::Input);
+    assert_eq!(failure.input, Some(InputRefusal::Values));
     let failure = monitor
         .event(Event {
             reading: Reading {
@@ -5719,4 +5729,91 @@ fn dispatch_gap_resource_stop_keeps_the_previous_reading_and_machine_reusable() 
     monitor.event(event(105)).unwrap();
     assert_eq!(monitor.baseline(), Some(105));
     assert_now(&monitor, 5);
+}
+
+#[test]
+#[trace("IT-018-SC-14", "interface-012-AC-3")]
+fn dispatch_body_invariant_terminates_without_consuming_the_event() {
+    use quire_contract_runtime::monitor::{Event, InputRefusal, Reading};
+    let mut input = dispatch_parts();
+    let members = verified_union(&mut input, "state-choice");
+    let empty = lexical_expression(
+        &mut input,
+        "event",
+        ValueType::Composite(key("state-choice")),
+        Operation::Union {
+            variant: members[1].variant().clone(),
+            positions: vec![],
+        },
+    );
+    let state_type = input.layout.state.value_type.clone();
+    let impossible = lexical_expression(
+        &mut input,
+        "event",
+        state_type,
+        Operation::UnionPayload {
+            value: empty,
+            variant: members[0].variant().clone(),
+            position: 0,
+        },
+    );
+    let Operation::Literal(Value::Composite(step)) = &input.expressions[1].operation else {
+        panic!("step");
+    };
+    let FieldValue::Present(results) = &step.slots()[1] else {
+        panic!("results");
+    };
+    let results = results.clone();
+    let results_type = input.layout.results.value_type.clone();
+    let results = lexical_expression(
+        &mut input,
+        "event",
+        results_type,
+        Operation::Literal(results),
+    );
+    let step_type = input.layout.step_result.value_type.clone();
+    let body = lexical_expression(
+        &mut input,
+        "event",
+        step_type,
+        Operation::Tuple {
+            positions: vec![impossible, results],
+        },
+    );
+    input.functions[1].body = body;
+    let captures = input
+        .types
+        .record(
+            key("inputs"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let program = Program::try_new(input).unwrap();
+    let mut monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let context = dispatch_context(&program);
+    let failure = monitor
+        .event(Event {
+            reading: Reading { context, value: 10 },
+            inputs: &captures,
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
+    assert_eq!(monitor.baseline(), None);
+    assert_now(&monitor, 0);
+    let failure = monitor
+        .event(Event {
+            reading: Reading { context, value: 11 },
+            inputs: &captures,
+        })
+        .err()
+        .unwrap();
+    assert_eq!(failure.code, MonitorFailureCode::Terminated);
+    assert_eq!(failure.input, Some(InputRefusal::Terminated));
+    let failure = monitor.poll(Reading { context, value: 11 }).err().unwrap();
+    assert_eq!(failure.code, MonitorFailureCode::Terminated);
 }
