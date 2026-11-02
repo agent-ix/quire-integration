@@ -1478,7 +1478,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-runtime"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#e5b0bbfc7266924515a1d1d8e6b4a8e67828b955"
+source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#728c5c61126dd7f2432668dd4ed547102e443a68"
 dependencies = [
  "quire-exact",
  "quire-semantic-value",
@@ -1517,7 +1517,7 @@ dependencies = [
 [[package]]
 name = "quire-exact"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-exact?branch=main#532d87b67f5c5866e9aa231f2cdc245c4aa350bc"
+source = "git+https://github.com/agent-ix/quire-exact?branch=main#eea6b1220c47494ac338434e2d213d41a2aceb16"
 dependencies = [
  "allocator-api2",
  "num-bigint",
