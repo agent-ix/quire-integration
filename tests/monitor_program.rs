@@ -56,8 +56,8 @@ fn key(name: &str) -> NodeKey {
                 "Time" | "Length" => "dimension",
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "outcome" => "union",
-                "step" | "step-buffered" | "step-missing-position" => "tuple",
-                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
+                "state-pair" | "bool-pair" | "step" | "step-buffered" | "step-missing-position" => "tuple",
+                "init-missing-position" | "event-missing-position" | "watermark-missing-position" | "gap-missing-position" | "init-buffered" | "event-buffered" | "watermark-buffered" | "gap-buffered" | "tuple-init" | "boolean-init" | "lexical-init" | "lexical-helper" | "pass-second" | "pass-state" | "option-probe" | "init" | "event" | "watermark" | "gap" | "condition" | "unreached-cycle" | "foreign-argument" | "bad-if" | "clause" => "pure_function",
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
@@ -160,6 +160,8 @@ record Instance { subject: Integer; subformula: Integer; born: Integer; }
 union Outcome { Failed(GapPayload), False, Incomplete(LimitPayload), Indeterminate, Pending, True }
 record Result { instance: Instance; outcome: Outcome; }
 type Results = Sequence<Result>;
+tuple StatePair(State, State);
+tuple BoolPair(Boolean, Boolean);
 tuple Step(State, Results);
 tuple StepBuffered(StateBuffered, Results);
 tuple StepMissingPosition(StateMissingPosition, Results);
@@ -185,6 +187,9 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function state_pair using v(a: State, b: State): StatePair pure { StatePair(a, b) }
+function bool_pair using v(): BoolPair pure { BoolPair(true, false) }
+function tuple_init using v(): State pure { State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
 function boolean_init using v(): State pure { if not false and (true or false) then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 22, history_start: 0, activations: sequence[], event_position: 0 } }
 function lexical_init using v(): State pure { let saved = State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } in saved }
 function lexical_helper using v(flag: Boolean): State pure { let saved = State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } in if flag then saved else saved }
@@ -208,6 +213,9 @@ function touch_instance using v(x: Instance): Instance pure { x }
 function touch_outcome using v(x: Outcome): Outcome pure { x }
 "#;
 const IDENTITIES: &[(&str, &str)] = &[
+    ("state-pair", "StatePair"),
+    ("bool-pair", "BoolPair"),
+    ("tuple-init", "tuple_init"),
     ("boolean-init", "boolean_init"),
     ("lexical-init", "lexical_init"),
     ("lexical-helper", "lexical_helper"),
@@ -505,6 +513,19 @@ fn parts_for(profile: FixtureState) -> ProgramParts {
                     ("instance", ValueType::Composite(key("instance"))),
                     ("outcome", ValueType::Composite(key("outcome"))),
                 ],
+            ),
+            CompositeDeclaration::new(
+                key("state-pair"),
+                "state-pair",
+                CompositeShape::Tuple(vec![
+                    ValueType::Composite(key("state")),
+                    ValueType::Composite(key("state")),
+                ]),
+            ),
+            CompositeDeclaration::new(
+                key("bool-pair"),
+                "bool-pair",
+                CompositeShape::Tuple(vec![ValueType::Boolean, ValueType::Boolean]),
             ),
             CompositeDeclaration::new(
                 key("step"),
@@ -2183,4 +2204,233 @@ fn boolean_operating_stops_are_never_boolean_results() {
         assert_eq!(failure.resource.unwrap().resource, expected);
         assert!(failure.invariant.is_none());
     }
+}
+
+fn tuple_parts(position: usize) -> (ProgramParts, ExpressionId) {
+    let mut input = parts();
+    input.functions[0].key = key("tuple-init");
+    input.expressions[0].key = key("tuple-init");
+    let first = state_at(&input, 11);
+    let second = state_at(&input, 99);
+    let tuple = input
+        .types
+        .tuple(key("state-pair"), vec![first, second])
+        .unwrap();
+    let literal = lexical_expression(
+        &mut input,
+        "tuple-init",
+        ValueType::Composite(key("state-pair")),
+        Operation::Literal(tuple),
+    );
+    let state = input.layout.state.value_type.clone();
+    let root = lexical_expression(
+        &mut input,
+        "tuple-init",
+        state,
+        Operation::TupleElement {
+            value: literal,
+            position,
+        },
+    );
+    input.functions[0].body = root;
+    (input, literal)
+}
+
+#[trace("TC-098", "IT-018-SC-08", "interface-006-AC-1")]
+#[test]
+fn tuple_projected_state_outlives_the_temporary_owner_in_declared_position_order() {
+    for (position, expected) in [(0, 11), (1, 99)] {
+        let (input, literal) = tuple_parts(position);
+        let program = Program::try_new(input).unwrap();
+        let monitor = build(BuildPlan {
+            program,
+            budget: execution_budget(),
+        })
+        .unwrap();
+        assert_now(&monitor, expected);
+        let Operation::Literal(Value::Composite(owner)) =
+            &monitor.program().expression(literal).unwrap().operation
+        else {
+            panic!("source tuple remains retained");
+        };
+        assert_eq!(
+            std::sync::Arc::strong_count(owner),
+            1,
+            "temporary projection owner was released before build returned"
+        );
+        let Value::Composite(state) = monitor.state() else {
+            panic!("projected State");
+        };
+        assert_eq!(
+            std::sync::Arc::strong_count(state),
+            2,
+            "one original tuple slot and one monitor state owner"
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-08", "interface-006-AC-2")]
+#[test]
+fn tuple_projection_rejects_record_receivers_missing_positions_and_wrong_types() {
+    for case in 0..3 {
+        let (mut input, _) = tuple_parts(0);
+        let root = input.functions[0].body;
+        match case {
+            0 => {
+                input.expressions[root.0].operation = Operation::TupleElement {
+                    value: ExpressionId(0),
+                    position: 0,
+                }
+            }
+            1 => {
+                let Operation::TupleElement { position, .. } =
+                    &mut input.expressions[root.0].operation
+                else {
+                    panic!("tuple projection");
+                };
+                *position = 2;
+            }
+            2 => input.expressions[root.0].value_type = ValueType::Boolean,
+            _ => unreachable!(),
+        }
+        refused(
+            input,
+            if case == 1 {
+                ProgramRefusalCode::InvalidReference
+            } else {
+                ProgramRefusalCode::TypeMismatch
+            },
+        );
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-08", "interface-006-AC-3")]
+#[test]
+fn tuple_projection_retained_addresses_respect_scratch_budget() {
+    let (input, _) = tuple_parts(1);
+    let program = Program::try_new(input).unwrap();
+    let failure = match build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: StepBudget {
+            scratch_elements: 1,
+            ..execution_budget()
+        },
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("tuple owner address and result operand need separate slots"),
+    };
+    let stop = failure.resource.unwrap();
+    assert_eq!(stop.resource, StepResource::ScratchElements);
+    assert_eq!((stop.limit, stop.spent, stop.requested), (Some(1), 1, 1));
+    let monitor = build(BuildPlan {
+        program,
+        budget: StepBudget {
+            scratch_elements: 2,
+            ..execution_budget()
+        },
+    })
+    .unwrap();
+    assert_now(&monitor, 99);
+}
+
+#[trace("TC-098", "IT-018-SC-08", "interface-006-AC-3")]
+#[test]
+fn tuple_deep_projections_use_explicit_continuations_without_subtree_copies() {
+    let _ = key("tuple-init");
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let depth = 2_000;
+            let (mut input, _) = tuple_parts(0);
+            let tuple_type = ValueType::Composite(key("bool-pair"));
+            let tuple = input
+                .types
+                .tuple(
+                    key("bool-pair"),
+                    vec![Value::Boolean(true), Value::Boolean(false)],
+                )
+                .unwrap();
+            let literal = lexical_expression(
+                &mut input,
+                "tuple-init",
+                tuple_type.clone(),
+                Operation::Literal(tuple),
+            );
+            let mut previous = lexical_expression(
+                &mut input,
+                "tuple-init",
+                ValueType::Boolean,
+                Operation::Literal(Value::Boolean(true)),
+            );
+            for _ in 0..depth {
+                let selected = lexical_expression(
+                    &mut input,
+                    "tuple-init",
+                    tuple_type.clone(),
+                    Operation::If {
+                        condition: previous,
+                        when_true: literal,
+                        when_false: literal,
+                    },
+                );
+                previous = lexical_expression(
+                    &mut input,
+                    "tuple-init",
+                    ValueType::Boolean,
+                    Operation::TupleElement {
+                        value: selected,
+                        position: 0,
+                    },
+                );
+            }
+            let state = input.layout.state.value_type.clone();
+            let root = lexical_expression(
+                &mut input,
+                "tuple-init",
+                state,
+                Operation::If {
+                    condition: previous,
+                    when_true: ExpressionId(0),
+                    when_false: ExpressionId(0),
+                },
+            );
+            input.functions[0].body = root;
+            let program = Program::try_new(input).unwrap();
+            let stopped = match build(BuildPlan {
+                program: Rc::clone(&program),
+                budget: StepBudget {
+                    scratch_elements: depth,
+                    ..execution_budget()
+                },
+            }) {
+                Err(failure) => failure,
+                Ok(_) => panic!("each retained projection plus its result must be charged"),
+            };
+            assert_eq!(
+                stopped.resource.unwrap().resource,
+                StepResource::ScratchElements
+            );
+            let monitor = build(BuildPlan {
+                program,
+                budget: StepBudget {
+                    scratch_elements: depth + 1,
+                    ..execution_budget()
+                },
+            })
+            .unwrap();
+            assert_now(&monitor, 0);
+            let Operation::Literal(Value::Composite(owner)) =
+                &monitor.program().expression(literal).unwrap().operation
+            else {
+                panic!("tuple literal");
+            };
+            assert_eq!(
+                std::sync::Arc::strong_count(owner),
+                1,
+                "deep temporary projection owners all released"
+            );
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }

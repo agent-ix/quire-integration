@@ -98,3 +98,30 @@ bindings:
   ac_id: interface-004-AC-4
   trace: correct
 ```
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | deferred | The retained-caller scratch portion is now controlled: four slots stop at spent 4/request 1, five slots succeed with outer now=99 on the preserved interim cohort. The remaining same-Machine subsequent-invocation cleanup subclause still awaits entry-dispatch controls on open IR-722. Full interface-004-AC-4 remains open and is not narrowed. |
+
+Lexical disposition carry inspected current RT af4c3d8effd378cac9cd953b01404aee6f118981 and integration 7fcff282ce80a05527bcd4b3493837a61f74f12d. The new public lexical_recursive_shadow_counts_the_retained_caller_operand control distinguishes a four-slot refusal from a five-slot success and checks restored outer now=99; it closes the caller-shadow accounting portion of the original finding. It builds a fresh Machine for each attempt and therefore does not establish reuse of one stopped Machine. That remainder stays on the existing IR-722 entry-dispatch work; no API widening, acceptance narrowing or full AC-4 credit is granted.
+
+The interface-004 preparation prose is corrected from visits-once to linear preparation, matching its fixed passes. No new lexical runtime defect found. Evidence remains interim-cohort only for integration; current RT Clippy passes on new leaves, but committed integration cohort, our final dependency-head long chain, QSL1463/2106 producer qualification, coverage acceptance and IEEE replay remain unresolved. No Cargo/heavy jobs or source edits by reviewer.
+
+Current verdict remains **CONDITIONAL**: only the same-Machine cleanup remainder is deferred; component/cohort qualification is not complete.
+
+```yaml
+dispositions:
+- fnd: FND-001
+  outcome: deferred
+  reason: 'The retained-caller scratch portion is now controlled: four slots stop
+    at spent 4/request 1, five slots succeed with outer now=99 on the preserved interim
+    cohort. The remaining same-Machine subsequent-invocation cleanup subclause still
+    awaits entry-dispatch controls on open IR-722. Full interface-004-AC-4 remains
+    open and is not narrowed.'
+  after_excerpt: "assert_eq!((stop.limit, stop.spent, stop.requested), (Some(4), 4,\
+    \ 1));\n    let monitor = build(BuildPlan {\n        program,\n        budget:\
+    \ StepBudget {\n            scratch_elements: 5,\n            ..execution_budget()\n\
+    \        },\n    })\n    .unwrap();\n    assert_now(&monitor, 99);"
+```

@@ -5,6 +5,8 @@ type: IT
 relationships:
   - target: ix://agent-ix/quire-contract-runtime/interface_002
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_006
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_005
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_004
@@ -99,6 +101,13 @@ placement in the controlled layout grants no temporal-root admission or executio
    reach its explicit stack stop. Non-Boolean operands/results refuse at build,
    and selected operating stops retain the resource channel. These tests do not
    qualify temporal operators or a monitor's temporal outcomes.
+
+8. Execute canonical tuple diagnostics. IT-018-SC-08: declared positions select
+   distinct State values, and temporary owner references are released before
+   build returns. Record receivers, unknown positions and wrong result types
+   refuse. Tight scratch budgets charge retained projection addresses; a deep
+   chain executes on a small native stack and releases every temporary tuple
+   owner without copying a projected subtree. No temporal outcome is qualified.
 
 ## Expected Results
 
