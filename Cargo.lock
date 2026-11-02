@@ -1478,7 +1478,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-runtime"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#8e0ff8fb57d5d24f7fe88d3619149e011de8e95d"
+source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#c962a1ef527ffa8d0656ad441ee98181ad59ce8e"
 dependencies = [
  "quire-exact",
  "quire-semantic-value",

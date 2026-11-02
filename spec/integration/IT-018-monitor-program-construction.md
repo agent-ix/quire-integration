@@ -5,6 +5,8 @@ type: IT
 relationships:
   - target: ix://agent-ix/quire-contract-runtime/interface_002
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/interface_003
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-012
     type: verifies
 ---
@@ -13,13 +15,14 @@ relationships:
 ## Objective
 
 Exercise the RT monitor construction boundary while preserving the producer ownership
-of semantic identity. These are controlled executable-part construction tests. They do
-not qualify a temporal plan producer, entry execution, or the complete FR-276 monitor.
+of semantic identity. These are controlled executable-part construction and ordinary
+initializer tests. They do not qualify a temporal plan producer, temporal entry
+semantics, or the complete FR-276 monitor.
 
 ## Target Integration
 
 Live QSL source emission → IR strict reader → retained structural identity → shared
-value/type declarations → RT `monitor::Program::try_new`.
+value/type declarations → RT `monitor::Program::try_new` → bounded ordinary initializer.
 
 ## Preconditions
 
@@ -60,6 +63,17 @@ placement in the controlled layout grants no temporal-root admission or executio
    locations remain valid; a 20,000-level inline DAG validates on a 512 KiB native stack.
 4. Share compatible entry functions. IT-018-SC-04: equivalent event/watermark signatures
    may retain one common function address without inventing another semantic key.
+
+5. Execute ordinary diagnostic initializers. IT-018-SC-05: two builds retain the
+   same immutable owner while owning distinct state replacement slots. Zero work,
+   stack or operand limits stop with the matching resource. An impossible scratch
+   reservation preserves state, owner and the old budget; successful replacement
+   changes only operating limits. A lazy branch does not invoke its unselected
+   recursive call. A 2,000-level lazy chain executes on a 512 KiB native stack,
+   while a smaller explicit continuation budget stops it. A Boolean initializer
+   body returns a typed invariant with its native invalid-membership cause and
+   original source key retained. These controls cover the initial executor interface only;
+   they do not qualify temporal on_event, on_watermark or on_gap semantics.
 
 ## Expected Results
 

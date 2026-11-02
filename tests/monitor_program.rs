@@ -4,8 +4,9 @@
 
 use ix_trace_rs::trace;
 use quire_contract_runtime::monitor::{
-    Buffer, Entries, Expression, ExpressionId, Function, FunctionId, Layout, Operation, Program,
-    ProgramParts, ProgramRefusalCode, TypeBinding,
+    build, Buffer, BuildPlan, Entries, Expression, ExpressionId, Function, FunctionId, Layout,
+    MonitorBuildFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode, StepBudget,
+    StepResource, TypeBinding,
 };
 use quire_exact::{
     CollectionKind, CollectionType, FieldValue, Identifier, Integer, NodeKey, Presence, Rational,
@@ -1083,4 +1084,225 @@ fn state_without_event_position_has_no_compatibility_path() {
     };
     assert_eq!(error.code, ProgramRefusalCode::TypeMismatch);
     assert_eq!(error.node, Some(key("state-missing-position")));
+}
+
+fn execution_budget() -> StepBudget {
+    StepBudget {
+        work: 100_000,
+        stack_frames: 10_000,
+        scratch_elements: 10_000,
+        scratch_bytes: 1_000_000,
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-1")]
+#[test]
+fn executor_build_retains_owner_and_initializes_independent_state_slots() {
+    let program = Program::try_new(parts()).unwrap();
+    let first = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let second = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert!(Rc::ptr_eq(first.program(), second.program()));
+    drop(program);
+    assert_state_contents(first.state());
+    assert_state_contents(second.state());
+    assert!(
+        !std::ptr::eq(first.state(), second.state()),
+        "each build owns its replacement slot"
+    );
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-2", "interface-003-AC-4")]
+#[test]
+fn executor_operating_stops_and_budget_replacement_are_typed_and_atomic() {
+    for (budget, resource) in [
+        (
+            StepBudget {
+                work: 0,
+                ..execution_budget()
+            },
+            StepResource::Work,
+        ),
+        (
+            StepBudget {
+                stack_frames: 0,
+                ..execution_budget()
+            },
+            StepResource::Stack,
+        ),
+        (
+            StepBudget {
+                scratch_elements: 0,
+                ..execution_budget()
+            },
+            StepResource::ScratchElements,
+        ),
+    ] {
+        let failure = match build(BuildPlan {
+            program: Program::try_new(parts()).unwrap(),
+            budget,
+        }) {
+            Err(failure) => failure,
+            Ok(_) => panic!("zero operating resource must stop init"),
+        };
+        assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+        assert_eq!(failure.resource.unwrap().resource, resource);
+    }
+    let mut monitor = build(BuildPlan {
+        program: Program::try_new(parts()).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let state = monitor.state() as *const Value;
+    let owner = Rc::as_ptr(monitor.program());
+    let impossible = StepBudget {
+        stack_frames: usize::MAX,
+        ..execution_budget()
+    };
+    let failure = monitor.set_step_budget(impossible).unwrap_err();
+    assert_eq!(failure.code, MonitorBuildFailureCode::Resource);
+    assert_eq!(failure.resource.unwrap().resource, StepResource::Storage);
+    assert_eq!(monitor.step_budget(), execution_budget());
+    assert_eq!(monitor.state() as *const Value, state);
+    assert_eq!(Rc::as_ptr(monitor.program()), owner);
+    let replacement = StepBudget {
+        work: 200_000,
+        ..execution_budget()
+    };
+    monitor.set_step_budget(replacement).unwrap();
+    assert_eq!(monitor.step_budget(), replacement);
+    assert_state_contents(monitor.state());
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-2")]
+#[test]
+fn executor_lazy_branch_does_not_enter_an_unselected_recursive_call() {
+    let mut input = parts();
+    let recursive = ExpressionId(input.expressions.len());
+    input.expressions.push(Expression {
+        key: key("init"),
+        body_path: vec![1],
+        value_type: input.layout.state.value_type.clone(),
+        operation: Operation::Call {
+            function: FunctionId(0),
+            arguments: vec![],
+        },
+    });
+    let condition = ExpressionId(input.expressions.len());
+    input.expressions.push(Expression {
+        key: key("condition"),
+        body_path: vec![1],
+        value_type: ValueType::Boolean,
+        operation: Operation::Literal(Value::Boolean(true)),
+    });
+    let root = ExpressionId(input.expressions.len());
+    input.expressions.push(Expression {
+        key: key("init"),
+        body_path: vec![2],
+        value_type: input.layout.state.value_type.clone(),
+        operation: Operation::If {
+            condition,
+            when_true: ExpressionId(0),
+            when_false: recursive,
+        },
+    });
+    input.functions[0].body = root;
+    let monitor = build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    assert_state_contents(monitor.state());
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
+#[test]
+fn executor_wrong_initializer_result_preserves_native_membership_failure() {
+    let mut input = parts();
+    input.expressions[0].value_type = ValueType::Boolean;
+    input.expressions[0].operation = Operation::Literal(Value::Boolean(true));
+    let failure = match build(BuildPlan {
+        program: Program::try_new(input).unwrap(),
+        budget: execution_budget(),
+    }) {
+        Err(failure) => failure,
+        Ok(_) => panic!("a Boolean body cannot initialize nominal State"),
+    };
+    assert_eq!(failure.code, MonitorBuildFailureCode::Invariant);
+    let invariant = failure.invariant.unwrap();
+    assert_eq!(
+        invariant.code,
+        quire_contract_runtime::monitor::ExecutorInvariantCode::Membership
+    );
+    assert_eq!(invariant.source_node(), Some(&key("init")));
+    let native = failure
+        .admission
+        .expect("keep the native invalid-membership cause and its arena");
+    assert!(matches!(
+        native.failure,
+        quire_semantic_value::supplied_membership::SuppliedAdmissionError::Invalid { .. }
+    ));
+    assert_eq!(native.source_node(), Some(&key("init")));
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-2")]
+#[test]
+fn executor_deep_lazy_chain_uses_bounded_explicit_stack() {
+    let _ = key("init");
+    std::thread::Builder::new()
+        .stack_size(512 * 1024)
+        .spawn(|| {
+            let mut input = parts();
+            let condition = ExpressionId(input.expressions.len());
+            input.expressions.push(Expression {
+                key: key("condition"),
+                body_path: vec![1],
+                value_type: ValueType::Boolean,
+                operation: Operation::Literal(Value::Boolean(true)),
+            });
+            let mut previous = ExpressionId(0);
+            for position in 0..2_000 {
+                let next = ExpressionId(input.expressions.len());
+                input.expressions.push(Expression {
+                    key: key("init"),
+                    body_path: vec![position + 1],
+                    value_type: input.layout.state.value_type.clone(),
+                    operation: Operation::If {
+                        condition,
+                        when_true: previous,
+                        when_false: previous,
+                    },
+                });
+                previous = next;
+            }
+            input.functions[0].body = previous;
+            let program = Program::try_new(input).unwrap();
+            let failure = match build(BuildPlan {
+                program: Rc::clone(&program),
+                budget: StepBudget {
+                    stack_frames: 32,
+                    ..execution_budget()
+                },
+            }) {
+                Err(failure) => failure,
+                Ok(_) => panic!("the explicit continuation stack must stop the deep path"),
+            };
+            assert_eq!(failure.resource.unwrap().resource, StepResource::Stack);
+            let monitor = build(BuildPlan {
+                program,
+                budget: execution_budget(),
+            })
+            .unwrap();
+            assert_state_contents(monitor.state());
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }
