@@ -23,6 +23,8 @@ relationships:
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_010
     type: verifies
+  - target: ix://agent-ix/quire-contract-runtime/FR-276
+    type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_012
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/interface_011
@@ -176,6 +178,15 @@ placement in the controlled layout grants no temporal-root admission or executio
     negative control; original Results and distinct program associations survive
     preparation and monitor drop. These controlled bodies do not qualify
     real-producer temporal semantics.
+
+15. Execute the source-owned event-position sequence. IT-018-SC-15: build starts
+    at zero; the baseline event at65530 increments once with zero delta; watermark
+    and poll leave the count unchanged; the gap at65500 preserves the count and
+    commits its reading; event65510 advances by delta10 and increments the count
+    to two. The final required exact Integer remains after activations, without
+    a host counter field. Tick time advances independently of the event count.
+    The ordinary entries use producer-origin identities and admitted typed source
+    bodies; this one criterion does not claim full temporal producer/TC-200 coverage.
 
 ## Expected Results
 

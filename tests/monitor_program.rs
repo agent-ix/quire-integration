@@ -55,6 +55,7 @@ fn key(name: &str) -> NodeKey {
             }).collect();
             let [node] = nodes.as_slice() else { panic!("one admitted declaration {declaration}, found {}", nodes.len()); };
             let expected_form = match *label {
+                "position-event" | "position-watermark" | "position-gap" => "pure_function",
                 "Time" | "Length" => "dimension",
                 "root-tick" | "tick" | "negative-tick" | "affine-tick" => "unit",
                 "state-choice" | "outcome" => "union",
@@ -197,6 +198,9 @@ function entry_init using v(): State pure { State { now: 0, history_start: 0, ac
 function entry_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
 function entry_gap using v(s: State, delta: Integer): Step pure { Step(State { now: 0, history_start: 0, activations: sequence[], event_position: 0 }, sequence[]) }
+function position_event using v(s: State, delta: Integer, captures: Inputs): Step pure { Step(State { now: s.now + delta, history_start: s.history_start, activations: s.activations, event_position: s.event_position + 1 }, sequence[]) }
+function position_watermark using v(s: State, boundary: Integer, progress_scope: Scope): Step pure { Step(s, sequence[]) }
+function position_gap using v(s: State, delta: Integer): Step pure { Step(State { now: s.now + delta, history_start: s.now + delta, activations: sequence[], event_position: s.event_position }, sequence[]) }
 type FoldTotal = Integer;
 function typed_sequence using v(s: Sequence<Integer>): Sequence<Integer> pure { s }
 function sequence_init using v(): State pure { let xs = typed_sequence(sequence[3, 1, 3]) in if size(xs) > 0 then State { now: 99, history_start: 0, activations: sequence[], event_position: 0 } else State { now: 0, history_start: 0, activations: sequence[], event_position: 0 } }
@@ -301,6 +305,9 @@ const IDENTITIES: &[(&str, &str)] = &[
     ("affine-tick", "affine_tick"),
     ("init", "entry_init"),
     ("event", "entry_event"),
+    ("position-event", "position_event"),
+    ("position-watermark", "position_watermark"),
+    ("position-gap", "position_gap"),
     ("watermark", "entry_watermark"),
     ("gap", "entry_gap"),
     ("condition", "condition"),
@@ -6270,4 +6277,213 @@ fn dispatch_results_retain_original_value_and_distinguish_foreign_program_associ
     drop(first_step);
     assert!(first_owner.upgrade().is_none());
     assert!(original.upgrade().is_none());
+}
+
+fn event_position_parts() -> ProgramParts {
+    let mut input = parts();
+    let Operation::Literal(Value::Composite(initial)) = &input.expressions[0].operation else {
+        panic!("source initializer");
+    };
+    let FieldValue::Present(Value::Collection(activations)) = &initial.slots()[2] else {
+        panic!("source activations");
+    };
+    let activations_type = ValueType::collection(activations.collection_type().clone());
+    let empty_activations = Value::Collection(activations.clone());
+    let Operation::Literal(Value::Composite(step)) = &input.expressions[1].operation else {
+        panic!("source Step");
+    };
+    let FieldValue::Present(results) = &step.slots()[1] else {
+        panic!("source Results");
+    };
+    let empty_results = results.clone();
+    for (index, owner) in [
+        (1, "position-event"),
+        (2, "position-watermark"),
+        (3, "position-gap"),
+    ] {
+        input.functions[index].key = key(owner);
+        let state_type = input.layout.state.value_type.clone();
+        let state = lexical_expression(
+            &mut input,
+            owner,
+            state_type.clone(),
+            Operation::Argument {
+                function: FunctionId(index),
+                position: 0,
+            },
+        );
+        let next_state = if index == 2 {
+            state
+        } else {
+            let field = |input: &mut ProgramParts, name| {
+                lexical_expression(
+                    input,
+                    owner,
+                    ValueType::Integer,
+                    Operation::RecordField {
+                        value: state,
+                        member: MemberId::new(MemberOwner::Node(key("state")), name).unwrap(),
+                    },
+                )
+            };
+            let now = field(&mut input, "now");
+            let delta = lexical_expression(
+                &mut input,
+                owner,
+                ValueType::Integer,
+                Operation::Argument {
+                    function: FunctionId(index),
+                    position: 1,
+                },
+            );
+            let now = lexical_expression(
+                &mut input,
+                owner,
+                ValueType::Integer,
+                Operation::IntegerAdd {
+                    left: now,
+                    right: delta,
+                },
+            );
+            let position = field(&mut input, "event_position");
+            let (history, activations, position) = if index == 1 {
+                let history = field(&mut input, "history_start");
+                let activations = lexical_expression(
+                    &mut input,
+                    owner,
+                    activations_type.clone(),
+                    Operation::RecordField {
+                        value: state,
+                        member: MemberId::new(MemberOwner::Node(key("state")), "activations")
+                            .unwrap(),
+                    },
+                );
+                let one = lexical_expression(
+                    &mut input,
+                    owner,
+                    ValueType::Integer,
+                    Operation::Literal(Value::Integer(Integer::one())),
+                );
+                let position = lexical_expression(
+                    &mut input,
+                    owner,
+                    ValueType::Integer,
+                    Operation::IntegerAdd {
+                        left: position,
+                        right: one,
+                    },
+                );
+                (history, activations, position)
+            } else {
+                let activations = lexical_expression(
+                    &mut input,
+                    owner,
+                    activations_type.clone(),
+                    Operation::Literal(empty_activations.clone()),
+                );
+                (now, activations, position)
+            };
+            let fields = [
+                ("now", now),
+                ("history_start", history),
+                ("activations", activations),
+                ("event_position", position),
+            ]
+            .into_iter()
+            .map(|(name, value)| {
+                (
+                    MemberId::new(MemberOwner::Node(key("state")), name).unwrap(),
+                    value,
+                )
+            })
+            .collect();
+            lexical_expression(&mut input, owner, state_type, Operation::Record { fields })
+        };
+        let results_type = input.layout.results.value_type.clone();
+        let results = lexical_expression(
+            &mut input,
+            owner,
+            results_type,
+            Operation::Literal(empty_results.clone()),
+        );
+        let step_type = input.layout.step_result.value_type.clone();
+        let body = lexical_expression(
+            &mut input,
+            owner,
+            step_type,
+            Operation::Tuple {
+                positions: vec![next_state, results],
+            },
+        );
+        input.functions[index].body = body;
+    }
+    input
+}
+
+#[test]
+#[trace("IT-018-SC-15", "FR-276-AC-11")]
+fn event_position_counts_ingested_events_and_not_watermarks_polls_or_gap_faults() {
+    use quire_contract_runtime::monitor::{Event, Reading, Watermark};
+    let input = event_position_parts();
+    let captures = input
+        .types
+        .record(
+            key("inputs"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let scope = input
+        .types
+        .record(
+            key("scope"),
+            vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+        )
+        .unwrap();
+    let program = Program::try_new(input).unwrap();
+    let mut monitor = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: execution_budget(),
+    })
+    .unwrap();
+    let context = dispatch_context(&program);
+    let event = |value| Event {
+        reading: Reading { context, value },
+        inputs: &captures,
+    };
+    let assert_position = |monitor: &quire_contract_runtime::monitor::Monitor, expected: u64| {
+        let Value::Composite(state) = monitor.state() else {
+            panic!("canonical State");
+        };
+        assert_eq!(state.slots().len(), 4, "no extra host counter field");
+        let FieldValue::Present(Value::Integer(position)) = &state.slots()[3] else {
+            panic!("final required exact Integer event_position");
+        };
+        assert_eq!(position, &Integer::from(expected));
+    };
+    assert_position(&monitor, 0);
+    monitor.event(event(65530)).unwrap();
+    assert_position(&monitor, 1);
+    assert_now(&monitor, 0);
+    let boundary = Integer::from(40_u64);
+    monitor
+        .watermark(Watermark {
+            context,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted progress",
+            inclusive_boundary: &boundary,
+            scope: &scope,
+        })
+        .unwrap();
+    assert_position(&monitor, 1);
+    monitor.poll(Reading { context, value: 7 }).unwrap();
+    assert_position(&monitor, 1);
+    assert_eq!(monitor.baseline(), Some(65530));
+    monitor.event(event(65500)).unwrap();
+    assert_position(&monitor, 1);
+    assert_now(&monitor, 65506);
+    assert_eq!(monitor.baseline(), Some(65500));
+    monitor.event(event(65510)).unwrap();
+    assert_position(&monitor, 2);
+    assert_now(&monitor, 65516);
+    assert_eq!(monitor.baseline(), Some(65510));
 }
