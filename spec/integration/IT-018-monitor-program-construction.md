@@ -3,7 +3,7 @@ id: IT-018
 title: "Retain monitor construction parts with producer-origin identities"
 type: IT
 relationships:
-  - target: ix://agent-ix/quire-contract-runtime/interface-002
+  - target: ix://agent-ix/quire-contract-runtime/interface_002
     type: verifies
   - target: ix://agent-ix/quire-contract-runtime/FR-012
     type: verifies
