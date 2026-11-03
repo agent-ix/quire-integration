@@ -13,7 +13,7 @@ Ticket: IR-669. Planless changed-test trace and evidence audit of draft PR #39 a
 
 ## Verdict
 
-FAIL. The SC-01 trace claim lacks an exhaustive TC-187 row route, and metering traces lack named authority observations.
+PASS after round-1 dispositions for the reviewed trace and evidence gaps. Compilation and the final gate remain blocked upstream by IR-1284.
 
 ## Findings
 
@@ -25,3 +25,10 @@ FAIL. The SC-01 trace claim lacks an exhaustive TC-187 row route, and metering t
 ## Coverage
 
 Plan completion: not assessed. `quoin matrix --repo /home/peter/dev/worktrees/ir669-f03-source-agreement --json` returned no coverage_matrix criteria because the module declares no `obligations:` source. I used a manual trace scan of IT-017-SC-01 through SC-05, QSpec TC-187 U01 through U39, and every changed `#[trace]` test. The six carried cases have real checked-QSL and public-runtime paths; U13/U21 power and U39 negation remain ticket-backed upstream work, while other integration-owned U rows remain unimplemented under IR-669. No reverse ownership gap, stub, ignored test, copied fixture, or vendored corpus was found in the changed files. Optional semantic review was not separately requested. Compilation is blocked before the U tests by IR-1284.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Partial U tests no longer trace family-wide SC-01; unimplemented integration-owned U rows remain open under IR-669. |
+| FND-002 | fixed | U01's SC-03 trace was removed, and the U16/U17/U18/U29 cases assert authority charge prefixes and relevant counters. |

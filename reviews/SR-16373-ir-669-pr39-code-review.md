@@ -13,7 +13,7 @@ Ticket: IR-669. Reviewed draft PR #39 at ccad0b4841a63c2159865c0f05d6f484a72f522
 
 ## Verdict
 
-FAIL for the current trace and accounting claims. One high-severity family coverage claim and two medium-severity accounting evidence gaps remain. No passing test or aggregate gate is claimed.
+PASS after round-1 dispositions for the reviewed diff. Compilation, focused tests and the final aggregate gate remain blocked by IR-1284; no passing test claim is made.
 
 ## Findings
 
@@ -26,3 +26,11 @@ FAIL for the current trace and accounting claims. One high-severity family cover
 ## Coverage
 
 Examined the complete PR diff: Cargo.lock and both new quantity test files. Checked IT-017-SC-01 through SC-05 and QSpec TC-187 U01 through U39, especially U07/U08/U16/U17/U18/U29 carried conversion and denial paths. The tests select QSpec rows through its public API; no copied corpus, vendored source, production API change, or CI workflow change appears in the diff. The carried helper compares full typed QSL and runtime outcomes, losses, ordered charges and counters after the separately asserted function.call envelope. Static `cargo fmt --all -- --check` and `git diff --check` pass. `quoin matrix --repo ... --json` reports no coverage_matrix criteria because the installed module has no obligations source; the trace judgment used the spec and test source directly. Focused compilation and the final gate are blocked by QSL/quire-eval IR-1284, so test behavior has not been verified on this head.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Every SC-01 trace was removed from the partial U test files; the PR and IR-669 remain explicitly partial while other runnable U rows are open. |
+| FND-002 | fixed | U01 now traces only SC-02 value agreement, matching its discarded-meter implementation. |
+| FND-003 | fixed | U16/U17/U18/U29 assert the named admitted charge-point prefixes, work/occurrence/edge counters, and relevant integer/decimal bounds alongside QSL/runtime meter equality and exact shortage fields. |
