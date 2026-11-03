@@ -33,7 +33,7 @@ use quire_contract_codegen::{
 };
 use quire_contract_ir::{
     CheckedPackageDispatchResult, CheckedPackageEvidence, CheckedPackageReadLimits,
-    ContractPackageV1,
+    CheckedPackageV2, ContractPackageV1,
 };
 use quire_driver::{
     build_registry, drive, CompileInput, Driven, DriverRefusal, GenerationInput, KaniInput,
@@ -171,13 +171,14 @@ impl Upstream for ExportVector {
 
     fn negotiate(
         &self,
+        admitted: &CheckedPackageV2,
         package: &ContractPackageV1,
         positions: &[ContractRequestPosition],
         envelope: &BackendProviderEnvelope,
     ) -> Result<Vec<ContractItemSettlement>, Box<ContractNegotiationError>> {
         *self.envelope.borrow_mut() = Some(envelope.clone());
         *self.positions.borrow_mut() = Some(positions.to_vec());
-        QslCg.negotiate(package, positions, envelope)
+        QslCg.negotiate(admitted, package, positions, envelope)
     }
 
     fn route<'d>(&self, dispositions: &'d [Disposition]) -> Vec<Option<&'d Candidate>> {
@@ -186,12 +187,13 @@ impl Upstream for ExportVector {
 
     fn generate(
         &self,
+        admitted: &CheckedPackageV2,
         package: &ContractPackageV1,
         positions: &[ContractRequestPosition],
         routed: &[RoutedGenerationItem],
         contexts: &GenerationContexts<'_>,
     ) -> Result<RoutedGeneration, RoutedGenerationError> {
-        QslCg.generate(package, positions, routed, contexts)
+        QslCg.generate(admitted, package, positions, routed, contexts)
     }
 }
 
