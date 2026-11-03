@@ -367,6 +367,29 @@ fn assert_call_charge_suffix(qsl: &Meter, runtime: &Meter) {
     }
 }
 
+fn assert_quantity_charge_prefix(
+    id: &str,
+    meter: &Meter,
+    points: &[ChargePoint],
+    work: u64,
+    occurrences: u64,
+    edges: u64,
+) {
+    let actual: Vec<_> = meter
+        .admitted_charges()
+        .iter()
+        .map(|charge| charge.point)
+        .collect();
+    assert_eq!(actual, points, "{id} admitted charge points");
+    assert_eq!(meter.consumed(LimitKind::WorkUnits), work, "{id} work");
+    assert_eq!(
+        meter.consumed(LimitKind::ValueOccurrences),
+        occurrences,
+        "{id} occurrences"
+    );
+    assert_eq!(meter.consumed(LimitKind::UnitEdges), edges, "{id} edges");
+}
+
 fn selected_quantity_row(id: &str) {
     // Branch-gating QSpec ID comparison: a selected row must exist exactly once.
     let rows: Vec<_> = vectors_of(TestCase::Tc187)
@@ -504,7 +527,7 @@ fn carried_fixture() -> CheckedQuantityFixture {
     checked_fixture(CARRIED_FUNCTIONS)
 }
 
-#[trace("TC-187", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[trace("TC-187", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn qspec_u07_u08_carried_conversion_values_and_refusals_agree() {
     for id in ["U07", "U08"] {
@@ -552,7 +575,7 @@ fn qspec_u07_u08_carried_conversion_values_and_refusals_agree() {
     }
 }
 
-#[trace("TC-187", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[trace("TC-187", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
     for id in ["U16", "U17", "U18", "U29"] {
@@ -574,19 +597,46 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
         exact,
         Outcome::Refused(Refusal::InexactConversion { .. })
     ));
-    assert_eq!(exact_meter.consumed(LimitKind::WorkUnits), 4);
-    let (rounded, _, _) = carried_conversion_agreement(&fixture, "u07_nearest", &inch, u16);
+    let conversion_prefix = [
+        ChargePoint::UnitIdentityRead,
+        ChargePoint::UnitEdge,
+        ChargePoint::UnitRationalArithmetic,
+        ChargePoint::UnitRationalArithmetic,
+    ];
+    assert_quantity_charge_prefix("U16 exact", &exact_meter, &conversion_prefix, 4, 1, 1);
+    let (rounded, _, rounded_meter) =
+        carried_conversion_agreement(&fixture, "u07_nearest", &inch, u16);
     assert!(matches!(rounded, Outcome::Completed(Value::Quantity(_))));
+    assert_quantity_charge_prefix(
+        "U16 nearest-even",
+        &rounded_meter,
+        &[
+            conversion_prefix[0],
+            conversion_prefix[1],
+            conversion_prefix[2],
+            conversion_prefix[3],
+            ChargePoint::UnitTargetDomain,
+            ChargePoint::UnitResultRetain,
+        ],
+        6,
+        1,
+        1,
+    );
+    assert_eq!(rounded_meter.consumed(LimitKind::IntegerBits), 14);
+    assert_eq!(rounded_meter.consumed(LimitKind::DecimalDigits), 5);
     let short_u16 = ScalarLimits {
         work_units: 4,
         ..u16
     };
-    let (exact, _, _) = carried_conversion_agreement(&fixture, "u07_exact", &inch, short_u16);
+    let (exact, _, exact_meter) =
+        carried_conversion_agreement(&fixture, "u07_exact", &inch, short_u16);
     assert!(matches!(
         exact,
         Outcome::Refused(Refusal::InexactConversion { .. })
     ));
-    let (rounded, _, _) = carried_conversion_agreement(&fixture, "u07_nearest", &inch, short_u16);
+    assert_quantity_charge_prefix("U16 short exact", &exact_meter, &conversion_prefix, 4, 1, 1);
+    let (rounded, _, rounded_meter) =
+        carried_conversion_agreement(&fixture, "u07_nearest", &inch, short_u16);
     let Outcome::Incomplete(stop) = rounded else {
         panic!("U16 nearest-even must stop at target-domain: {rounded:?}")
     };
@@ -596,6 +646,14 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
     );
     assert_eq!(stop.next_charge, Integer::from(1_i64));
     assert_eq!(stop.charge_point, ChargePoint::UnitTargetDomain);
+    assert_quantity_charge_prefix(
+        "U16 short nearest-even",
+        &rounded_meter,
+        &conversion_prefix,
+        4,
+        1,
+        1,
+    );
 
     let three = quantity(&fixture, "m", 3, 1);
     let u17 = ScalarLimits {
@@ -605,12 +663,21 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
         work_units: 2,
         ..ZERO_LIMITS
     };
-    let (outside, _, _) = carried_conversion_agreement(&fixture, "u08_exact", &three, u17);
+    let (outside, _, outside_meter) =
+        carried_conversion_agreement(&fixture, "u08_exact", &three, u17);
     assert!(matches!(
         outside,
         Outcome::Refused(Refusal::DecimalOutOfDomain { .. })
     ));
-    let (denied, _, _) = carried_conversion_agreement(
+    assert_quantity_charge_prefix(
+        "U17 outside domain",
+        &outside_meter,
+        &[ChargePoint::UnitIdentityRead, ChargePoint::UnitTargetDomain],
+        2,
+        1,
+        0,
+    );
+    let (denied, _, denied_meter) = carried_conversion_agreement(
         &fixture,
         "u08_exact",
         &three,
@@ -628,6 +695,14 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
     );
     assert_eq!(stop.next_charge, Integer::from(1_i64));
     assert_eq!(stop.charge_point, ChargePoint::UnitTargetDomain);
+    assert_quantity_charge_prefix(
+        "U17 denied",
+        &denied_meter,
+        &[ChargePoint::UnitIdentityRead],
+        1,
+        1,
+        0,
+    );
 
     let one = quantity(&fixture, "m", 1, 1);
     let u18 = ScalarLimits {
@@ -638,7 +713,8 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
         result_units: 1,
         ..ZERO_LIMITS
     };
-    let (denied, _, _) = carried_conversion_agreement(&fixture, "u18_large_scale", &one, u18);
+    let (denied, _, denied_meter) =
+        carried_conversion_agreement(&fixture, "u18_large_scale", &one, u18);
     let Outcome::Incomplete(stop) = denied else {
         panic!("U18 must stop before materializing the coefficient: {denied:?}")
     };
@@ -648,6 +724,15 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
     );
     assert_eq!(stop.next_charge, Integer::from(4_294_967_296_i64));
     assert_eq!(stop.charge_point, ChargePoint::UnitTargetDomain);
+    assert_quantity_charge_prefix(
+        "U18 denied",
+        &denied_meter,
+        &[ChargePoint::UnitIdentityRead],
+        1,
+        1,
+        0,
+    );
+    assert_eq!(denied_meter.consumed(LimitKind::DecimalDigits), 0);
 
     let u29 = ScalarLimits {
         integer_bits: 15,
@@ -657,12 +742,14 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
         result_units: 1,
         ..ZERO_LIMITS
     };
-    let (exact, _, _) = carried_conversion_agreement(&fixture, "u29_exact", &inch, u29);
+    let (exact, _, exact_meter) = carried_conversion_agreement(&fixture, "u29_exact", &inch, u29);
     assert!(matches!(
         exact,
         Outcome::Refused(Refusal::InexactConversion { .. })
     ));
-    let (rounded, _, _) = carried_conversion_agreement(&fixture, "u29_nearest", &inch, u29);
+    assert_quantity_charge_prefix("U29 exact", &exact_meter, &conversion_prefix, 4, 1, 1);
+    let (rounded, _, rounded_meter) =
+        carried_conversion_agreement(&fixture, "u29_nearest", &inch, u29);
     let Outcome::Incomplete(stop) = rounded else {
         panic!("U29 nearest-even must stop at target-domain: {rounded:?}")
     };
@@ -672,19 +759,35 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
     );
     assert_eq!(stop.next_charge, Integer::from(1_i64));
     assert_eq!(stop.charge_point, ChargePoint::UnitTargetDomain);
+    assert_quantity_charge_prefix(
+        "U29 nearest-even",
+        &rounded_meter,
+        &conversion_prefix,
+        4,
+        1,
+        1,
+    );
     let outside_limits = ScalarLimits {
         integer_bits: 2,
         value_occurrences: 1,
         work_units: 2,
         ..ZERO_LIMITS
     };
-    let (outside, _, _) =
+    let (outside, _, outside_meter) =
         carried_conversion_agreement(&fixture, "u29_outside", &three, outside_limits);
     assert!(matches!(
         outside,
         Outcome::Refused(Refusal::IntegerOutOfDomain { .. })
     ));
-    let (denied, _, _) = carried_conversion_agreement(
+    assert_quantity_charge_prefix(
+        "U29 outside domain",
+        &outside_meter,
+        &[ChargePoint::UnitIdentityRead, ChargePoint::UnitTargetDomain],
+        2,
+        1,
+        0,
+    );
+    let (denied, _, denied_meter) = carried_conversion_agreement(
         &fixture,
         "u29_outside",
         &three,
@@ -702,6 +805,14 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
     );
     assert_eq!(stop.next_charge, Integer::from(1_i64));
     assert_eq!(stop.charge_point, ChargePoint::UnitTargetDomain);
+    assert_quantity_charge_prefix(
+        "U29 denied",
+        &denied_meter,
+        &[ChargePoint::UnitIdentityRead],
+        1,
+        1,
+        0,
+    );
 }
 
 fn exact_conversion(fixture: &CheckedQuantityFixture, source: &Quantity, target: &str) -> Quantity {
@@ -1275,7 +1386,7 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
     }
 }
 
-#[trace("TC-187", "IT-017-SC-01", "IT-017-SC-04")]
+#[trace("TC-187", "IT-017-SC-04")]
 #[test]
 fn qspec_admission_only_quantity_sources_refuse_at_assembly() {
     // Branch-gating QSpec IDs: each selected row has an S3 admission observation.
@@ -1388,7 +1499,7 @@ fn qspec_admission_only_quantity_sources_refuse_at_assembly() {
     }
 }
 
-#[trace("TC-187", "IT-017-SC-01", "IT-017-SC-04")]
+#[trace("TC-187", "IT-017-SC-04")]
 #[test]
 fn qspec_dimensionless_derived_unit_is_admitted() {
     // Branch-gating QSpec ID comparison: U11g3 must remain authored.
@@ -1399,7 +1510,7 @@ fn qspec_dimensionless_derived_unit_is_admitted() {
     qsl_assembly_admits("dimension L; dimension N = L / L; unit one : N = rational(1,1);");
 }
 
-#[trace("TC-187", "IT-017-SC-01", "IT-017-SC-04")]
+#[trace("TC-187", "IT-017-SC-04")]
 #[test]
 fn qspec_multi_source_topology_cases_retain_their_refusal_causes() {
     // Branch-gating QSpec IDs: each selected row has its own source order.
@@ -1456,7 +1567,7 @@ fn qspec_multi_source_topology_cases_retain_their_refusal_causes() {
     }
 }
 
-#[trace("TC-187", "IT-017-SC-01", "IT-017-SC-04")]
+#[trace("TC-187", "IT-017-SC-04")]
 #[test]
 fn qspec_quantity_parameter_and_result_types_follow_unit_identity() {
     const TIME: &str =

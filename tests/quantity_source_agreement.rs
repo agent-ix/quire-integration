@@ -34,7 +34,7 @@ fn rational(numerator: i64, denominator: i64) -> Rational {
         .expect("nonzero denominator")
 }
 
-#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[trace("TC-097", "IT-017-SC-02")]
 #[test]
 fn tc187_u01_conversion_then_addition_agrees_with_runtime() {
     // Branch-gating string comparison: only QSpec U01 owns this source case.
@@ -169,7 +169,7 @@ fn tc187_u01_conversion_then_addition_agrees_with_runtime() {
     assert_eq!(qsl_sum.magnitude(), &rational(7, 2), "QSpec U01 sum");
 }
 
-#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-04")]
+#[trace("TC-097", "IT-017-SC-04")]
 #[test]
 fn tc187_u03_incompatible_dimensions_refuse_at_source_check() {
     // Branch-gating string comparison: U03 owns this admission case.
