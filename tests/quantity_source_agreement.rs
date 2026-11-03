@@ -5,6 +5,7 @@ use ix_trace_rs::trace;
 use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_package::CheckedPackage;
 use qsl_semantics::check::{CheckCause, PackageDeclarations};
+use qsl_semantics::model::intake::SelectedModels;
 use qsl_semantics::model::object_environment::ObjectEnvironment;
 use quire_eval::FamilyOutcome;
 use quire_exact::{
@@ -56,7 +57,7 @@ fn tc187_u01_conversion_then_addition_agrees_with_runtime() {
          unit m : Length = rational(1, 1);\n\
          unit cm : Length = rational(1, 100) * m;\n\
          function converted using v(): Quantity<m> pure { convert<Quantity<m>>(250 cm) }\n\
-         function sum using v(): Quantity<m> pure { convert<Quantity<m>>(250 cm) + 1 m }\n";
+         function combined using v(): Quantity<m> pure { convert<Quantity<m>>(250 cm) + 1 m }\n";
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
         "quantity.native",
@@ -70,7 +71,7 @@ fn tc187_u01_conversion_then_addition_agrees_with_runtime() {
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the quantity source");
@@ -103,7 +104,7 @@ fn tc187_u01_conversion_then_addition_agrees_with_runtime() {
     );
     let evaluation = package
         .call(
-            &QualifiedName::unqualified("sum").expect("sum is an identifier"),
+            &QualifiedName::unqualified("combined").expect("combined is an identifier"),
             Vec::new(),
             &ObjectEnvironment::default(),
             &mut Meter::new(LIMITS),
@@ -205,12 +206,15 @@ fn tc187_u03_incompatible_dimensions_refuse_at_source_check() {
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the incompatible source")
     .check(CheckingLimits::default())
     .expect_err("S4 rejects addition across distinct dimensions");
+    let [refusal] = refusal.as_slice() else {
+        panic!("S4 must return exactly one dimensional refusal: {refusal:?}");
+    };
     assert_eq!(
         refusal.cause,
         CheckCause::IllTyped(IllTypedCause::TypeMismatch)

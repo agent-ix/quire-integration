@@ -286,7 +286,7 @@ fn unit_id(fixture: &CheckedQuantityFixture, name: &str) -> quire_exact::UnitId 
     let [(_, ValueType::Quantity(id))] = signature.parameters else {
         panic!("{name} must have one quantity parameter")
     };
-    *id
+    id.clone()
 }
 
 fn quantity(
@@ -364,6 +364,21 @@ fn assert_call_charge_suffix(qsl: &Meter, runtime: &Meter) {
             runtime.consumed(counter) + call_work,
             "{counter:?}"
         );
+    }
+}
+
+fn assert_value_outcome_agreement(actual: &Outcome<Value>, expected: &Outcome<Value>, case: &str) {
+    match (actual, expected) {
+        (Outcome::Completed(Value::Quantity(a)), Outcome::Completed(Value::Quantity(b))) => {
+            assert_eq!(a, b, "{case} quantity")
+        }
+        (Outcome::Completed(Value::Boolean(a)), Outcome::Completed(Value::Boolean(b))) => {
+            assert_eq!(a, b, "{case} boolean")
+        }
+        (Outcome::Undefined(a), Outcome::Undefined(b)) => assert_eq!(a, b, "{case} undefined"),
+        (Outcome::Refused(a), Outcome::Refused(b)) => assert_eq!(a, b, "{case} refusal"),
+        (Outcome::Incomplete(a), Outcome::Incomplete(b)) => assert_eq!(a, b, "{case} stop"),
+        _ => panic!("{case} QSL/runtime outcome differs: {actual:?} != {expected:?}"),
     }
 }
 
@@ -506,7 +521,7 @@ fn carried_conversion_agreement(
             assert_eq!(qsl_stop.next_charge, runtime_stop.next_charge);
             assert_eq!(qsl_stop.charge_point, runtime_stop.charge_point);
         }
-        _ => assert_eq!(qsl, runtime, "{function} QSL/runtime outcome"),
+        _ => assert_value_outcome_agreement(&qsl, &runtime, function),
     }
     assert_eq!(qsl_losses, runtime_losses, "{function} QSL/runtime losses");
     assert_call_charge_suffix(&qsl_meter, &runtime_meter);
@@ -565,7 +580,11 @@ fn qspec_u07_u08_carried_conversion_values_and_refusals_agree() {
             carried_conversion_agreement(&fixture, "u08_exact", &source, LIMITS);
         assert!(losses.is_empty(), "U08 exact conversion has no loss");
         if (-2..=2).contains(&value) {
-            assert_eq!(result, Outcome::Completed(Value::Quantity(source)));
+            assert_value_outcome_agreement(
+                &result,
+                &Outcome::Completed(Value::Quantity(source)),
+                "U08 in-domain",
+            );
         } else {
             assert!(matches!(
                 result,
@@ -817,7 +836,10 @@ fn qspec_u16_u17_u18_u29_carried_limits_and_stop_points_agree() {
 
 fn exact_conversion(fixture: &CheckedQuantityFixture, source: &Quantity, target: &str) -> Quantity {
     let target_id = unit_id(fixture, target);
-    let target_unit = fixture.units.get(target_id).expect("admitted target unit");
+    let target_unit = fixture
+        .units
+        .get(target_id.clone())
+        .expect("admitted target unit");
     let source_unit = fixture.units.resolve(source).expect("admitted source unit");
     let result = convert_quantity(
         source_unit,
@@ -917,7 +939,7 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                      function u09b using v(): Quantity<m> pure { convert<Quantity<m>>(1 m_alt) }",
                 );
                 let source = quantity(&distinct, "m_alt", 1, 1);
-                assert_ne!(source.unit(), unit_id(&distinct, "m"));
+                assert_ne!(source.unit(), &unit_id(&distinct, "m"));
                 assert_eq!(
                     qsl_quantity(&distinct, "u09b"),
                     exact_conversion(&distinct, &source, "m")
@@ -939,7 +961,7 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 let mut denied_meter =
                     Meter::new(U10_LIMITS).with_injected_denial(InjectedDenial {
                         point: ChargePoint::UnitResultRetain,
-                        occurrence: 1,
+                        occurrence: std::num::NonZeroU64::MIN,
                     });
                 let denied = convert_quantity(
                     fixture.units.resolve(&source).unwrap(),
@@ -968,12 +990,13 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 let ConvertedValue::Exact(runtime_value) = runtime_conversion.value() else {
                     panic!("U10 exact conversion must return a rational")
                 };
-                assert_eq!(
-                    qsl_result,
-                    Outcome::Completed(Value::Quantity(Quantity::new(
+                assert_value_outcome_agreement(
+                    &qsl_result,
+                    &Outcome::Completed(Value::Quantity(Quantity::new(
                         runtime_value.clone(),
                         unit_id(&fixture, "m"),
-                    )))
+                    ))),
+                    "U10",
                 );
                 assert_call_charge_suffix(&qsl_meter, &runtime_meter);
                 assert_eq!(
@@ -1069,12 +1092,13 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 let ConvertedValue::Exact(runtime_value) = runtime_conversion.value() else {
                     panic!("U15 exact conversion must return a rational")
                 };
-                assert_eq!(
-                    qsl_result,
-                    Outcome::Completed(Value::Quantity(Quantity::new(
+                assert_value_outcome_agreement(
+                    &qsl_result,
+                    &Outcome::Completed(Value::Quantity(Quantity::new(
                         runtime_value.clone(),
                         unit_id(&fixture, "cm"),
-                    )))
+                    ))),
+                    "U15",
                 );
                 assert_call_charge_suffix(&qsl_meter, &runtime_meter);
             }
@@ -1101,9 +1125,10 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 let Outcome::Completed(runtime_value) = runtime_result else {
                     panic!("U19 unbounded runtime addition must complete")
                 };
-                assert_eq!(
-                    qsl_result,
-                    Outcome::Completed(Value::Quantity(runtime_value))
+                assert_value_outcome_agreement(
+                    &qsl_result,
+                    &Outcome::Completed(Value::Quantity(runtime_value)),
+                    "U19",
                 );
                 assert_call_charge_suffix(&qsl_meter, &runtime_meter);
                 let mut exact_meter = Meter::new(U19_LIMITS);
@@ -1169,7 +1194,7 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 let mut units = fixture.units.clone();
                 assert_eq!(
                     units.insert(compound_unit.unit().clone()).unwrap(),
-                    compound.unit()
+                    compound.unit().clone()
                 );
                 let m2_id = unit_id(&fixture, "m2");
                 let cm2_id = unit_id(&fixture, "cm2");
@@ -1187,7 +1212,7 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 });
                 let m2 = convert_quantity(
                     units.resolve(&compound).unwrap(),
-                    units.get(m2_id).unwrap(),
+                    units.get(m2_id.clone()).unwrap(),
                     &QuantityTarget::Exact,
                     &mut m2_meter,
                 )
@@ -1217,7 +1242,7 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 };
                 let cm2 = convert_quantity(
                     units.resolve(&compound).unwrap(),
-                    units.get(cm2_id).unwrap(),
+                    units.get(cm2_id.clone()).unwrap(),
                     &QuantityTarget::Exact,
                     &mut Meter::new(cm2_limits),
                 )
@@ -1233,7 +1258,7 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                     qsl_quantity(&fixture, "u22_cm2"),
                     Quantity::new(
                         Rational::new(40000_i64.into(), 1_i64.into()).unwrap(),
-                        cm2_id
+                        cm2_id.clone()
                     )
                 );
                 let mut short_meter = Meter::new(ScalarLimits {
@@ -1294,9 +1319,10 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 let Outcome::Completed(runtime_value) = runtime_result else {
                     panic!("U23 unbounded comparison must complete")
                 };
-                assert_eq!(
-                    qsl_result,
-                    Outcome::Completed(Value::Boolean(runtime_value))
+                assert_value_outcome_agreement(
+                    &qsl_result,
+                    &Outcome::Completed(Value::Boolean(runtime_value)),
+                    "U23",
                 );
                 assert_call_charge_suffix(&qsl_meter, &runtime_meter);
                 let rev1 = quantity(&fixture, "rev", 1, 1);
@@ -1375,9 +1401,10 @@ function u24_param using v(a: Quantity<cm>, b: Quantity<cm>): Quantity<cm> pure 
                 let Outcome::Completed(runtime_value) = runtime_result else {
                     panic!("U24 unbounded runtime addition must complete")
                 };
-                assert_eq!(
-                    qsl_result,
-                    Outcome::Completed(Value::Quantity(runtime_value))
+                assert_value_outcome_agreement(
+                    &qsl_result,
+                    &Outcome::Completed(Value::Quantity(runtime_value)),
+                    "U24",
                 );
                 assert_call_charge_suffix(&qsl_meter, &runtime_meter);
             }
@@ -1461,7 +1488,7 @@ fn qspec_admission_only_quantity_sources_refuse_at_assembly() {
             ),
             "U11j" => (
                 "dimension L; unit m : L = rational(1,1); unit m_alt : L = rational(1,1); unit u_self : L = rational(1,1) * u_self;",
-                "invalid_package/unit-graph-topology",
+                "invalid_package/conflicting-definition",
             ),
             "U11k" => (
                 "dimension L; unit u_self : L = rational(1,1) * u_self; dimension T; unit z : T = rational(0,1);",
