@@ -9,7 +9,7 @@ review_set: subset
 
 ## Summary
 
-Ticket: IR-669. Reviewed draft PR #37 at 7624808b against IT-017 and QSpec TC-193. The tests exercise real checked QSL and runtime paths, but selected runnable obligations and the row-inventory guard are missing.
+Ticket: IR-669. Reviewed the initial draft PR #37 against IT-017 and QSpec TC-193. The tests exercise real checked QSL and runtime paths, but selected runnable obligations and the row-inventory guard are missing.
 
 ## Verdict
 
@@ -27,7 +27,7 @@ FAIL. One high-severity inventory gap and four medium-severity test gaps remain.
 
 ## Coverage
 
-Examined the full PR diff: Cargo.lock and the two new IEEE test files. Checked IT-017-SC-01 through SC-05 and TC-097 against QSpec TC-193 F01-F34, with focused attention to F10/F13/F17/F20 and pending producer subcases. No CI workflow, production API, vendored corpus, or copied artifact changed. Static `git diff --check` and `cargo fmt --all -- --check` passed. Focused compilation and local tests are blocked before test code by IR-1284 (QSL 1d8893f6 / quire-eval 4e59f729).
+Examined the full PR diff: Cargo.lock and the two new IEEE test files. Checked IT-017-SC-01 through SC-05 and TC-097 against QSpec TC-193 F01-F34, with focused attention to F10/F13/F17/F20 and pending producer subcases. No CI workflow, production API, vendored corpus, or copied artifact changed. Static `git diff --check` and `cargo fmt --all -- --check` passed. Focused compilation and local tests were blocked before test code by IR-1284 (QSL/quire-eval API skew).
 
 ## New findings (disposition pass 1)
 
@@ -63,9 +63,9 @@ Examined the full PR diff: Cargo.lock and the two new IEEE test files. Checked I
 
 ## Current review pass
 
-At frozen head 666a460c (QSpec b1feb484), static `git diff --check` passed. Reviewed the new FMA, ordering, identity, extrema, F20 admission, F34 width paths and exhaustive F dispatcher. FMA and callable comparisons make independent QSL and RT observations of values, flags/losses and ordered scalar charge suffixes; F34 compares values at both widths. Prior FND-001 through FND-007 remain fixed. Focused compilation and final gate remain unverified because the pinned quire-driver API is skewed (IR-1277).
+At the reviewed draft head, static `git diff --check` passed. Reviewed the new FMA, ordering, identity, extrema, F20 admission, F34 width paths and exhaustive F dispatcher against QSpec TC-193. FMA and callable comparisons make independent QSL and RT observations of values, flags/losses and ordered scalar charge suffixes; F34 compares values at both widths. Prior FND-001 through FND-007 remain fixed. Focused compilation and final gate remained unverified because the quire-driver API was skewed (IR-1277).
 
-## Disposition pass 5 (6bd56e51)
+## Disposition pass 5
 
 | FND | outcome | reason |
 | --- | --- | --- |

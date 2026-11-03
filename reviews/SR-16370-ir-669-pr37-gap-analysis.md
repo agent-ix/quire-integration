@@ -41,9 +41,9 @@ Plan completion: not assessed. `quoin matrix --repo ... --json` returned no cove
 
 ## Current review pass
 
-At frozen head 666a460c against QSpec b1feb484, the new F04b/F11, F01/F02/F02b, F05, F20 and F34 trace claims were checked manually because the installed matrix has no obligations source. The two omitted authored subcases above are the only new coverage finding. IR-1283 conversion/negation cases remain ticket-backed PENDING; IR-1282 equality charge assertions remain retained but unrun. No passing focused test or final gate is claimed while IR-1277 blocks compilation.
+At the reviewed draft head against QSpec TC-193, the new F04b/F11, F01/F02/F02b, F05, F20 and F34 trace claims were checked manually because the installed matrix has no obligations source. The two omitted authored subcases above are the only new coverage finding. IR-1283 conversion/negation cases remain ticket-backed PENDING; IR-1282 equality charge assertions remained retained but unrun. No passing focused test or final gate was claimed while IR-1277 blocked compilation.
 
-## Disposition pass 3 (6bd56e51)
+## Disposition pass 3
 
 | FND | outcome | reason |
 | --- | --- | --- |

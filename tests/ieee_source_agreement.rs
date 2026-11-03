@@ -5,6 +5,7 @@ use ix_trace_rs::trace;
 use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_package::CheckedPackage;
 use qsl_semantics::check::{CheckCause, PackageDeclarations};
+use qsl_semantics::model::intake::SelectedModels;
 use qsl_semantics::model::object_environment::ObjectEnvironment;
 use qsl_semantics::value::{admit_ieee_profile, DefinitionRole};
 use quire_eval::FamilyOutcome;
@@ -165,7 +166,7 @@ fn observed_binary(
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the IEEE source");
@@ -238,7 +239,7 @@ fn observed_sqrt(
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the IEEE square-root source");
@@ -295,7 +296,7 @@ fn observed_float_source(
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the IEEE callable source");
@@ -913,7 +914,7 @@ fn observed_numeric_equal(left: u32, right: u32, mut meter: Meter) -> (Outcome<V
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the IEEE comparison source");
@@ -955,23 +956,6 @@ fn checked_numeric_equal(left: u32, right: u32) -> (bool, Meter) {
     (equal, meter)
 }
 
-fn assert_numeric_equal_value_only(id: &str, left: u32, right: u32, expected: bool) {
-    let (qsl_equal, _) = checked_numeric_equal(left, right);
-    let mut runtime_meter = Meter::new(LIMITS);
-    let runtime = compare_ieee(
-        IeeeComparison::NumericEqual,
-        IeeeValue::binary32(left),
-        IeeeValue::binary32(right),
-        &mut runtime_meter,
-    )
-    .expect("same-width IEEE comparison type-checks");
-    let Outcome::Completed(runtime_equal) = runtime else {
-        panic!("runtime did not complete {id} numeric equality: {runtime:?}");
-    };
-    assert_eq!(qsl_equal, runtime_equal, "{id} numeric equality value");
-    assert_eq!(qsl_equal, expected, "{id} QSpec numeric equality value");
-}
-
 fn assert_numeric_equal(id: &str, left: u32, right: u32, expected: bool) {
     let (qsl_equal, qsl_meter) = checked_numeric_equal(left, right);
     let mut runtime_meter = Meter::new(LIMITS);
@@ -1009,25 +993,9 @@ fn assert_numeric_equal(id: &str, left: u32, right: u32, expected: bool) {
     }
 }
 
-#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02")]
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
-fn tc193_f01_f02_numeric_equal_values_agree() {
-    let f01 = selected_vector("F01");
-    let f01_bits = hex_bits(f01.inputs);
-    assert_eq!(f01_bits.len(), 2, "F01 has two binary32 operands");
-    assert_numeric_equal_value_only("F01", f01_bits[0], f01_bits[1], true);
-
-    let f02 = selected_vector("F02");
-    let f02_bits = hex_bits(f02.inputs);
-    assert_eq!(f02_bits.len(), 2, "F02 has two binary32 operands");
-    for bits in f02_bits {
-        assert_numeric_equal_value_only("F02", bits, bits, false);
-    }
-}
-
-// IR-1282: retain the two-sided charge assertion for activation after QSL
-// numeric equality invokes the metered runtime comparison.
-fn tc193_f01_f02_numeric_equal_charges_agree_after_ir1282() {
+fn tc193_f01_f02_numeric_equal_charges_agree() {
     let f01 = selected_vector("F01");
     let f01_bits = hex_bits(f01.inputs);
     assert_eq!(f01_bits.len(), 2, "F01 has two binary32 operands");
@@ -1041,37 +1009,9 @@ fn tc193_f01_f02_numeric_equal_charges_agree_after_ir1282() {
     }
 }
 
-#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02")]
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
-fn tc193_f17_numeric_equality_value_agrees() {
-    let f17 = selected_vector("F17");
-    let bits = hex_bits(f17.inputs);
-    assert_eq!(bits.len(), 2, "F17 has two binary32 operands");
-    let runtime_limits = ieee_limits(32, 2, 2, 1);
-    let source_limits = ScalarLimits {
-        work_units: 3,
-        ..runtime_limits
-    };
-    let (qsl, _) = observed_numeric_equal(bits[0], bits[1], Meter::new(source_limits));
-    let mut runtime_meter = Meter::new(runtime_limits);
-    let runtime = compare_ieee(
-        IeeeComparison::NumericEqual,
-        IeeeValue::binary32(bits[0]),
-        IeeeValue::binary32(bits[1]),
-        &mut runtime_meter,
-    )
-    .expect("same-width IEEE comparison type-checks");
-    assert_eq!(
-        qsl,
-        Outcome::Completed(Value::Boolean(false)),
-        "F17 QSL Boolean"
-    );
-    assert_eq!(runtime, Outcome::Completed(false), "F17 runtime Boolean");
-}
-
-// IR-1282: retain the denial metadata and complete charge-prefix assertions
-// for activation after QSL numeric equality meters both named operations.
-fn tc193_f17_numeric_equality_accounts_for_named_charges_after_ir1282() {
+fn tc193_f17_numeric_equality_accounts_for_named_charges() {
     let f17 = selected_vector("F17");
     let f17_bits = hex_bits(f17.inputs);
     assert_eq!(f17_bits.len(), 2, "F17 has two binary32 operands");
@@ -1248,7 +1188,7 @@ fn tc193_f06_cross_width_comparison_refuses_before_evaluation() {
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the mixed-width source");
@@ -1256,9 +1196,12 @@ fn tc193_f06_cross_width_comparison_refuses_before_evaluation() {
         admit_ieee_profile(&[DefinitionRole::IeeeProfile.reference()], &[])
             .expect("the selected IEEE profile admits"),
     );
-    let refusal = declarations
+    let refusals = declarations
         .check(CheckingLimits::default())
         .expect_err("S4 refuses mixed IEEE widths");
+    let [refusal] = refusals.as_slice() else {
+        panic!("S4 must report one mixed-width refusal: {refusals:?}");
+    };
     assert_eq!(
         refusal.cause,
         CheckCause::IllTyped(IllTypedCause::TypeMismatch)
@@ -1275,7 +1218,7 @@ fn tc193_f06_cross_width_comparison_refuses_before_evaluation() {
     assert!(meter.admitted_charges().is_empty(), "no runtime charge");
 }
 
-fn assert_f20_source_admission_refusal(function: &str, expected_cause: Option<CheckCause>) {
+fn assert_f20_source_admission_refusal(function: &str) {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n{function}\n"
@@ -1287,13 +1230,17 @@ fn assert_f20_source_admission_refusal(function: &str, expected_cause: Option<Ch
         qsl_cst::Limits::default(),
     )
     .expect("S1 parses the F20 admission source");
-    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    assert!(
+        parsed.is_admissible(),
+        "{source:?}: {:?}",
+        parsed.diagnostics()
+    );
     let unit = qsl_forms::build_unit(&parsed).expect("S2 builds the F20 admission source");
     let mut declarations = PackageDeclarations::assemble(
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles the F20 admission source");
@@ -1301,18 +1248,17 @@ fn assert_f20_source_admission_refusal(function: &str, expected_cause: Option<Ch
         admit_ieee_profile(&[DefinitionRole::IeeeProfile.reference()], &[])
             .expect("the selected IEEE profile admits"),
     );
-    let refusal = declarations
+    let refusals = declarations
         .check(CheckingLimits::default())
         .expect_err("S4 refuses F20 before evaluation");
-    if let Some(expected_cause) = expected_cause {
-        assert_eq!(refusal.cause, expected_cause);
-    } else {
-        assert!(
-            matches!(&refusal.cause, CheckCause::IllTyped(_)),
-            "F20 must have a typed admission refusal: {:?}",
-            refusal.cause
-        );
-    }
+    let [refusal] = refusals.as_slice() else {
+        panic!("S4 must report one F20 refusal: {refusals:?}");
+    };
+    assert_eq!(
+        refusal.cause,
+        CheckCause::IllTyped(IllTypedCause::TypeMismatch),
+        "F20 typed admission refusal for {function}"
+    );
 }
 
 #[trace("TC-097", "IT-017-SC-01", "IT-017-SC-04")]
@@ -1328,18 +1274,11 @@ fn tc193_f20_admission_refusals_have_no_charge() {
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Boolean pure { quire::value::ieee::totalOrder(a, b) }",
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Boolean pure { quire::value::ieee::bitIdentical(a, b) }",
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Float32[nearest-even] pure { a + b }",
-    ] {
-        assert_f20_source_admission_refusal(
-            function,
-            Some(CheckCause::IllTyped(IllTypedCause::TypeMismatch)),
-        );
-    }
-    for function in [
         "function f using v(a: Float32[nearest-even], b: Int[0,1]): Float32[nearest-even] pure { a + b }",
-        "function f using v(a: Float32[nearest-even]): Decimal[0,10;0,0] pure { convert<Decimal[0,10;0,0]>(a) }",
+        "function f using v(a: Float32[nearest-even]): Decimal[0,10;0,0;nearest-even] pure { convert<Decimal[0,10;0,0;nearest-even]>(a) }",
         "function f using v(a: Float32[nearest-even]): Int[0,1] pure { convert<Int[0,1]>(a) }",
     ] {
-        assert_f20_source_admission_refusal(function, None);
+        assert_f20_source_admission_refusal(function);
     }
     let mut meter = Meter::new(ieee_limits(0, 0, 0, 0));
     for comparison in IeeeComparison::ALL {
@@ -2128,12 +2067,11 @@ enum FCase {
         run: fn(),
         ticket: &'static str,
         subcase: &'static str,
-        blocked_assertion: Option<fn()>,
     },
 }
 
 fn run_f01_f02_available() {
-    tc193_f01_f02_numeric_equal_values_agree();
+    tc193_f01_f02_numeric_equal_charges_agree();
     tc193_f01_f02_f02b_order_and_identity_agree();
 }
 
@@ -2145,12 +2083,7 @@ fn run_f04b_add_and_fma() {
 fn f_case(id: &str) -> FCase {
     // Branch-gating QSpec F-ID dispatch: an unknown or newly authored ID fails closed.
     match id {
-        "F01" | "F02" => FCase::Partial {
-            run: run_f01_f02_available,
-            ticket: "IR-1282",
-            subcase: "numeric equality metering",
-            blocked_assertion: Some(tc193_f01_f02_numeric_equal_charges_agree_after_ir1282),
-        },
+        "F01" | "F02" => FCase::Runnable(run_f01_f02_available),
         "F02b" => FCase::Runnable(tc193_f01_f02_f02b_order_and_identity_agree),
         "F03" | "F04" => {
             FCase::Runnable(tc193_selected_add_rows_agree_from_checked_source_to_runtime)
@@ -2169,14 +2102,7 @@ fn f_case(id: &str) -> FCase {
         "F12" => FCase::Runnable(tc193_f12_invalid_arithmetic_agrees_in_every_mode),
         "F13" => FCase::Runnable(tc193_f13_division_flags_are_operation_local),
         "F15" | "F16" => FCase::Runnable(tc193_f15_f16_subnormal_multiplication_agrees),
-        "F17" => FCase::Partial {
-            run: tc193_f17_numeric_equality_value_agrees,
-            ticket: "IR-1282",
-            subcase: "QSL numeric equality metering producer repair",
-            blocked_assertion: Some(
-                tc193_f17_numeric_equality_accounts_for_named_charges_after_ir1282,
-            ),
-        },
+        "F17" => FCase::Runnable(tc193_f17_numeric_equality_accounts_for_named_charges),
         "F18" | "F21" | "F22" => FCase::Runnable(tc193_f18_f21_f22_metered_arithmetic_agrees),
         "F19" | "F30" => FCase::Runnable(tc193_f19_f30_square_root_named_charges_agree),
         "F20" => FCase::Runnable(tc193_f20_admission_refusals_have_no_charge),
@@ -2188,7 +2114,6 @@ fn f_case(id: &str) -> FCase {
             run: tc193_f26_signed_zero_arithmetic_agrees_in_every_mode,
             ticket: "IR-1283",
             subcase: "signed-zero width conversion",
-            blocked_assertion: None,
         },
         "F34" => FCase::Runnable(tc193_f34_float_relations_agree_at_both_widths),
         other => panic!("unrouted QSpec TC-193 F vector {other}"),
@@ -2205,15 +2130,9 @@ fn tc193_every_published_f_row_has_a_runnable_or_ticket_backed_route() {
                 run,
                 ticket,
                 subcase,
-                blocked_assertion,
             } => {
                 run();
-                let assertion = if blocked_assertion.is_some() {
-                    "retained strict assertion"
-                } else {
-                    "producer path"
-                };
-                eprintln!("PENDING {} {subcase}: {ticket} ({assertion})", row.id);
+                eprintln!("PENDING {} {subcase}: {ticket}", row.id);
             }
             FCase::Pending { ticket, subcase } => {
                 eprintln!("PENDING {} {subcase}: {ticket}", row.id);
