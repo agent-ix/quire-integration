@@ -54,3 +54,13 @@ Examined the full PR diff: Cargo.lock and the two new IEEE test files. Checked I
 | FND-006 | fixed | F01/F02 and F17 runnable paths now compare values only; strict metering/denial functions remain reachable in the `Partial` record but are not executed until IR-1282. |
 | FND-007 | still-open | Remove IT-017-SC-03 from the F01/F02 value-only test trace; keep SC-03 on the later activated strict metering test when IR-1282 lands. |
 | FND-007 | fixed | F01/F02 value-only test now traces SC-01/SC-02 only; the inventory runner traces SC-01 only, while active charge tests retain SC-03. |
+
+## New findings (disposition pass 4)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-008 | medium | F20 source admission helper accepts any `IllTyped` cause for the newly added mixed-width totalOrder and bitIdentical calls. FR-397-AC-24 requires `ill_typed/type-mismatch`; a different ill-typed failure would satisfy this test, so it does not prove the specified refusal. | tests/ieee_source_agreement.rs:1304-1311,1323-1325 |
+
+## Current review pass
+
+At frozen head 666a460c (QSpec b1feb484), static `git diff --check` passed. Reviewed the new FMA, ordering, identity, extrema, F20 admission, F34 width paths and exhaustive F dispatcher. FMA and callable comparisons make independent QSL and RT observations of values, flags/losses and ordered scalar charge suffixes; F34 compares values at both widths. Prior FND-001 through FND-007 remain fixed. Focused compilation and final gate remain unverified because the pinned quire-driver API is skewed (IR-1277).

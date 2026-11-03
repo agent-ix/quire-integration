@@ -1275,7 +1275,7 @@ fn tc193_f06_cross_width_comparison_refuses_before_evaluation() {
     assert!(meter.admitted_charges().is_empty(), "no runtime charge");
 }
 
-fn assert_f20_source_admission_refusal(function: &str) {
+fn assert_f20_source_admission_refusal(function: &str, expected_cause: Option<CheckCause>) {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n{function}\n"
@@ -1304,11 +1304,15 @@ fn assert_f20_source_admission_refusal(function: &str) {
     let refusal = declarations
         .check(CheckingLimits::default())
         .expect_err("S4 refuses F20 before evaluation");
-    assert!(
-        matches!(&refusal.cause, CheckCause::IllTyped(_)),
-        "F20 must have a typed admission refusal: {:?}",
-        refusal.cause
-    );
+    if let Some(expected_cause) = expected_cause {
+        assert_eq!(refusal.cause, expected_cause);
+    } else {
+        assert!(
+            matches!(&refusal.cause, CheckCause::IllTyped(_)),
+            "F20 must have a typed admission refusal: {:?}",
+            refusal.cause
+        );
+    }
 }
 
 #[trace("TC-097", "IT-017-SC-01", "IT-017-SC-04")]
@@ -1324,11 +1328,18 @@ fn tc193_f20_admission_refusals_have_no_charge() {
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Boolean pure { quire::value::ieee::totalOrder(a, b) }",
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Boolean pure { quire::value::ieee::bitIdentical(a, b) }",
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Float32[nearest-even] pure { a + b }",
+    ] {
+        assert_f20_source_admission_refusal(
+            function,
+            Some(CheckCause::IllTyped(IllTypedCause::TypeMismatch)),
+        );
+    }
+    for function in [
         "function f using v(a: Float32[nearest-even], b: Int[0,1]): Float32[nearest-even] pure { a + b }",
         "function f using v(a: Float32[nearest-even]): Decimal[0,10;0,0] pure { convert<Decimal[0,10;0,0]>(a) }",
         "function f using v(a: Float32[nearest-even]): Int[0,1] pure { convert<Int[0,1]>(a) }",
     ] {
-        assert_f20_source_admission_refusal(function);
+        assert_f20_source_admission_refusal(function, None);
     }
     let mut meter = Meter::new(ieee_limits(0, 0, 0, 0));
     for comparison in IeeeComparison::ALL {
@@ -1928,6 +1939,13 @@ fn tc193_f05_infinities_and_finite_extrema_agree() {
             true,
         );
         assert_float_relation("F05 reverse less", high, low, FloatRelation::Less, false);
+        assert_float_relation(
+            "F05 reverse less-or-equal",
+            high,
+            low,
+            FloatRelation::LessOrEqual,
+            false,
+        );
         assert_intrinsic_comparison(
             "F05 total order",
             low,
@@ -2052,6 +2070,13 @@ fn tc193_f01_f02_f02b_order_and_identity_agree() {
         "F02 self bit identity",
         first_nan,
         first_nan,
+        IeeeComparison::BitIdentical,
+        true,
+    );
+    assert_intrinsic_comparison(
+        "F02 second self bit identity",
+        second_nan,
+        second_nan,
         IeeeComparison::BitIdentical,
         true,
     );
