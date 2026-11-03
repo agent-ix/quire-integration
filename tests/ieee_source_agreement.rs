@@ -717,6 +717,23 @@ fn checked_numeric_equal(left: u32, right: u32) -> (bool, Meter) {
     (equal, meter)
 }
 
+fn assert_numeric_equal_value_only(id: &str, left: u32, right: u32, expected: bool) {
+    let (qsl_equal, _) = checked_numeric_equal(left, right);
+    let mut runtime_meter = Meter::new(LIMITS);
+    let runtime = compare_ieee(
+        IeeeComparison::NumericEqual,
+        IeeeValue::binary32(left),
+        IeeeValue::binary32(right),
+        &mut runtime_meter,
+    )
+    .expect("same-width IEEE comparison type-checks");
+    let Outcome::Completed(runtime_equal) = runtime else {
+        panic!("runtime did not complete {id} numeric equality: {runtime:?}");
+    };
+    assert_eq!(qsl_equal, runtime_equal, "{id} numeric equality value");
+    assert_eq!(qsl_equal, expected, "{id} QSpec numeric equality value");
+}
+
 fn assert_numeric_equal(id: &str, left: u32, right: u32, expected: bool) {
     let (qsl_equal, qsl_meter) = checked_numeric_equal(left, right);
     let mut runtime_meter = Meter::new(LIMITS);
@@ -756,7 +773,23 @@ fn assert_numeric_equal(id: &str, left: u32, right: u32, expected: bool) {
 
 #[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
-fn tc193_f01_f02_numeric_equal_portions_agree() {
+fn tc193_f01_f02_numeric_equal_values_agree() {
+    let f01 = selected_vector("F01");
+    let f01_bits = hex_bits(f01.inputs);
+    assert_eq!(f01_bits.len(), 2, "F01 has two binary32 operands");
+    assert_numeric_equal_value_only("F01", f01_bits[0], f01_bits[1], true);
+
+    let f02 = selected_vector("F02");
+    let f02_bits = hex_bits(f02.inputs);
+    assert_eq!(f02_bits.len(), 2, "F02 has two binary32 operands");
+    for bits in f02_bits {
+        assert_numeric_equal_value_only("F02", bits, bits, false);
+    }
+}
+
+// IR-1282: retain the two-sided charge assertion for activation after QSL
+// numeric equality invokes the metered runtime comparison.
+fn tc193_f01_f02_numeric_equal_charges_agree_after_ir1282() {
     let f01 = selected_vector("F01");
     let f01_bits = hex_bits(f01.inputs);
     assert_eq!(f01_bits.len(), 2, "F01 has two binary32 operands");
@@ -770,9 +803,37 @@ fn tc193_f01_f02_numeric_equal_portions_agree() {
     }
 }
 
-#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02")]
 #[test]
-fn tc193_f17_numeric_equality_accounts_for_named_charges() {
+fn tc193_f17_numeric_equality_value_agrees() {
+    let f17 = selected_vector("F17");
+    let bits = hex_bits(f17.inputs);
+    assert_eq!(bits.len(), 2, "F17 has two binary32 operands");
+    let runtime_limits = ieee_limits(32, 2, 2, 1);
+    let source_limits = ScalarLimits {
+        work_units: 3,
+        ..runtime_limits
+    };
+    let (qsl, _) = observed_numeric_equal(bits[0], bits[1], Meter::new(source_limits));
+    let mut runtime_meter = Meter::new(runtime_limits);
+    let runtime = compare_ieee(
+        IeeeComparison::NumericEqual,
+        IeeeValue::binary32(bits[0]),
+        IeeeValue::binary32(bits[1]),
+        &mut runtime_meter,
+    )
+    .expect("same-width IEEE comparison type-checks");
+    assert_eq!(
+        qsl,
+        Outcome::Completed(Value::Boolean(false)),
+        "F17 QSL Boolean"
+    );
+    assert_eq!(runtime, Outcome::Completed(false), "F17 runtime Boolean");
+}
+
+// IR-1282: retain the denial metadata and complete charge-prefix assertions
+// for activation after QSL numeric equality meters both named operations.
+fn tc193_f17_numeric_equality_accounts_for_named_charges_after_ir1282() {
     let f17 = selected_vector("F17");
     let f17_bits = hex_bits(f17.inputs);
     assert_eq!(f17_bits.len(), 2, "F17 has two binary32 operands");
@@ -1548,6 +1609,7 @@ enum FCase {
         run: fn(),
         ticket: &'static str,
         subcase: &'static str,
+        blocked_assertion: Option<fn()>,
     },
 }
 
@@ -1555,9 +1617,10 @@ fn f_case(id: &str) -> FCase {
     // Branch-gating QSpec F-ID dispatch: an unknown or newly authored ID fails closed.
     match id {
         "F01" | "F02" => FCase::Partial {
-            run: tc193_f01_f02_numeric_equal_portions_agree,
+            run: tc193_f01_f02_numeric_equal_values_agree,
             ticket: "IR-1282 / QSL-1388",
             subcase: "numeric equality metering / bit identity and total ordering",
+            blocked_assertion: Some(tc193_f01_f02_numeric_equal_charges_agree_after_ir1282),
         },
         "F02b" => FCase::Pending {
             ticket: "QSL-1388",
@@ -1570,6 +1633,7 @@ fn f_case(id: &str) -> FCase {
             run: tc193_selected_add_rows_agree_from_checked_source_to_runtime,
             ticket: "QSL-1388",
             subcase: "FMA leg after runnable ADD leg",
+            blocked_assertion: None,
         },
         "F05" => FCase::Pending {
             ticket: "QSL-1388",
@@ -1591,9 +1655,12 @@ fn f_case(id: &str) -> FCase {
         "F13" => FCase::Runnable(tc193_f13_division_flags_are_operation_local),
         "F15" | "F16" => FCase::Runnable(tc193_f15_f16_subnormal_multiplication_agrees),
         "F17" => FCase::Partial {
-            run: tc193_f17_numeric_equality_accounts_for_named_charges,
+            run: tc193_f17_numeric_equality_value_agrees,
             ticket: "IR-1282",
             subcase: "QSL numeric equality metering producer repair",
+            blocked_assertion: Some(
+                tc193_f17_numeric_equality_accounts_for_named_charges_after_ir1282,
+            ),
         },
         "F18" | "F21" | "F22" => FCase::Runnable(tc193_f18_f21_f22_metered_arithmetic_agrees),
         "F19" | "F30" => FCase::Runnable(tc193_f19_f30_square_root_named_charges_agree),
@@ -1601,6 +1668,7 @@ fn f_case(id: &str) -> FCase {
             run: tc193_f20_admission_refusals_have_no_charge,
             ticket: "QSL-1388",
             subcase: "totalOrder and bitIdentical admission",
+            blocked_assertion: None,
         },
         "F24" | "F25" | "F27" | "F28" | "F31" | "F32" | "F33" => FCase::Pending {
             ticket: "IR-1283",
@@ -1610,6 +1678,7 @@ fn f_case(id: &str) -> FCase {
             run: tc193_f26_signed_zero_arithmetic_agrees_in_every_mode,
             ticket: "IR-1283",
             subcase: "signed-zero width conversion",
+            blocked_assertion: None,
         },
         "F34" => FCase::Pending {
             ticket: "IR-1282 / QSL-1388",
@@ -1635,9 +1704,15 @@ fn tc193_every_published_f_row_has_a_runnable_or_ticket_backed_route() {
                 run,
                 ticket,
                 subcase,
+                blocked_assertion,
             } => {
                 run();
-                eprintln!("PENDING {} {subcase}: {ticket}", row.id);
+                let assertion = if blocked_assertion.is_some() {
+                    "retained strict assertion"
+                } else {
+                    "producer path"
+                };
+                eprintln!("PENDING {} {subcase}: {ticket} ({assertion})", row.id);
             }
             FCase::Pending { ticket, subcase } => {
                 eprintln!("PENDING {} {subcase}: {ticket}", row.id);
