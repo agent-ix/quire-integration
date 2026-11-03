@@ -407,6 +407,7 @@ fn tc186_t06_invalid_utf8_refuses_at_both_reader_boundaries() {
 fn tc186_t04_t05_text_bounds_admit_and_refuse() {
     let t04 = selected_vector("T04");
     let t05 = selected_vector("T05");
+    // Branch-gating QSpec bound spellings: reject changed row inputs.
     assert!(t04.inputs.contains("Text[1,1;nfc]"));
     assert!(t05.inputs.contains("Text[0,0;nfc]"));
     let composed = codepoint_sequence(&t04.inputs);
@@ -469,6 +470,7 @@ fn tc186_t06b_checked_text_values_agree_with_runtime_bytes() {
     let row = selected_vector("T06b");
     // Source-spelling provenance remains PENDING IR-1286: QSL constructs it
     // from decoded text, so the raw and escaped spellings are not distinguished.
+    // Branch-gating QSpec source spellings: this row owns both source forms.
     assert!(row.inputs.contains("\\u00e9"));
     assert!(row.inputs.contains("binary-utf8"));
     let raw_spelling = "\"é\"";
@@ -513,6 +515,7 @@ fn tc186_t06b_checked_text_values_agree_with_runtime_bytes() {
 #[test]
 fn tc186_t10_distinct_text_profiles_refuse_before_charge() {
     let row = selected_vector("T10");
+    // Branch-gating QSpec profile spelling: this row selects binary UTF-8.
     assert!(row.inputs.contains("binary-utf8"));
     let source = "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
@@ -597,10 +600,9 @@ fn assert_order_agreement(id: &str, profile: TextProfile, left: &str, right: &st
     let mut runtime_meter = Meter::new(LIMITS);
     let runtime = compare_text(ComparisonOperator::Less, &left, &right, &mut runtime_meter)
         .expect("same-profile T12 operands type-check");
-    assert_eq!(
-        qsl,
-        Outcome::Completed(Value::Boolean(true)),
-        "{id} QSL order"
+    assert!(
+        matches!(&qsl, Outcome::Completed(Value::Boolean(true))),
+        "{id} QSL order: {qsl:?}"
     );
     assert_eq!(runtime, Outcome::Completed(true), "{id} runtime order");
     assert_meter_agreement(&qsl_meter, &runtime_meter);
@@ -618,6 +620,7 @@ fn tc186_t12_scalar_and_unsigned_utf8_order_agree() {
 #[test]
 fn tc186_t11_nfc_exact_limits_and_named_denials_agree() {
     let row = selected_vector("T11");
+    // Branch-gating QSpec charge-point spelling: this denial is authored.
     assert!(row.inputs.contains("text.normalize-output"));
     let (composed, decomposed) = t01_operands();
     let (left, right) = (
@@ -690,6 +693,7 @@ fn tc186_t11_nfc_exact_limits_and_named_denials_agree() {
 #[test]
 fn tc186_t14_non_normalizing_comparison_and_one_under_agree() {
     let row = selected_vector("T14");
+    // Branch-gating QSpec limit spelling: this row authors the one-under case.
     assert!(row.inputs.contains("work_units: 2"));
     let (composed, decomposed) = t01_operands();
     for profile in [TextProfile::UnicodeScalars, TextProfile::BinaryUtf8] {
@@ -750,6 +754,7 @@ fn tc186_t14_non_normalizing_comparison_and_one_under_agree() {
 #[test]
 fn tc186_t13_normalized_length_controls_admission() {
     let row = selected_vector("T13");
+    // Branch-gating QSpec bound spelling: this row authors NFD refusal.
     assert!(row.inputs.contains("Text[1,1;nfd]"));
     let (composed, decomposed) = t01_operands();
     let decomposed_literal = source_literal(&decomposed);
@@ -791,6 +796,7 @@ fn tc186_t13_normalized_length_controls_admission() {
 #[test]
 fn tc186_t16_admission_limit_precedence_is_exact() {
     let row = selected_vector("T16");
+    // Branch-gating QSpec limit spelling: this row authors normalized denial.
     assert!(row.inputs.contains("normalized_scalars: 1"));
     let (composed, decomposed) = t01_operands();
     assert_checked_text_literal_refusal((1, 1), TextProfile::Nfd, &decomposed, 2);
@@ -939,6 +945,7 @@ mod enum_rows {
     };
 
     fn selected_vector(id: &str) {
+        // Branch-gating QSpec ID comparison: each enum row must be published exactly once.
         let rows: Vec<_> = vectors_of(TestCase::Tc186)
             .filter(|vector| vector.id == id)
             .collect();
@@ -1188,6 +1195,7 @@ enum TRoute {
     },
 }
 
+#[ix_trace_rs::string_edge]
 fn t_route(id: &str) -> TRoute {
     // Branch-gating QSpec ID match: a new row must have a runnable or ticket-backed route.
     match id {
