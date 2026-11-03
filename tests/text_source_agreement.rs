@@ -1211,8 +1211,8 @@ mod enum_rows {
     #[test]
     pub(super) fn tc186_t09_changed_owner_has_distinct_identity() {
         selected_vector("T09");
-        // Case/order identity is PENDING IR-1300: QSL currently retains the
-        // same declaration key when only the enum body changes.
+        // Case/order identity is PENDING IR-1300 / QSL-1574: QSL currently
+        // retains the same declaration key when only the enum body changes.
         let old = assemble("ordered enum A { READY, DONE }");
         let changed_owner =
             assemble_with_package("ordered enum A { READY, DONE }", "ir-669-other-owner");
