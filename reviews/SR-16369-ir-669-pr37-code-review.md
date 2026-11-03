@@ -64,3 +64,9 @@ Examined the full PR diff: Cargo.lock and the two new IEEE test files. Checked I
 ## Current review pass
 
 At frozen head 666a460c (QSpec b1feb484), static `git diff --check` passed. Reviewed the new FMA, ordering, identity, extrema, F20 admission, F34 width paths and exhaustive F dispatcher. FMA and callable comparisons make independent QSL and RT observations of values, flags/losses and ordered scalar charge suffixes; F34 compares values at both widths. Prior FND-001 through FND-007 remain fixed. Focused compilation and final gate remain unverified because the pinned quire-driver API is skewed (IR-1277).
+
+## Disposition pass 5 (6bd56e51)
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-008 | fixed | The F20 mixed-width equality, totalOrder, bitIdentical, and addition source cases now require CheckCause::IllTyped(IllTypedCause::TypeMismatch). |
