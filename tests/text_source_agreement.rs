@@ -665,9 +665,10 @@ fn tc186_t11_nfc_exact_limits_and_named_denials_agree() {
     ] {
         assert_eq!(runtime_meter.consumed(kind), count, "{kind:?}");
     }
-    for (point, occurrence) in [
-        (ChargePoint::TextNormalizeOutput, 2),
-        (ChargePoint::TextResultRetain, 1),
+    let complete_charges = runtime_meter.admitted_charges().to_vec();
+    for (point, occurrence, prefix_len, normalized) in [
+        (ChargePoint::TextNormalizeOutput, 2, 4, 1),
+        (ChargePoint::TextResultRetain, 1, 5, 2),
     ] {
         let denial = InjectedDenial {
             point,
@@ -678,14 +679,54 @@ fn tc186_t11_nfc_exact_limits_and_named_denials_agree() {
         let mut runtime_meter = Meter::new(T11_LIMITS).with_injected_denial(denial);
         let runtime = compare_text(ComparisonOperator::Equal, &left, &right, &mut runtime_meter)
             .expect("same profile");
-        assert!(
-            matches!(qsl, Outcome::Incomplete(Incomplete { charge_point, .. }) if charge_point == point)
+        let Outcome::Incomplete(qsl_shortage) = qsl else {
+            panic!("QSL must stop at {point:?}: {qsl:?}");
+        };
+        let Outcome::Incomplete(runtime_shortage) = runtime else {
+            panic!("runtime must stop at {point:?}: {runtime:?}");
+        };
+        let runtime_work = u64::try_from(prefix_len).expect("T11 prefix fits u64");
+        assert_eq!(
+            runtime_shortage,
+            Incomplete {
+                limit_kind: LimitKind::WorkUnits,
+                limit: runtime_work,
+                consumed: runtime_work,
+                next_charge: Integer::from(1_u64),
+                charge_point: point,
+            }
         );
-        assert!(
-            matches!(runtime, Outcome::Incomplete(Incomplete { charge_point, .. }) if charge_point == point)
+        assert_eq!(
+            qsl_shortage,
+            Incomplete {
+                limit_kind: LimitKind::WorkUnits,
+                limit: runtime_work + 1,
+                consumed: runtime_work + 1,
+                next_charge: Integer::from(1_u64),
+                charge_point: point,
+            }
         );
         assert_meter_agreement(&qsl_meter, &runtime_meter);
-        assert_eq!(runtime_meter.consumed(LimitKind::ResultUnits), 0);
+        assert_eq!(
+            runtime_meter.admitted_charges(),
+            &complete_charges[..prefix_len],
+            "T11 stops at the authored prefix"
+        );
+        for kind in LimitKind::ALL {
+            let expected = match kind {
+                LimitKind::TextInputBytes => 5,
+                LimitKind::TextScalars => 3,
+                LimitKind::NormalizedScalars => normalized,
+                LimitKind::ValueOccurrences => 2,
+                LimitKind::WorkUnits => runtime_work,
+                _ => 0,
+            };
+            assert_eq!(
+                runtime_meter.consumed(kind),
+                expected,
+                "T11 {point:?} {kind:?}"
+            );
+        }
     }
 }
 
@@ -826,7 +867,16 @@ fn tc186_t16_admission_limit_precedence_is_exact() {
         work_units: 1,
         ..base
     };
-    for (payload, profile, limits, expected_points, denied, expected) in [
+    for (
+        payload,
+        profile,
+        limits,
+        expected_points,
+        denied,
+        expected,
+        denied_points,
+        denied_nonzero,
+    ) in [
         (
             &decomposed,
             TextProfile::Nfd,
@@ -849,6 +899,19 @@ fn tc186_t16_admission_limit_precedence_is_exact() {
                 next_charge: Integer::from(2_u64),
                 charge_point: ChargePoint::TextNormalizeOutput,
             },
+            &[
+                ChargePoint::TextInputBytes,
+                ChargePoint::TextDecodeScalars,
+                ChargePoint::TextNormalizeInput,
+                ChargePoint::TextNormalizeOutput,
+            ][..],
+            &[
+                (LimitKind::TextInputBytes, 3),
+                (LimitKind::TextScalars, 2),
+                (LimitKind::NormalizedScalars, 1),
+                (LimitKind::ValueOccurrences, 1),
+                (LimitKind::WorkUnits, 4),
+            ][..],
         ),
         (
             &decomposed,
@@ -866,6 +929,12 @@ fn tc186_t16_admission_limit_precedence_is_exact() {
                 next_charge: Integer::from(2_u64),
                 charge_point: ChargePoint::TextDecodeScalars,
             },
+            &[ChargePoint::TextInputBytes][..],
+            &[
+                (LimitKind::TextInputBytes, 3),
+                (LimitKind::ValueOccurrences, 1),
+                (LimitKind::WorkUnits, 1),
+            ][..],
         ),
         (
             &composed,
@@ -883,6 +952,8 @@ fn tc186_t16_admission_limit_precedence_is_exact() {
                 next_charge: Integer::from(2_u64),
                 charge_point: ChargePoint::TextInputBytes,
             },
+            &[][..],
+            &[][..],
         ),
     ] {
         let mut meter = Meter::new(limits);
@@ -896,10 +967,29 @@ fn tc186_t16_admission_limit_precedence_is_exact() {
             .map(|charge| charge.point)
             .collect();
         assert_eq!(points.as_slice(), expected_points);
-        assert!(matches!(
-            admit(payload, (1, 1), profile, &mut Meter::new(denied)),
-            Outcome::Incomplete(record) if record == expected
-        ));
+        let mut denied_meter = Meter::new(denied);
+        let denied_outcome = admit(payload, (1, 1), profile, &mut denied_meter);
+        let Outcome::Incomplete(record) = denied_outcome else {
+            panic!("T16 one-under admission must stop: {denied_outcome:?}");
+        };
+        assert_eq!(record, expected);
+        let actual_points: Vec<_> = denied_meter
+            .admitted_charges()
+            .iter()
+            .map(|charge| charge.point)
+            .collect();
+        assert_eq!(actual_points.as_slice(), denied_points);
+        for kind in LimitKind::ALL {
+            let expected = denied_nonzero
+                .iter()
+                .find_map(|(candidate, amount)| (*candidate == kind).then_some(*amount))
+                .unwrap_or(0);
+            assert_eq!(
+                denied_meter.consumed(kind),
+                expected,
+                "T16 {profile:?} {kind:?}"
+            );
+        }
     }
 }
 
