@@ -9,11 +9,11 @@ review_set: subset
 
 ## Summary
 
-Ticket: IR-669. Reviewed draft PR #38 at e0099cc against IT-017 and QSpec TC-186. The tests use real checked QSL and runtime paths. Compilation is independently blocked before this test crate by the upstream QSL/quire-eval mismatch IR-1284.
+Ticket: IR-669. Reviewed draft PR #38 against IT-017 and QSpec TC-186. The tests use real checked QSL and runtime paths. The current focused T test binary passes 17 tests. T06b provenance and T09 case/order identity remain ticket-backed partial subcases.
 
 ## Verdict
 
-PASS after round-1 dispositions for the reviewed diff. T06b correctly names its distinct-provenance subcase PENDING IR-1286. Compilation, focused tests, and the final aggregate gate remain blocked by IR-1284; no passing test claim is made.
+CONDITIONAL. Original FND-001 and FND-002 remain fixed. New FND-003 requires the committed review artifacts to state current evidence and remove raw SHAs. The aggregate gate is pending.
 
 ## Findings
 
@@ -22,9 +22,15 @@ PASS after round-1 dispositions for the reviewed diff. T06b correctly names its 
 | FND-001 | medium | T11's two injected-denial checks accept any `Incomplete` record with the named charge point. They do not assert the limit kind, limit, consumed amount, next charge, or full stop prefix, so a wrong shortage record can pass despite the SC-03 trace and QSpec T11's exact-denial obligation. | tests/text_source_agreement.rs:668 |
 | FND-002 | medium | T16 checks the denied `Incomplete` record using a temporary Meter, then discards that meter. The named one-under cases therefore do not assert the admitted charge prefix or consumed counters, so a later or wrong charge sequence can pass the exact-limit test. | tests/text_source_agreement.rs:897 |
 
+## New findings (disposition pass 2)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-003 | medium | The committed code-review and gap-analysis artifacts still state that QSL compilation and focused tests are blocked by IR-1284 and include raw SHA prose, although the current T binary passes all 17 tests. This makes the PR's durable verification record false and violates the repository's no-SHA prose rule. | reviews/SR-16371-ir-669-pr38-code-review.md:12; reviews/SR-16372-ir-669-pr38-gap-analysis.md:12 |
+
 ## Coverage
 
-Examined the full PR diff: Cargo.lock and tests/text_source_agreement.rs. Checked IT-017-SC-01 through SC-05, QSpec TC-186 T01 through T16 (including T05b and T06b), and the changed test dispatch and traces. The exhaustive T-ID route fails for an unknown ID and names IR-1286 for T06b's missing provenance. T09 includes owner, case, and order identity changes. No production API, CI workflow, vendored corpus, or copied fixture changed. Static `git diff --check` and `cargo fmt --all -- --check` passed. Focused compilation and tests are blocked before this test crate by IR-1284 (QSL 1d8893f6 / quire-eval 4e59f729).
+Examined the full PR diff: Cargo.lock, tests/text_source_agreement.rs, and the two review artifacts. Checked IT-017-SC-01 through SC-05 and QSpec TC-186 T01 through T16, including T05b and T06b. The public QSpec table has 18 rows: 16 runnable routes and exact pending routes for T06b (IR-1286) and T09 case/order (IR-1300 / QSL-1574). An unknown ID panics. T09 owner-change executes. No production API, CI workflow, vendored corpus, or copied fixture changed. Static `git diff --check` and `cargo fmt --all -- --check` pass. `cargo test --locked --test text_source_agreement -- --test-threads=1` passes 17 tests; the aggregate gate remains the lead's responsibility.
 
 ## Dispositions
 
@@ -32,3 +38,4 @@ Examined the full PR diff: Cargo.lock and tests/text_source_agreement.rs. Checke
 | --- | --- | --- |
 | FND-001 | fixed | T11 asserts exact QSL/runtime shortage records, the complete admitted-charge prefix, and every consumed counter for each named denial. |
 | FND-002 | fixed | T16 retains the denied meter and asserts exact admitted charge points plus all consumed counters for each one-under case. |
+| FND-003 | still-open | The committed review artifacts have not yet been replaced by the corrected validated reviewer copies. |

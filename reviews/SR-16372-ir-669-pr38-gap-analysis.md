@@ -9,11 +9,11 @@ review_set: subset
 
 ## Summary
 
-Ticket: IR-669. Planless changed-test trace and evidence audit of draft PR #38 at e0099cc. QSpec's public TC-186 rows are dispatched to live tests or the ticket-backed T06b partial route. The metering assertions still overstate what those tests establish.
+Ticket: IR-669. Planless changed-test trace and evidence audit of draft PR #38. QSpec's public TC-186 rows are dispatched to live tests or the ticket-backed T06b and T09 partial routes. The current focused T test binary passes all 17 tests.
 
 ## Verdict
 
-PASS after round-1 dispositions for the reviewed trace and evidence gaps. Compilation and the final gate remain blocked upstream by IR-1284.
+PASS after round-1 dispositions for the reviewed trace and evidence gaps. The aggregate gate remains pending. The committed copy of this artifact still needs refresh to match the current evidence.
 
 ## Findings
 
@@ -23,7 +23,7 @@ PASS after round-1 dispositions for the reviewed trace and evidence gaps. Compil
 
 ## Coverage
 
-Plan completion: not assessed. `quoin matrix --repo ... --json` reported no coverage_matrix criteria because the installed module declares no `obligations:` source. I used a manual trace scan of IT-017-SC-01 through SC-05, QSpec TC-186 T01 through T16, and the changed `#[trace]` tests. T06b's distinct provenance is ticket-backed PENDING IR-1286. No reverse ownership gap, stub, ignored test, vendored fixture, or copied corpus was found in the changed files. Optional semantic review was not separately requested.
+Plan completion: not assessed. `quoin matrix --repo ... --json` reported no coverage_matrix criteria because the installed module declares no `obligations:` source. I used a manual trace scan of IT-017-SC-01 through SC-05, QSpec TC-186 T01 through T16, and the changed `#[trace]` tests. T06b distinct provenance is PENDING IR-1286; T09 case/order identity is PENDING IR-1300 / QSL-1574. Their available value and owner-change portions execute, and the unknown-row route fails closed. No reverse ownership gap, stub, ignored test, vendored fixture, or copied corpus was found in the changed files. Optional semantic review was not separately requested. The focused T test binary passes 17 tests; the aggregate gate is pending.
 
 ## Dispositions
 
