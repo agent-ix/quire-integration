@@ -440,7 +440,10 @@ fn carried_conversion_agreement(
     // A checked call adds exactly one function.call work unit before the
     // scalar conversion. The scalar charge suffix is otherwise identical.
     let qsl_limits = ScalarLimits {
-        work_units: runtime_limits.work_units.saturating_add(1),
+        work_units: runtime_limits
+            .work_units
+            .checked_add(1)
+            .expect("the QSL call needs one additional work unit"),
         ..runtime_limits
     };
     let mut qsl_meter = Meter::new(qsl_limits);
