@@ -273,6 +273,244 @@ fn observed_sqrt(
     (outcome, losses, meter)
 }
 
+fn observed_float_source(
+    function: &str,
+    arguments: Vec<Value>,
+    mut meter: Meter,
+) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\n\
+         profile v = \"quire.value.complete/v1\";\n{function}\n"
+    );
+    let parsed = qsl_cst::parse(
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        "ieee-callable.native",
+        source.as_bytes(),
+        qsl_cst::Limits::default(),
+    )
+    .expect("S1 parses the IEEE callable source");
+    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    let unit = qsl_forms::build_unit(&parsed).expect("S2 builds the IEEE callable source");
+    let mut declarations = PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "ir-669".to_owned(),
+        unit,
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("S3 assembles the IEEE callable source");
+    declarations.ieee_profile = Some(
+        admit_ieee_profile(&[DefinitionRole::IeeeProfile.reference()], &[])
+            .expect("the selected IEEE profile admits"),
+    );
+    let package = CheckedPackage::link(
+        declarations
+            .check(CheckingLimits::default())
+            .expect("S4 checks the IEEE callable source"),
+    );
+    let evaluation = package
+        .call(
+            &QualifiedName::unqualified("f").expect("f is an identifier"),
+            arguments,
+            &ObjectEnvironment::default(),
+            &mut meter,
+        )
+        .expect("S6a calls the checked IEEE callable");
+    let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
+        panic!(
+            "QSL did not reach IEEE callable evaluation: {:?}",
+            evaluation.outcome
+        );
+    };
+    let losses = evaluation
+        .losses
+        .into_iter()
+        .map(|loss| loss.loss)
+        .collect();
+    (outcome, losses, meter)
+}
+
+fn assert_scalar_charge_suffix(id: &str, qsl: &Meter, runtime: &Meter) {
+    assert_eq!(
+        qsl.admitted_charges()[0].point,
+        ChargePoint::FunctionCall,
+        "{id}"
+    );
+    assert_eq!(
+        &qsl.admitted_charges()[1..],
+        runtime.admitted_charges(),
+        "{id}"
+    );
+    for counter in LimitKind::ALL {
+        let envelope = u64::from(counter == LimitKind::WorkUnits);
+        assert_eq!(
+            qsl.consumed(counter),
+            runtime.consumed(counter) + envelope,
+            "{id} {counter:?}"
+        );
+    }
+}
+
+fn assert_fma_agreement(id: &str, inputs: [u32; 3], expected_bits: u32, expected_flags: IeeeFlags) {
+    let function = "function f using v(a: Float32[nearest-even], b: Float32[nearest-even], \
+                    c: Float32[nearest-even]): Float32[nearest-even] pure \
+                    { quire::value::ieee::fma(a, b, c) }";
+    let operands = inputs.map(IeeeValue::binary32);
+    let (qsl, losses, qsl_meter) = observed_float_source(
+        function,
+        operands.into_iter().map(Value::Float).collect(),
+        Meter::new(LIMITS),
+    );
+    let mut runtime_meter = Meter::new(LIMITS);
+    let runtime = evaluate_ieee(
+        IeeeOperation::FusedMultiplyAdd(operands[0], operands[1], operands[2]),
+        RoundingMode::NearestEven,
+        &mut runtime_meter,
+    )
+    .expect("binary32 FMA operands type-check");
+    let (Outcome::Completed(Value::Float(qsl_value)), Outcome::Completed(runtime_value)) =
+        (qsl, runtime)
+    else {
+        panic!("{id} FMA must complete on both sides");
+    };
+    assert_eq!(qsl_value, runtime_value.value(), "{id} FMA bits agree");
+    assert_eq!(
+        qsl_value.bits(),
+        u64::from(expected_bits),
+        "{id} QSpec bits"
+    );
+    assert_eq!(runtime_value.flags(), expected_flags, "{id} QSpec flags");
+    if expected_flags.is_empty() {
+        assert!(losses.is_empty(), "{id} QSL flags");
+    } else {
+        assert_eq!(losses, vec![ValueLoss::IeeeFlags(expected_flags)]);
+    }
+    assert_scalar_charge_suffix(id, &qsl_meter, &runtime_meter);
+}
+
+fn float_type(width: IeeeWidth) -> &'static str {
+    match width {
+        IeeeWidth::Binary32 => "Float32[nearest-even]",
+        IeeeWidth::Binary64 => "Float64[nearest-even]",
+    }
+}
+
+fn assert_intrinsic_comparison(
+    id: &str,
+    left: IeeeValue,
+    right: IeeeValue,
+    comparison: IeeeComparison,
+    expected: bool,
+) {
+    assert_eq!(left.width(), right.width(), "{id} selected width");
+    let intrinsic = match comparison {
+        IeeeComparison::NumericEqual => "numericEqual",
+        IeeeComparison::TotalOrder => "totalOrder",
+        IeeeComparison::BitIdentical => "bitIdentical",
+    };
+    let ty = float_type(left.width());
+    let function = format!(
+        "function f using v(a: {ty}, b: {ty}): Boolean pure \
+         {{ quire::value::ieee::{intrinsic}(a, b) }}"
+    );
+    let (qsl, losses, qsl_meter) = observed_float_source(
+        &function,
+        vec![Value::Float(left), Value::Float(right)],
+        Meter::new(LIMITS),
+    );
+    let mut runtime_meter = Meter::new(LIMITS);
+    let runtime = compare_ieee(comparison, left, right, &mut runtime_meter)
+        .expect("same-width IEEE comparison type-checks");
+    let (Outcome::Completed(Value::Boolean(qsl_value)), Outcome::Completed(runtime_value)) =
+        (qsl, runtime)
+    else {
+        panic!("{id} intrinsic comparison must complete on both sides");
+    };
+    assert_eq!(qsl_value, runtime_value, "{id} two-sided comparison");
+    assert_eq!(qsl_value, expected, "{id} QSpec result");
+    assert!(losses.is_empty(), "{id} comparison has no IEEE flag");
+    assert_scalar_charge_suffix(id, &qsl_meter, &runtime_meter);
+}
+
+#[derive(Clone, Copy, Debug)]
+enum FloatRelation {
+    Equal,
+    NotEqual,
+    Less,
+    LessOrEqual,
+    Greater,
+    GreaterOrEqual,
+}
+
+impl FloatRelation {
+    fn symbol(self) -> &'static str {
+        match self {
+            Self::Equal => "=",
+            Self::NotEqual => "!=",
+            Self::Less => "<",
+            Self::LessOrEqual => "<=",
+            Self::Greater => ">",
+            Self::GreaterOrEqual => ">=",
+        }
+    }
+}
+
+fn assert_float_relation(
+    id: &str,
+    left: IeeeValue,
+    right: IeeeValue,
+    relation: FloatRelation,
+    expected: bool,
+) {
+    assert_eq!(left.width(), right.width(), "{id} selected width");
+    let ty = float_type(left.width());
+    let symbol = relation.symbol();
+    let function = format!("function f using v(a: {ty}, b: {ty}): Boolean pure {{ a {symbol} b }}");
+    let (qsl, losses, _qsl_meter) = observed_float_source(
+        &function,
+        vec![Value::Float(left), Value::Float(right)],
+        Meter::new(LIMITS),
+    );
+    let Outcome::Completed(Value::Boolean(qsl_value)) = qsl else {
+        panic!("{id} Float relation must complete: {qsl:?}");
+    };
+    let mut equality_meter = Meter::new(LIMITS);
+    let equality = compare_ieee(
+        IeeeComparison::NumericEqual,
+        left,
+        right,
+        &mut equality_meter,
+    )
+    .expect("same-width IEEE equality type-checks");
+    let Outcome::Completed(equal) = equality else {
+        panic!("{id} runtime equality must complete: {equality:?}");
+    };
+    let mut order_meter = Meter::new(LIMITS);
+    let forward = compare_ieee(IeeeComparison::TotalOrder, left, right, &mut order_meter)
+        .expect("same-width IEEE order type-checks");
+    let Outcome::Completed(forward) = forward else {
+        panic!("{id} runtime order must complete: {forward:?}");
+    };
+    let mut reverse_meter = Meter::new(LIMITS);
+    let reverse = compare_ieee(IeeeComparison::TotalOrder, right, left, &mut reverse_meter)
+        .expect("same-width IEEE reverse order type-checks");
+    let Outcome::Completed(reverse) = reverse else {
+        panic!("{id} runtime reverse order must complete: {reverse:?}");
+    };
+    let ordinary = !left.is_nan() && !right.is_nan();
+    let runtime_value = match relation {
+        FloatRelation::Equal => equal,
+        FloatRelation::NotEqual => !equal,
+        FloatRelation::Less => ordinary && forward && !equal,
+        FloatRelation::LessOrEqual => ordinary && (forward || equal),
+        FloatRelation::Greater => ordinary && reverse && !equal,
+        FloatRelation::GreaterOrEqual => ordinary && (reverse || equal),
+    };
+    assert_eq!(qsl_value, runtime_value, "{id} QSL versus RT relation");
+    assert_eq!(qsl_value, expected, "{id} QSpec relation");
+    assert!(losses.is_empty(), "{id} relation has no IEEE flag");
+}
+
 fn checked_add(left: u32, right: u32, mode: RoundingMode) -> (IeeeValue, IeeeFlags, Meter) {
     let (outcome, losses, meter) = observed_add(
         IeeeValue::binary32(left),
@@ -1083,6 +1321,8 @@ fn tc193_f20_admission_refusals_have_no_charge() {
     let right = operands[1];
     for function in [
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Boolean pure { a = b }",
+        "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Boolean pure { quire::value::ieee::totalOrder(a, b) }",
+        "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Boolean pure { quire::value::ieee::bitIdentical(a, b) }",
         "function f using v(a: Float32[nearest-even], b: Float64[nearest-even]): Float32[nearest-even] pure { a + b }",
         "function f using v(a: Float32[nearest-even], b: Int[0,1]): Float32[nearest-even] pure { a + b }",
         "function f using v(a: Float32[nearest-even]): Decimal[0,10;0,0] pure { convert<Decimal[0,10;0,0]>(a) }",
@@ -1091,14 +1331,16 @@ fn tc193_f20_admission_refusals_have_no_charge() {
         assert_f20_source_admission_refusal(function);
     }
     let mut meter = Meter::new(ieee_limits(0, 0, 0, 0));
-    let comparison = compare_ieee(
-        IeeeComparison::NumericEqual,
-        IeeeValue::binary32(left),
-        IeeeValue::binary64(right),
-        &mut meter,
-    )
-    .expect_err("mixed-width numericEqual refuses before evaluation");
-    assert_eq!(comparison.cause, IllTypedCause::DistinctIeeeWidths);
+    for comparison in IeeeComparison::ALL {
+        let refusal = compare_ieee(
+            comparison,
+            IeeeValue::binary32(left),
+            IeeeValue::binary64(right),
+            &mut meter,
+        )
+        .expect_err("mixed-width IEEE comparison refuses before evaluation");
+        assert_eq!(refusal.cause, IllTypedCause::DistinctIeeeWidths);
+    }
     let runtime = evaluate_ieee(
         IeeeOperation::Add(IeeeValue::binary32(left), IeeeValue::binary64(right)),
         RoundingMode::NearestEven,
@@ -1599,6 +1841,258 @@ fn tc193_f15_f16_subnormal_multiplication_agrees() {
     );
 }
 
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn tc193_f04b_f11_fma_agrees_with_runtime_and_separate_rounding() {
+    let f04b = selected_vector("F04b");
+    let f04b_inputs = hex_bits(f04b.inputs);
+    let [_, _, fma_a, fma_b, fma_c] = f04b_inputs.as_slice() else {
+        panic!("F04b supplies ADD then three FMA operands");
+    };
+    assert_eq!(hex_bits(f04b.expected), [0x7fc0_0012, 0x7fc0_0012]);
+    assert_fma_agreement(
+        "F04b FMA",
+        [*fma_a, *fma_b, *fma_c],
+        0x7fc0_0012,
+        [IeeeFlag::Invalid].into_iter().collect(),
+    );
+
+    let f11 = selected_vector("F11");
+    let inputs = hex_bits(f11.inputs);
+    let [a, b, c] = inputs.as_slice() else {
+        panic!("F11 supplies three FMA operands");
+    };
+    assert_eq!(hex_bits(f11.expected), [0xa880_0000, 0x0000_0000]);
+    assert_fma_agreement("F11 fused", [*a, *b, *c], 0xa880_0000, IeeeFlags::EMPTY);
+
+    let function = "function f using v(a: Float32[nearest-even], b: Float32[nearest-even], \
+                    c: Float32[nearest-even]): Float32[nearest-even] pure { a * b + c }";
+    let a = IeeeValue::binary32(*a);
+    let b = IeeeValue::binary32(*b);
+    let c = IeeeValue::binary32(*c);
+    let (qsl, losses, qsl_meter) = observed_float_source(
+        function,
+        vec![Value::Float(a), Value::Float(b), Value::Float(c)],
+        Meter::new(LIMITS),
+    );
+    let mut runtime_meter = Meter::new(LIMITS);
+    let product = evaluate_ieee(
+        IeeeOperation::Multiply(a, b),
+        RoundingMode::NearestEven,
+        &mut runtime_meter,
+    )
+    .expect("binary32 product type-checks");
+    let Outcome::Completed(product) = product else {
+        panic!("F11 separate product must complete");
+    };
+    let sum = evaluate_ieee(
+        IeeeOperation::Add(product.value(), c),
+        RoundingMode::NearestEven,
+        &mut runtime_meter,
+    )
+    .expect("binary32 sum type-checks");
+    let (Outcome::Completed(Value::Float(qsl_value)), Outcome::Completed(sum)) = (qsl, sum) else {
+        panic!("F11 separate path must complete on both sides");
+    };
+    assert_eq!(qsl_value, sum.value(), "F11 separate two-sided bits");
+    assert_eq!(qsl_value.bits(), 0, "F11 separate QSpec bits");
+    let runtime_losses: Vec<_> = [product.flags(), sum.flags()]
+        .into_iter()
+        .filter(|flags| !flags.is_empty())
+        .map(ValueLoss::IeeeFlags)
+        .collect();
+    assert_eq!(losses, runtime_losses, "F11 separate flags");
+    assert_scalar_charge_suffix("F11 separate", &qsl_meter, &runtime_meter);
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn tc193_f05_infinities_and_finite_extrema_agree() {
+    let row = selected_vector("F05");
+    // Branch-gating QSpec prose: the selected comparison class must stay authored.
+    assert!(row.inputs.contains("infinity"));
+    assert!(row.inputs.contains("finite extrema"));
+    for (low, high) in [
+        (0xff80_0000, 0xff7f_ffff),
+        (0xff7f_ffff, 0x7f7f_ffff),
+        (0x7f7f_ffff, 0x7f80_0000),
+    ] {
+        let low = IeeeValue::binary32(low);
+        let high = IeeeValue::binary32(high);
+        assert_float_relation("F05 less", low, high, FloatRelation::Less, true);
+        assert_float_relation(
+            "F05 less-or-equal",
+            low,
+            high,
+            FloatRelation::LessOrEqual,
+            true,
+        );
+        assert_float_relation("F05 reverse less", high, low, FloatRelation::Less, false);
+        assert_intrinsic_comparison(
+            "F05 total order",
+            low,
+            high,
+            IeeeComparison::TotalOrder,
+            true,
+        );
+        assert_intrinsic_comparison(
+            "F05 numeric inequality",
+            low,
+            high,
+            IeeeComparison::NumericEqual,
+            false,
+        );
+    }
+    let positive_infinity = IeeeValue::binary32(0x7f80_0000);
+    let negative_infinity = IeeeValue::binary32(0xff80_0000);
+    assert_intrinsic_comparison(
+        "F05 infinity self identity",
+        positive_infinity,
+        positive_infinity,
+        IeeeComparison::BitIdentical,
+        true,
+    );
+    assert_intrinsic_comparison(
+        "F05 infinity sign identity",
+        positive_infinity,
+        negative_infinity,
+        IeeeComparison::BitIdentical,
+        false,
+    );
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02")]
+#[test]
+fn tc193_f34_float_relations_agree_at_both_widths() {
+    let row = selected_vector("F34");
+    let binary64 = hex_bits64(row.inputs);
+    assert_eq!(binary64.len(), 6, "F34 names six binary64 roles");
+    for (p0, n0, one, pinf, qnan, snan) in [
+        (
+            IeeeValue::binary64(binary64[0]),
+            IeeeValue::binary64(binary64[1]),
+            IeeeValue::binary64(binary64[2]),
+            IeeeValue::binary64(binary64[3]),
+            IeeeValue::binary64(binary64[4]),
+            IeeeValue::binary64(binary64[5]),
+        ),
+        (
+            IeeeValue::binary32(0x0000_0000),
+            IeeeValue::binary32(0x8000_0000),
+            IeeeValue::binary32(0x3f80_0000),
+            IeeeValue::binary32(0x7f80_0000),
+            IeeeValue::binary32(0x7fc0_0000),
+            IeeeValue::binary32(0x7f80_0001),
+        ),
+    ] {
+        for (left, relation, right, expected) in [
+            (n0, FloatRelation::Equal, p0, true),
+            (n0, FloatRelation::Less, p0, false),
+            (n0, FloatRelation::LessOrEqual, p0, true),
+            (p0, FloatRelation::GreaterOrEqual, n0, true),
+            (p0, FloatRelation::Greater, n0, false),
+            (one, FloatRelation::Less, pinf, true),
+            (qnan, FloatRelation::Equal, qnan, false),
+            (qnan, FloatRelation::NotEqual, qnan, true),
+            (qnan, FloatRelation::NotEqual, one, true),
+            (qnan, FloatRelation::Less, one, false),
+            (qnan, FloatRelation::LessOrEqual, one, false),
+            (one, FloatRelation::Greater, qnan, false),
+            (one, FloatRelation::GreaterOrEqual, qnan, false),
+            (snan, FloatRelation::Less, one, false),
+            (snan, FloatRelation::Equal, snan, false),
+            (pinf, FloatRelation::Equal, pinf, true),
+            (pinf, FloatRelation::LessOrEqual, pinf, true),
+        ] {
+            assert_float_relation("F34", left, right, relation, expected);
+        }
+    }
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn tc193_f01_f02_f02b_order_and_identity_agree() {
+    let f01 = selected_vector("F01");
+    let f01_bits = hex_bits(f01.inputs);
+    let [positive_zero, negative_zero] = f01_bits.as_slice() else {
+        panic!("F01 supplies two binary32 zeros");
+    };
+    let positive_zero = IeeeValue::binary32(*positive_zero);
+    let negative_zero = IeeeValue::binary32(*negative_zero);
+    assert_intrinsic_comparison(
+        "F01 signed-zero identity",
+        negative_zero,
+        positive_zero,
+        IeeeComparison::BitIdentical,
+        false,
+    );
+    assert_intrinsic_comparison(
+        "F01 signed-zero order",
+        negative_zero,
+        positive_zero,
+        IeeeComparison::TotalOrder,
+        true,
+    );
+    assert_intrinsic_comparison(
+        "F01 reverse signed-zero order",
+        positive_zero,
+        negative_zero,
+        IeeeComparison::TotalOrder,
+        false,
+    );
+
+    let f02 = selected_vector("F02");
+    let f02_bits = hex_bits(f02.inputs);
+    let [first_nan, second_nan] = f02_bits.as_slice() else {
+        panic!("F02 supplies two qNaNs");
+    };
+    let first_nan = IeeeValue::binary32(*first_nan);
+    let second_nan = IeeeValue::binary32(*second_nan);
+    assert_intrinsic_comparison(
+        "F02 self bit identity",
+        first_nan,
+        first_nan,
+        IeeeComparison::BitIdentical,
+        true,
+    );
+    assert_intrinsic_comparison(
+        "F02 payload order",
+        first_nan,
+        second_nan,
+        IeeeComparison::TotalOrder,
+        true,
+    );
+    assert_intrinsic_comparison(
+        "F02 reverse payload order",
+        second_nan,
+        first_nan,
+        IeeeComparison::TotalOrder,
+        false,
+    );
+
+    let f02b = selected_vector("F02b");
+    let f02b_bits = hex_bits(f02b.inputs);
+    let [negative_two, negative_one, signaling, quiet] = f02b_bits.as_slice() else {
+        panic!("F02b supplies two negative qNaNs and a signaling/quiet pair");
+    };
+    for (low, high) in [(*negative_two, *negative_one), (*signaling, *quiet)] {
+        assert_intrinsic_comparison(
+            "F02b authored NaN order",
+            IeeeValue::binary32(low),
+            IeeeValue::binary32(high),
+            IeeeComparison::TotalOrder,
+            true,
+        );
+        assert_intrinsic_comparison(
+            "F02b reverse NaN order",
+            IeeeValue::binary32(high),
+            IeeeValue::binary32(low),
+            IeeeComparison::TotalOrder,
+            false,
+        );
+    }
+}
+
 enum FCase {
     Runnable(fn()),
     Pending {
@@ -1613,32 +2107,31 @@ enum FCase {
     },
 }
 
+fn run_f01_f02_available() {
+    tc193_f01_f02_numeric_equal_values_agree();
+    tc193_f01_f02_f02b_order_and_identity_agree();
+}
+
+fn run_f04b_add_and_fma() {
+    tc193_selected_add_rows_agree_from_checked_source_to_runtime();
+    tc193_f04b_f11_fma_agrees_with_runtime_and_separate_rounding();
+}
+
 fn f_case(id: &str) -> FCase {
     // Branch-gating QSpec F-ID dispatch: an unknown or newly authored ID fails closed.
     match id {
         "F01" | "F02" => FCase::Partial {
-            run: tc193_f01_f02_numeric_equal_values_agree,
-            ticket: "IR-1282 / QSL-1388",
-            subcase: "numeric equality metering / bit identity and total ordering",
+            run: run_f01_f02_available,
+            ticket: "IR-1282",
+            subcase: "numeric equality metering",
             blocked_assertion: Some(tc193_f01_f02_numeric_equal_charges_agree_after_ir1282),
         },
-        "F02b" => FCase::Pending {
-            ticket: "QSL-1388",
-            subcase: "negative NaN and signaling/quiet total ordering",
-        },
+        "F02b" => FCase::Runnable(tc193_f01_f02_f02b_order_and_identity_agree),
         "F03" | "F04" => {
             FCase::Runnable(tc193_selected_add_rows_agree_from_checked_source_to_runtime)
         }
-        "F04b" => FCase::Partial {
-            run: tc193_selected_add_rows_agree_from_checked_source_to_runtime,
-            ticket: "QSL-1388",
-            subcase: "FMA leg after runnable ADD leg",
-            blocked_assertion: None,
-        },
-        "F05" => FCase::Pending {
-            ticket: "QSL-1388",
-            subcase: "Float ordering, total ordering, and bit identity",
-        },
+        "F04b" => FCase::Runnable(run_f04b_add_and_fma),
+        "F05" => FCase::Runnable(tc193_f05_infinities_and_finite_extrema_agree),
         "F06" => FCase::Runnable(tc193_f06_cross_width_comparison_refuses_before_evaluation),
         "F07" | "F08" => {
             FCase::Runnable(tc193_f07_f08_rounding_modes_agree_from_checked_source_to_runtime)
@@ -1647,10 +2140,7 @@ fn f_case(id: &str) -> FCase {
             FCase::Runnable(tc193_f09_f14_f23_f29_exact_refusal_and_rounding_agree)
         }
         "F10" => FCase::Runnable(tc193_f10_binary64_rounding_agrees),
-        "F11" => FCase::Pending {
-            ticket: "QSL-1388",
-            subcase: "fused multiply-add",
-        },
+        "F11" => FCase::Runnable(tc193_f04b_f11_fma_agrees_with_runtime_and_separate_rounding),
         "F12" => FCase::Runnable(tc193_f12_invalid_arithmetic_agrees_in_every_mode),
         "F13" => FCase::Runnable(tc193_f13_division_flags_are_operation_local),
         "F15" | "F16" => FCase::Runnable(tc193_f15_f16_subnormal_multiplication_agrees),
@@ -1664,12 +2154,7 @@ fn f_case(id: &str) -> FCase {
         },
         "F18" | "F21" | "F22" => FCase::Runnable(tc193_f18_f21_f22_metered_arithmetic_agrees),
         "F19" | "F30" => FCase::Runnable(tc193_f19_f30_square_root_named_charges_agree),
-        "F20" => FCase::Partial {
-            run: tc193_f20_admission_refusals_have_no_charge,
-            ticket: "QSL-1388",
-            subcase: "totalOrder and bitIdentical admission",
-            blocked_assertion: None,
-        },
+        "F20" => FCase::Runnable(tc193_f20_admission_refusals_have_no_charge),
         "F24" | "F25" | "F27" | "F28" | "F31" | "F32" | "F33" => FCase::Pending {
             ticket: "IR-1283",
             subcase: "IEEE conversion or negation source and evaluation path",
@@ -1680,10 +2165,7 @@ fn f_case(id: &str) -> FCase {
             subcase: "signed-zero width conversion",
             blocked_assertion: None,
         },
-        "F34" => FCase::Pending {
-            ticket: "IR-1282 / QSL-1388",
-            subcase: "metered equality and Float ordering",
-        },
+        "F34" => FCase::Runnable(tc193_f34_float_relations_agree_at_both_widths),
         other => panic!("unrouted QSpec TC-193 F vector {other}"),
     }
 }
