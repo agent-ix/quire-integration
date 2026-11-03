@@ -171,14 +171,14 @@ impl Upstream for ExportVector {
 
     fn negotiate(
         &self,
-        admitted: &CheckedPackageV2,
+        source: &CheckedPackageV2,
         package: &ContractPackageV1,
         positions: &[ContractRequestPosition],
         envelope: &BackendProviderEnvelope,
     ) -> Result<Vec<ContractItemSettlement>, Box<ContractNegotiationError>> {
         *self.envelope.borrow_mut() = Some(envelope.clone());
         *self.positions.borrow_mut() = Some(positions.to_vec());
-        QslCg.negotiate(admitted, package, positions, envelope)
+        QslCg.negotiate(source, package, positions, envelope)
     }
 
     fn route<'d>(&self, dispositions: &'d [Disposition]) -> Vec<Option<&'d Candidate>> {
@@ -187,13 +187,13 @@ impl Upstream for ExportVector {
 
     fn generate(
         &self,
-        admitted: &CheckedPackageV2,
+        source: &CheckedPackageV2,
         package: &ContractPackageV1,
         positions: &[ContractRequestPosition],
         routed: &[RoutedGenerationItem],
         contexts: &GenerationContexts<'_>,
     ) -> Result<RoutedGeneration, RoutedGenerationError> {
-        QslCg.generate(admitted, package, positions, routed, contexts)
+        QslCg.generate(source, package, positions, routed, contexts)
     }
 }
 
