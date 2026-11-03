@@ -1356,7 +1356,7 @@ dependencies = [
 [[package]]
 name = "qsl-route"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#b992dc74d08e696392cbc10d2c4cc444c41148e3"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#047450762797109aa62850845dbc98c0ed4f9b67"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1606,7 +1606,7 @@ dependencies = [
 [[package]]
 name = "quire-spec-language"
 version = "0.2.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#b992dc74d08e696392cbc10d2c4cc444c41148e3"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#047450762797109aa62850845dbc98c0ed4f9b67"
 dependencies = [
  "ix-trace-rs",
  "logos",
