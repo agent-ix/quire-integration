@@ -13,7 +13,7 @@ Ticket: IR-669. Reviewed draft PR #38 against IT-017 and QSpec TC-186. The tests
 
 ## Verdict
 
-CONDITIONAL. Original FND-001 and FND-002 remain fixed. New FND-003 requires the committed review artifacts to state current evidence and remove raw SHAs. The aggregate gate is pending.
+PASS for the scoped PR review. FND-001, FND-002, and FND-003 are fixed. The aggregate gate remains the lead's responsibility.
 
 ## Findings
 
@@ -38,4 +38,4 @@ Examined the full PR diff: Cargo.lock, tests/text_source_agreement.rs, and the t
 | --- | --- | --- |
 | FND-001 | fixed | T11 asserts exact QSL/runtime shortage records, the complete admitted-charge prefix, and every consumed counter for each named denial. |
 | FND-002 | fixed | T16 retains the denied meter and asserts exact admitted charge points plus all consumed counters for each one-under case. |
-| FND-003 | still-open | The committed review artifacts have not yet been replaced by the corrected validated reviewer copies. |
+| FND-003 | fixed | Both committed review artifacts now state the current focused test evidence, retain the exact pending T06b and T09 routes, and contain no raw SHA prose. |

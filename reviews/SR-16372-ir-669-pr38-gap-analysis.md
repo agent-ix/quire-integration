@@ -13,7 +13,7 @@ Ticket: IR-669. Planless changed-test trace and evidence audit of draft PR #38. 
 
 ## Verdict
 
-PASS after round-1 dispositions for the reviewed trace and evidence gaps. The aggregate gate remains pending. The committed copy of this artifact still needs refresh to match the current evidence.
+PASS after round-1 dispositions for the reviewed trace and evidence gaps. The focused T test binary passes all 17 tests. The aggregate gate remains pending.
 
 ## Findings
 
