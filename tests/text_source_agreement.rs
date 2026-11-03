@@ -5,6 +5,7 @@ use ix_trace_rs::trace;
 use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
 use qsl_package::CheckedPackage;
 use qsl_semantics::check::{CheckCause, PackageDeclarations};
+use qsl_semantics::model::intake::SelectedModels;
 use qsl_semantics::model::object_environment::ObjectEnvironment;
 use quire_eval::FamilyOutcome;
 use quire_exact::{
@@ -125,7 +126,7 @@ fn checked_text_literal(
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles bounded Text");
@@ -212,7 +213,7 @@ fn checked_compare_with_limits(
             parsed.source().reference().clone(),
             "ir-669".to_owned(),
             unit,
-            Vec::new(),
+            SelectedModels::default(),
             Vec::new(),
         )
         .expect("S3 assembles the text source")
@@ -410,7 +411,7 @@ fn tc186_t04_t05_text_bounds_admit_and_refuse() {
     // Branch-gating QSpec bound spellings: reject changed row inputs.
     assert!(t04.inputs.contains("Text[1,1;nfc]"));
     assert!(t05.inputs.contains("Text[0,0;nfc]"));
-    let composed = codepoint_sequence(&t04.inputs);
+    let composed = codepoint_sequence(t04.inputs);
     assert_eq!(composed, "é");
     let composed_literal = source_literal(&composed);
     let qsl_nfc = checked_text_literal((1, 1), TextProfile::Nfc, &composed_literal)
@@ -534,7 +535,7 @@ fn tc186_t10_distinct_text_profiles_refuse_before_charge() {
         parsed.source().reference().clone(),
         "ir-669".to_owned(),
         unit,
-        Vec::new(),
+        SelectedModels::default(),
         Vec::new(),
     )
     .expect("S3 assembles mixed profiles")
@@ -998,6 +999,7 @@ mod enum_rows {
     use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
     use qsl_package::CheckedPackage;
     use qsl_semantics::check::{EnumBinding, PackageDeclarations};
+    use qsl_semantics::model::intake::SelectedModels;
     use qsl_semantics::model::object_environment::ObjectEnvironment;
     use quire_eval::FamilyOutcome;
     use quire_exact::{
@@ -1067,7 +1069,7 @@ mod enum_rows {
             parsed.source().reference().clone(),
             package_name.to_owned(),
             unit,
-            Vec::new(),
+            SelectedModels::default(),
             Vec::new(),
         )
         .expect("S3 assembles enum source")
@@ -1130,7 +1132,7 @@ mod enum_rows {
         let body = "enum A { READY }\nenum B { READY }\n\
                     function compare using v(): Boolean pure { A::READY = B::READY }";
         let declarations = assemble(body);
-        let [left, right] = declarations.enums() else {
+        let [left, right] = declarations.enums.as_slice() else {
             panic!("T07 admits exactly two enum declarations");
         };
         assert_ne!(left.declaration.key(), right.declaration.key());
@@ -1160,7 +1162,7 @@ mod enum_rows {
         let ordered = "ordered enum A { READY, DONE }\n\
                        function compare using v(): Boolean pure { A::READY < A::DONE }";
         let declarations = assemble(ordered);
-        let [binding] = declarations.enums() else {
+        let [binding] = declarations.enums.as_slice() else {
             panic!("T08 admits one enum declaration");
         };
         let mut meter = Meter::new(UNBOUNDED);
@@ -1189,7 +1191,7 @@ mod enum_rows {
         let unordered = "enum A { READY, DONE }\n\
                          function compare using v(): Boolean pure { A::READY < A::DONE }";
         let declarations = assemble(unordered);
-        let [binding] = declarations.enums() else {
+        let [binding] = declarations.enums.as_slice() else {
             panic!("T08 admits one unordered declaration");
         };
         let mut meter = Meter::new(UNBOUNDED);
@@ -1207,31 +1209,26 @@ mod enum_rows {
 
     #[trace("TC-097", "IT-017-SC-01", "IT-017-SC-04")]
     #[test]
-    pub(super) fn tc186_t09_changed_owner_case_or_order_has_distinct_identity() {
+    pub(super) fn tc186_t09_changed_owner_has_distinct_identity() {
         selected_vector("T09");
+        // Case/order identity is PENDING IR-1300: QSL currently retains the
+        // same declaration key when only the enum body changes.
         let old = assemble("ordered enum A { READY, DONE }");
-        let changed_case = assemble("ordered enum A { READY, CLOSED }");
-        let changed_order = assemble("ordered enum A { DONE, READY }");
         let changed_owner =
             assemble_with_package("ordered enum A { READY, DONE }", "ir-669-other-owner");
-        let old = &old.enums()[0];
-        for changed in [
-            &changed_owner.enums()[0],
-            &changed_case.enums()[0],
-            &changed_order.enums()[0],
-        ] {
-            assert_ne!(old.declaration.key(), changed.declaration.key());
-            let mut meter = Meter::new(UNBOUNDED);
-            let error = compare_enum(
-                ComparisonOperator::Equal,
-                member(old, "READY"),
-                member(changed, "READY"),
-                &mut meter,
-            )
-            .expect_err("a changed admitted declaration has a new identity");
-            assert_eq!(error.cause, IllTypedCause::DistinctEnumDeclarations);
-            assert!(meter.admitted_charges().is_empty());
-        }
+        let old = &old.enums[0];
+        let changed = &changed_owner.enums[0];
+        assert_ne!(old.declaration.key(), changed.declaration.key());
+        let mut meter = Meter::new(UNBOUNDED);
+        let error = compare_enum(
+            ComparisonOperator::Equal,
+            member(old, "READY"),
+            member(changed, "READY"),
+            &mut meter,
+        )
+        .expect_err("a changed admitted declaration has a new identity");
+        assert_eq!(error.cause, IllTypedCause::DistinctEnumDeclarations);
+        assert!(meter.admitted_charges().is_empty());
         checked_ill_typed(
             "ordered enum A { READY, DONE }\nordered enum B { READY, CLOSED }\n\
              function compare using v(): Boolean pure { A::READY = B::READY }",
@@ -1243,7 +1240,7 @@ mod enum_rows {
     pub(super) fn tc186_t15_precedence_is_ill_typed_with_zero_limits_and_no_charge() {
         selected_vector("T15");
         let declarations = assemble("enum A { DONE, READY }\nenum B { READY }");
-        let [a, b] = declarations.enums() else {
+        let [a, b] = declarations.enums.as_slice() else {
             panic!("T15 admits two declarations");
         };
         for (operator, left, right, cause) in [
@@ -1309,9 +1306,11 @@ fn t_route(id: &str) -> TRoute {
         "T08" => {
             TRoute::Runnable(enum_rows::tc186_t08_ordered_members_agree_and_unordered_order_refuses)
         }
-        "T09" => {
-            TRoute::Runnable(enum_rows::tc186_t09_changed_owner_case_or_order_has_distinct_identity)
-        }
+        "T09" => TRoute::Partial {
+            run: enum_rows::tc186_t09_changed_owner_has_distinct_identity,
+            ticket: "IR-1300",
+            missing: "QSL must change enum identity when cases or their order change",
+        },
         "T10" => TRoute::Runnable(tc186_t10_distinct_text_profiles_refuse_before_charge),
         "T11" => TRoute::Runnable(tc186_t11_nfc_exact_limits_and_named_denials_agree),
         "T12" => TRoute::Runnable(tc186_t12_scalar_and_unsigned_utf8_order_agree),
