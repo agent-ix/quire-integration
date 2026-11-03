@@ -53,3 +53,4 @@ Examined the full PR diff: Cargo.lock and the two new IEEE test files. Checked I
 | FND-006 | still-open | The Partial runner still calls the blocked F01/F02 and F17 metering assertions; preserve them as PENDING or split value-only runnable assertions from the blocked charge assertions so the F-only suite can pass without IR-1282. |
 | FND-006 | fixed | F01/F02 and F17 runnable paths now compare values only; strict metering/denial functions remain reachable in the `Partial` record but are not executed until IR-1282. |
 | FND-007 | still-open | Remove IT-017-SC-03 from the F01/F02 value-only test trace; keep SC-03 on the later activated strict metering test when IR-1282 lands. |
+| FND-007 | fixed | F01/F02 value-only test now traces SC-01/SC-02 only; the inventory runner traces SC-01 only, while active charge tests retain SC-03. |
