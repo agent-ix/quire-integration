@@ -13,7 +13,7 @@ Ticket: IR-669. Planless changed-test trace and evidence audit of draft PR #38 a
 
 ## Verdict
 
-CONDITIONAL. The gap below needs a fix before this PR can claim the traced criteria. Compilation remains blocked upstream by IR-1284.
+PASS after round-1 dispositions for the reviewed trace and evidence gaps. Compilation and the final gate remain blocked upstream by IR-1284.
 
 ## Findings
 
@@ -24,3 +24,9 @@ CONDITIONAL. The gap below needs a fix before this PR can claim the traced crite
 ## Coverage
 
 Plan completion: not assessed. `quoin matrix --repo ... --json` reported no coverage_matrix criteria because the installed module declares no `obligations:` source. I used a manual trace scan of IT-017-SC-01 through SC-05, QSpec TC-186 T01 through T16, and the changed `#[trace]` tests. T06b's distinct provenance is ticket-backed PENDING IR-1286. No reverse ownership gap, stub, ignored test, vendored fixture, or copied corpus was found in the changed files. Optional semantic review was not separately requested.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | T11 now checks denial metadata, prefix, and counters; T16 checks the retained denied meter's prefix and counters. |
