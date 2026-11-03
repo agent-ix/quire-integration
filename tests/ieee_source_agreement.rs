@@ -771,7 +771,7 @@ fn assert_numeric_equal(id: &str, left: u32, right: u32, expected: bool) {
     }
 }
 
-#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02")]
 #[test]
 fn tc193_f01_f02_numeric_equal_values_agree() {
     let f01 = selected_vector("F01");
@@ -1688,13 +1688,7 @@ fn f_case(id: &str) -> FCase {
     }
 }
 
-#[trace(
-    "TC-097",
-    "IT-017-SC-01",
-    "IT-017-SC-02",
-    "IT-017-SC-03",
-    "IT-017-SC-04"
-)]
+#[trace("TC-097", "IT-017-SC-01")]
 #[test]
 fn tc193_every_published_f_row_has_a_runnable_or_ticket_backed_route() {
     for row in vectors_of(TestCase::Tc193) {

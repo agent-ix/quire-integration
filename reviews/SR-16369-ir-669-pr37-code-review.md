@@ -28,3 +28,28 @@ FAIL. One high-severity inventory gap and four medium-severity test gaps remain.
 ## Coverage
 
 Examined the full PR diff: Cargo.lock and the two new IEEE test files. Checked IT-017-SC-01 through SC-05 and TC-097 against QSpec TC-193 F01-F34, with focused attention to F10/F13/F17/F20 and pending producer subcases. No CI workflow, production API, vendored corpus, or copied artifact changed. Static `git diff --check` and `cargo fmt --all -- --check` passed. Focused compilation and local tests are blocked before test code by IR-1284 (QSL 1d8893f6 / quire-eval 4e59f729).
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-006 | high | The exhaustive runner marks F01/F02 and F17 Partial but invokes their full charge-agreement tests. Current locked QSL has no IEEE equality metering (IR-1282), so these ticket-backed PENDING cases fail the F-only suite after the unrelated compile repair and prevent landing runnable F rows independently. | tests/ieee_source_agreement.rs:1554-1595 |
+
+## New findings (disposition pass 2)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-007 | medium | The new F01/F02 value-only `#[test]` still traces IT-017-SC-03, although it checks no meter charge, counter, or denial; its runnable trace falsely claims accounting evidence while that subcase is PENDING IR-1282. | tests/ieee_source_agreement.rs:774-788 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | `f_case` exhaustively matches published F IDs, panics on unknown IDs, and the runner iterates QSpec vectors. |
+| FND-002 | fixed | F10 now runs the I(64,2,4,1) tuple and injects a named result-retain denial through the bounded comparison helper. |
+| FND-003 | fixed | F13 now runs an immediately following exact no-flag ADD after divide-by-zero cases. |
+| FND-004 | fixed | F20 now checks mixed-width equality, mixed-width ADD, Float plus exact integer, and direct Float to Decimal/Int source admissions with a zero-limit runtime meter. |
+| FND-005 | fixed | F17 now asserts shortage limit, next charge, expected consumed amounts, complete counters, and ordered admitted charge prefix. |
+| FND-006 | still-open | The Partial runner still calls the blocked F01/F02 and F17 metering assertions; preserve them as PENDING or split value-only runnable assertions from the blocked charge assertions so the F-only suite can pass without IR-1282. |
+| FND-006 | fixed | F01/F02 and F17 runnable paths now compare values only; strict metering/denial functions remain reachable in the `Partial` record but are not executed until IR-1282. |
+| FND-007 | still-open | Remove IT-017-SC-03 from the F01/F02 value-only test trace; keep SC-03 on the later activated strict metering test when IR-1282 lands. |
