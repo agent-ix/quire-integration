@@ -70,3 +70,21 @@ At the reviewed draft head, static `git diff --check` passed. Reviewed the new F
 | FND | outcome | reason |
 | --- | --- | --- |
 | FND-008 | fixed | The F20 mixed-width equality, totalOrder, bitIdentical, and addition source cases now require CheckCause::IllTyped(IllTypedCause::TypeMismatch). |
+
+## Disposition pass 6
+
+No new findings in the reviewed delta. The new QSL/driver/IR API adaptation, exact F20 admission cause, and active F01/F02/F17 metering paths have no new finding in the changed code. The focused test evidence is 19 passed and zero failed; the final aggregate gate is reserved for the code lead.
+
+## New findings (disposition pass 7)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-009 | medium | The committed review artifacts leave the initial FAIL verdict and superseded IR-1284/IR-1277/IR-1282 blockers as the latest visible review status. They do not record the now passing focused F and IR-914 checks or that IR-1301 alone holds the aggregate gate. Add a current status appendix to both artifacts while preserving the historical finding and disposition text. | reviews/SR-16369-ir-669-pr37-code-review.md:14-16,64-66; reviews/SR-16370-ir-669-pr37-gap-analysis.md:42-44 |
+
+## Disposition pass 7
+
+The new driver forwarding and lockfile relock contain no code, Rust, or trace finding. IR-914 strict sibling assertion remains intact. Focused IR-914 and IEEE F tests passed in the coding lane; final aggregate gate remains open on IR-1301. FND-009 remains open for the committed review artifact status.
+
+## Current status
+
+The initial FAIL verdict and earlier blocker statements above record their historical review passes. The reviewed Rust and test-code findings are fixed; FND-009 identified this missing current-status record, which this appendix supplies for reviewer disposition. The strict `real_qsl_export_refusal_is_withheld_before_codegen` check passes (1 passed), and `cargo test --test ieee_source_agreement` passes (19 passed, zero failed or ignored). Scoped Clippy passed for both touched test targets with warnings denied. IR-1301 holds the final aggregate gate because QSL still resolves two transitive filament-core-data revisions. The F conversion and negation portions remain ticket-backed PENDING under IR-1283; they are outside the runnable F slice.

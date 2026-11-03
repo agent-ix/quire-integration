@@ -48,3 +48,15 @@ At the reviewed draft head against QSpec TC-193, the new F04b/F11, F01/F02/F02b,
 | FND | outcome | reason |
 | --- | --- | --- |
 | FND-003 | fixed | F02 now checks second_nan bit identity to itself; each F05 pair now checks reverse LessOrEqual is false. |
+
+## Disposition pass 4
+
+No new findings in the reviewed delta. The F dispatcher now runs F01/F02/F17 strict metering; IR-1283 conversion and negation subcases remain ticket-backed PENDING. No false whole-F completion claim was found. The focused test evidence is 19 passed and zero failed; the final aggregate gate is reserved for the code lead.
+
+## Disposition pass 5
+
+No new trace or runnable F-row gap in the driver forwarding and lockfile relock. The committed artifact status correction is recorded as SR-16369 FND-009.
+
+## Current status
+
+The initial FAIL verdict and earlier IR-1282/IR-1277 blockers above describe historical review passes. The reviewed runnable F rows now execute strict F01/F02/F17 metering, F20 admission refusal, FMA, ordering, identity, arithmetic, and named meter assertions. `cargo test --test ieee_source_agreement` passes (19 passed, zero failed or ignored), and the strict IR-914 export regression passes (1 passed). IR-1283 conversion and negation subcases remain ticket-backed PENDING. IR-1301's transitive QSL filament-core-data split holds the final aggregate gate; no full-gate result is claimed.
