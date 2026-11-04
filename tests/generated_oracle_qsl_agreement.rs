@@ -244,7 +244,13 @@ fn bounded_integer_source_executes_its_generated_oracle_and_observed_qsl_operati
         "the source supplies actual checked bounds"
     );
     let key = qsl_foundation::node_wire::node_key_from_json(
-        &serde_json::to_value(&nodes[0]).expect("serialize the admitted structural key"),
+        &serde_json::to_value(
+            admitted
+                .ir
+                .structural_key(&nodes[0])
+                .expect("the selected compact ID has its reader-verified structural key"),
+        )
+        .expect("serialize the admitted structural key"),
     )
     .expect("the owner decoder reads the admitted key, without synthesizing an identity");
     let locations = admitted
