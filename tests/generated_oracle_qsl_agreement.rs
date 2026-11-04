@@ -291,13 +291,13 @@ fn bounded_integer_source_executes_its_generated_oracle_and_observed_qsl_operati
     let [Value::Integer(selected_value)] = selected.as_slice() else {
         panic!("the exact selected application completed an Integer: {selected:?}");
     };
-    assert_eq!(*selected_value, &Integer::from(5_i64));
+    assert_eq!(selected_value, &Integer::from(5_i64));
     let quire_eval::FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(returned))) =
         &evaluation.outcome
     else {
         panic!("the typed call must complete: {:?}", evaluation.outcome)
     };
-    assert_eq!(returned, *selected_value);
+    assert_eq!(returned, selected_value);
     assert!(evaluation.location.is_none());
     assert!(evaluation.losses.is_empty());
     let driver = format!(
@@ -325,7 +325,7 @@ fn observe() {{
     );
     assert_eq!(
         native[0],
-        format!("{:?}", Outcome::Completed((*selected_value).clone()))
+        format!("{:?}", Outcome::Completed(selected_value.clone()))
     );
     eprintln!(
         "QSL whole call: {:?}; raw meter {:?}; losses {:?}",
