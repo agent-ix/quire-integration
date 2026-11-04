@@ -114,7 +114,7 @@ fn checked_text_literal(
         profile.as_str(),
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "text-type.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -200,7 +200,7 @@ fn checked_compare_with_limits(
         profile = profile.as_str(),
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "text.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -356,7 +356,7 @@ fn tc186_t05b_bare_text_type_refuses_at_source_recognition() {
          profile v = \"quire.value.complete/v1\";\n\
          function invalid using v(a: Text): Boolean pure { a = a }\n";
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "bare-text.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -391,7 +391,7 @@ fn tc186_t06_invalid_utf8_refuses_at_both_reader_boundaries() {
         .expect("T06 names reader bytes");
     assert_eq!(bytes.len(), 2, "T06 has two reader bytes");
     let source_refusal = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "invalid-text.native",
         &bytes,
         qsl_cst::Limits::default(),
@@ -469,8 +469,6 @@ fn tc186_t04_t05_text_bounds_admit_and_refuse() {
 #[test]
 fn tc186_t06b_checked_text_values_agree_with_runtime_bytes() {
     let row = selected_vector("T06b");
-    // Source-spelling provenance remains PENDING IR-1286: QSL constructs it
-    // from decoded text, so the raw and escaped spellings are not distinguished.
     // Branch-gating QSpec source spellings: this row owns both source forms.
     assert!(row.inputs.contains("\\u00e9"));
     assert!(row.inputs.contains("binary-utf8"));
@@ -485,14 +483,15 @@ fn tc186_t06b_checked_text_values_agree_with_runtime_bytes() {
     let runtime = admit_text(&runtime_payload, &ty, &mut Meter::new(LIMITS))
         .completed()
         .expect("runtime bytes admit");
-    assert!(matches!(
+    assert_eq!(
         raw.payload().provenance(),
-        TextProvenance::SourceLiteral(_)
-    ));
-    assert!(matches!(
+        &TextProvenance::SourceLiteral(raw_spelling.into())
+    );
+    assert_eq!(
         escaped.payload().provenance(),
-        TextProvenance::SourceLiteral(_)
-    ));
+        &TextProvenance::SourceLiteral(escaped_spelling.into())
+    );
+    assert_ne!(raw.payload().provenance(), escaped.payload().provenance());
     assert_eq!(runtime.payload().provenance(), &TextProvenance::Runtime);
     for left in [&raw, &escaped, &runtime] {
         assert_eq!(left.retained().as_bytes(), [0xc3, 0xa9]);
@@ -523,7 +522,7 @@ fn tc186_t10_distinct_text_profiles_refuse_before_charge() {
          function wrong using v(a: Text[0, 16; nfc], b: Text[0, 16; binary-utf8]): \
          Boolean pure { a = b }\n";
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "mixed-profiles.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -1057,7 +1056,7 @@ mod enum_rows {
              profile v = \"quire.value.complete/v1\";\n{body}\n"
         );
         let parsed = qsl_cst::parse(
-            qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+            qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
             "enum.native",
             source.as_bytes(),
             qsl_cst::Limits::default(),
@@ -1295,11 +1294,7 @@ fn t_route(id: &str) -> TRoute {
         "T04" | "T05" => TRoute::Runnable(tc186_t04_t05_text_bounds_admit_and_refuse),
         "T05b" => TRoute::Runnable(tc186_t05b_bare_text_type_refuses_at_source_recognition),
         "T06" => TRoute::Runnable(tc186_t06_invalid_utf8_refuses_at_both_reader_boundaries),
-        "T06b" => TRoute::Partial {
-            run: tc186_t06b_checked_text_values_agree_with_runtime_bytes,
-            ticket: "IR-1286",
-            missing: "QSL must retain distinct raw and escaped Text source spellings",
-        },
+        "T06b" => TRoute::Runnable(tc186_t06b_checked_text_values_agree_with_runtime_bytes),
         "T07" => TRoute::Runnable(
             enum_rows::tc186_t07_cross_declaration_is_ill_typed_at_source_and_runtime,
         ),
