@@ -6672,11 +6672,15 @@ fn admitted_position_locations_refuse_duplicate_and_foreign_bindings() {
     refused(neutral_bound, ProgramRefusalCode::DuplicateKey);
 
     let (mut mixed, ids, _) = shared_position_parts();
-    mixed.expressions[ids[0][2].0].operation = Operation::Argument {
-        function: FunctionId(3),
-        position: 1,
+    mixed.expressions[ids[0][3].0].operation = Operation::IntegerAdd {
+        left: ids[0][1],
+        right: ids[1][2],
     };
-    refused(mixed, ProgramRefusalCode::DuplicateKey);
+    let mixed_refusal = Program::try_new(mixed)
+        .err()
+        .expect("a mixed owner cannot reuse the admitted addition location");
+    assert_eq!(mixed_refusal.code, ProgramRefusalCode::DuplicateKey);
+    assert_eq!(mixed_refusal.node.as_ref(), Some(&source[3]));
 
     let mut foreign_argument = event_position_parts();
     let ids = position_expression_ids(&foreign_argument, FunctionId(1));
