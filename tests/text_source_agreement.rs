@@ -182,6 +182,7 @@ fn assert_checked_text_literal_refusal(
 fn checked_compare_with_limits(
     operator: ComparisonOperator,
     profile: TextProfile,
+    bounds: (u64, u64),
     left: &Text,
     right: &Text,
     limits: ScalarLimits,
@@ -195,8 +196,10 @@ fn checked_compare_with_limits(
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
-         function equal using v(a: Text[0, 16; {profile}], b: Text[0, 16; {profile}]): \
+         function equal using v(a: Text[{min}, {max}; {profile}], b: Text[{min}, {max}; {profile}]): \
          Boolean pure {{ a {symbol} b }}\n",
+        min = bounds.0,
+        max = bounds.1,
         profile = profile.as_str(),
     );
     let parsed = qsl_cst::parse(
@@ -252,6 +255,7 @@ fn checked_equal_with_limits(
     checked_compare_with_limits(
         ComparisonOperator::Equal,
         profile,
+        (0, 16),
         left,
         right,
         limits,
@@ -465,7 +469,13 @@ fn tc186_t04_t05_text_bounds_admit_and_refuse() {
     );
 }
 
-#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-04")]
+#[trace(
+    "TC-097",
+    "IT-017-SC-01",
+    "IT-017-SC-02",
+    "IT-017-SC-03",
+    "IT-017-SC-04"
+)]
 #[test]
 fn tc186_t06b_checked_text_values_agree_with_runtime_bytes() {
     let row = selected_vector("T06b");
@@ -493,21 +503,37 @@ fn tc186_t06b_checked_text_values_agree_with_runtime_bytes() {
     );
     assert_ne!(raw.payload().provenance(), escaped.payload().provenance());
     assert_eq!(runtime.payload().provenance(), &TextProvenance::Runtime);
-    for left in [&raw, &escaped, &runtime] {
-        assert_eq!(left.retained().as_bytes(), [0xc3, 0xa9]);
-        for right in [&raw, &escaped, &runtime] {
-            assert_eq!(
-                compare_text(
-                    ComparisonOperator::Equal,
-                    left,
-                    right,
-                    &mut Meter::new(LIMITS)
-                )
-                .expect("same profile")
-                .completed(),
-                Some(true)
-            );
-        }
+    for value in [&raw, &escaped, &runtime] {
+        assert_eq!(value.retained().as_bytes(), [0xc3, 0xa9]);
+    }
+    for (pair, left, right) in [
+        ("raw/escaped", &raw, &escaped),
+        ("raw/runtime", &raw, &runtime),
+        ("escaped/runtime", &escaped, &runtime),
+    ] {
+        let (qsl, qsl_meter) = checked_compare_with_limits(
+            ComparisonOperator::Equal,
+            TextProfile::BinaryUtf8,
+            (2, 2),
+            left,
+            right,
+            LIMITS,
+            None,
+        );
+        let mut runtime_meter = Meter::new(LIMITS);
+        let runtime_equal =
+            compare_text(ComparisonOperator::Equal, left, right, &mut runtime_meter)
+                .expect("same binary Text profile");
+        assert!(
+            matches!(&qsl, Outcome::Completed(Value::Boolean(true))),
+            "{pair} checked QSL equality: {qsl:?}"
+        );
+        assert_eq!(
+            runtime_equal,
+            Outcome::Completed(true),
+            "{pair} RT equality"
+        );
+        assert_meter_agreement(&qsl_meter, &runtime_meter);
     }
 }
 
@@ -592,6 +618,7 @@ fn assert_order_agreement(id: &str, profile: TextProfile, left: &str, right: &st
     let (qsl, qsl_meter) = checked_compare_with_limits(
         ComparisonOperator::Less,
         profile,
+        (0, 16),
         &left,
         &right,
         LIMITS,
