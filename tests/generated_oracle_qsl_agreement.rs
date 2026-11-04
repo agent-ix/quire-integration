@@ -388,3 +388,106 @@ fn bounded_scalar_entry_retains_the_real_quantity_value_position_refusals() {
 
 #[path = "support/function_agreement.rs"]
 mod function_agreement;
+
+/// Complete truth-table and short-circuit native scalar contribution. Source
+/// locations remain a separate source-map axis; this does not qualify SC-04.
+#[trace("TC-099")]
+#[test]
+fn generated_boolean_truth_tables_preserve_typed_values_and_ordered_accounting() {
+    for (syntax, identity) in [
+        ("and", "quire.op.boolean.and"),
+        ("or", "quire.op.boolean.or"),
+        ("implies", "quire.op.boolean.implies"),
+        ("=", "quire.op.boolean.eq"),
+        ("!=", "quire.op.boolean.ne"),
+    ] {
+        for left in [false, true] {
+            for right in [false, true] {
+                let admitted = admit(&format!(
+                    "function truth using v(): Boolean pure {{ {left} {syntax} {right} }}"
+                ));
+                let nodes = operation_nodes(&admitted.ir, identity);
+                assert_eq!(nodes.len(), 1, "one genuine selected operation");
+                let items = derive_exact_scalar_items(&admitted.ir, &nodes)
+                    .into_iter()
+                    .map(|item| item.expect("Boolean derives from original source"))
+                    .collect::<Vec<_>>();
+                let output = generate_exact_scalar_oracles(&admitted.ir, &items).unwrap();
+                let [claim] = output.claim_map.items.as_slice() else {
+                    panic!("one truth claim");
+                };
+                let quire_contract_codegen::ClaimDisposition::Generated(generated) = &claim.result
+                else {
+                    panic!("actual Boolean family must generate: {:?}", claim.result);
+                };
+                let function = admitted
+                    .qsl
+                    .graph()
+                    .function_by_identity(admitted.qsl.graph().function_identity("truth").unwrap())
+                    .unwrap();
+                let mut expected = Vec::new();
+                for work in [1024, 0, 1] {
+                    let mut allowance = limits();
+                    allowance.work_units = work;
+                    let mut meter = quire_exact::Meter::new(allowance);
+                    let result = qsl_eval::value::evaluate_closed(
+                        &admitted.qsl,
+                        function.body,
+                        function.slots,
+                        &mut meter,
+                    )
+                    .expect("genuine closed Boolean body");
+                    let quire_eval::FamilyOutcome::Evaluated(outcome) = result.outcome else {
+                        panic!("actual Boolean value family");
+                    };
+                    let losses = result
+                        .losses
+                        .into_iter()
+                        .map(|loss| loss.loss)
+                        .collect::<Vec<_>>();
+                    expected.push(oracle_observation::snapshot(
+                        &boolean_outcome(outcome),
+                        &losses,
+                        &meter,
+                    ));
+                }
+                let lazy = matches!(
+                    items[0].operation,
+                    quire_contract_codegen::ExactScalarOperation::Boolean {
+                        right_may_stop: true,
+                        ..
+                    }
+                );
+                let arguments = if lazy {
+                    format!("{left}, || quire_exact::Outcome::Completed({right})")
+                } else {
+                    format!("{left}, {right}")
+                };
+                let driver = format!(
+                    r#"
+mod oracle_observation;
+use quire_exact::{{Meter,ScalarLimits}};
+#[test]
+fn observe() {{
+    for work in [1024,0,1] {{
+        let mut allowance = {:?}; allowance.work_units = work;
+        let mut meter = Meter::new(allowance);
+        let actual = quire_exact_scalar_oracles::{}({},&mut meter).expect("actual admitted Boolean arguments");
+        let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new();
+        println!("IT019_OBSERVATION {{}}",oracle_observation::snapshot(&actual,&losses,&meter));
+    }}
+}}
+"#,
+                    limits(),
+                    generated.symbol,
+                    arguments
+                );
+                assert_eq!(
+                    generated_oracle::execute(&output.artifacts, &driver),
+                    expected,
+                    "{left} {syntax} {right}"
+                );
+            }
+        }
+    }
+}
