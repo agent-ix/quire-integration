@@ -205,3 +205,131 @@ fn unbounded_qsl_integer_source_retains_the_codegen_bound_refusal() {
     assert_eq!(declared.node_tag.as_ref(), "scalar_type");
     assert_eq!(declared.semantic_form.as_ref(), "integer");
 }
+
+/// The selected operation is observed from the real bounded-parameter call.
+/// Full caller and generated-body ledgers remain distinct observations here;
+/// this value/occurrence contribution does not claim SC-04 accounting parity.
+#[trace("TC-099")]
+#[test]
+fn bounded_integer_source_executes_its_generated_oracle_and_observed_qsl_operation() {
+    use qsl_eval::value::{ApplicationObservation, CheckedPackageEvaluation, QualifiedName};
+    use qsl_semantics::model::object_environment::ObjectEnvironment;
+    use quire_exact::{Integer, Meter, Outcome, Value};
+    let admitted = admit("function step using v(x: Int[0, 9]): Int[1, 10] pure { x + 1 }");
+    let nodes = operation_nodes(&admitted.ir, "quire.op.integer.add");
+    assert_eq!(
+        nodes.len(),
+        1,
+        "one selected arithmetic operation, not a first-match selection"
+    );
+    let items = derive_exact_scalar_items(&admitted.ir, &nodes)
+        .into_iter()
+        .map(|item| item.expect("a genuine bounded-operand source must derive"))
+        .collect::<Vec<_>>();
+    let generated = generate_exact_scalar_oracles(&admitted.ir, &items)
+        .expect("the genuine bounded source generates");
+    let [claim] = generated.claim_map.items.as_slice() else {
+        panic!("one selected claim")
+    };
+    assert_eq!(claim.node_id, nodes[0]);
+    assert_eq!(
+        claim.operation.provenance,
+        quire_contract_codegen::OperationProvenance::IrConfirmed
+    );
+    let quire_contract_codegen::ClaimDisposition::Generated(oracle) = &claim.result else {
+        panic!("the source claim must really generate: {:?}", claim.result);
+    };
+    assert!(
+        !oracle.checked_bounds.is_empty(),
+        "the source supplies actual checked bounds"
+    );
+    let key = qsl_foundation::node_wire::node_key_from_json(
+        &serde_json::to_value(&nodes[0]).expect("serialize the admitted structural key"),
+    )
+    .expect("the owner decoder reads the admitted key, without synthesizing an identity");
+    let locations = admitted
+        .qsl
+        .graph()
+        .occurrences()
+        .filter(|(node, _, _)| node == &key)
+        .map(|(_, _, location)| location.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        locations.len(),
+        1,
+        "the selected emitted node has one actual source occurrence"
+    );
+    let mut observed = Vec::new();
+    let mut unavailable_imported_call = false;
+    let mut function_evaluations = 0;
+    let mut function_case_limit_reached = false;
+    let mut qsl_meter = Meter::new(limits());
+    let evaluation = admitted
+        .qsl
+        .call_observing_applications(
+            &QualifiedName::unqualified("step").expect("declared source name"),
+            vec![Value::Integer(Integer::from(4_i64))],
+            &ObjectEnvironment::default(),
+            &mut qsl_meter,
+            ApplicationObservation {
+                observed: &mut observed,
+                unavailable_imported_call: &mut unavailable_imported_call,
+                function_case_limit: 1,
+                function_evaluations: &mut function_evaluations,
+                function_case_limit_reached: &mut function_case_limit_reached,
+            },
+        )
+        .expect("the real bounded QSL call executes");
+    assert!(!unavailable_imported_call);
+    assert!(!function_case_limit_reached);
+    assert_eq!(function_evaluations, 1);
+    let selected = observed
+        .iter()
+        .filter(|(location, _)| locations.contains(location))
+        .map(|(_, value)| value)
+        .collect::<Vec<_>>();
+    let [Value::Integer(selected_value)] = selected.as_slice() else {
+        panic!("the exact selected application completed an Integer: {selected:?}");
+    };
+    assert_eq!(*selected_value, &Integer::from(5_i64));
+    let quire_eval::FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(returned))) =
+        &evaluation.outcome
+    else {
+        panic!("the typed call must complete: {:?}", evaluation.outcome)
+    };
+    assert_eq!(returned, *selected_value);
+    assert!(evaluation.location.is_none());
+    assert!(evaluation.losses.is_empty());
+    let driver = format!(
+        r#"
+mod oracle_observation;
+use quire_exact::{{Integer, Meter, ScalarLimits}};
+#[test]
+fn observe() {{
+    let mut meter = Meter::new({:?});
+    let actual = quire_exact_scalar_oracles::{}(&Integer::from(4_i64), &Integer::from(1_i64), &mut meter)
+        .expect("generated operand admission");
+    println!("IT019_OBSERVATION {{:?}}", actual);
+    let losses = Vec::<quire_semantic_value::loss::ValueLoss>::new();
+    println!("IT019_OBSERVATION {{}}", oracle_observation::snapshot(&actual, &losses, &meter));
+}}
+"#,
+        limits(),
+        oracle.symbol
+    );
+    let native = generated_oracle::execute(&generated.artifacts, &driver);
+    assert_eq!(
+        native.len(),
+        2,
+        "actual typed outcome and complete body observation"
+    );
+    assert_eq!(
+        native[0],
+        format!("{:?}", Outcome::Completed((*selected_value).clone()))
+    );
+    eprintln!(
+        "QSL whole call: {:?}; raw meter {:?}; losses {:?}",
+        evaluation.outcome, qsl_meter, evaluation.losses
+    );
+    eprintln!("Generated body whole observation: {}", native[1]);
+}
