@@ -119,7 +119,7 @@ fn integer_outcome(
 #[trace("TC-099")]
 #[test]
 fn generated_integer_addition_matches_the_actual_qsl_body() {
-    let admitted = admit("function addition using v(): Integer pure { 4 + 1 }");
+    let admitted = admit("function addition using v(): Int[0, 9] pure { 4 + 1 }");
     let nodes = operation_nodes(&admitted.ir, "quire.op.integer.add");
     let items = derive_exact_scalar_items(&admitted.ir, &nodes)
         .into_iter()
@@ -180,4 +180,28 @@ fn observe() {{
         generated_oracle::execute(&output.artifacts, &driver),
         vec![expected]
     );
+}
+
+/// A missing scalar bound remains CG's typed generation refusal, even when
+/// QSL itself can evaluate the unbounded source. It is not agreement credit.
+#[trace("TC-099")]
+#[test]
+fn unbounded_qsl_integer_source_retains_the_codegen_bound_refusal() {
+    let admitted = admit("function unbounded using v(): Integer pure { 4 + 1 }");
+    let nodes = operation_nodes(&admitted.ir, "quire.op.integer.add");
+    let results = derive_exact_scalar_items(&admitted.ir, &nodes);
+    let [Err(quire_contract_codegen::ExactScalarRefusal::RequiresBound { unbounded_type })] =
+        results.as_slice()
+    else {
+        panic!("the unbounded source retains RequiresBound: {results:?}")
+    };
+    let declared = admitted
+        .ir
+        .graph()
+        .nodes
+        .iter()
+        .find(|node| &node.node_id == unbounded_type)
+        .expect("the refused type is admitted");
+    assert_eq!(declared.node_tag.as_ref(), "scalar_type");
+    assert_eq!(declared.semantic_form.as_ref(), "integer");
 }
