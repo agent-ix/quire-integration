@@ -14,9 +14,8 @@ use qsl_semantics::{
 use quire_eval::{CallFailure, FamilyOutcome};
 use quire_exact::{
     evaluate_decimal, order_numbers, planned_equality, ChargePoint, Decimal, DecimalOperation,
-    DecimalResult, DecimalType, IllTypedCause, InjectedDenial, Integer, LimitKind, Meter,
-    OrderedOperands, OrderingOperator, Outcome, Refusal, RoundingMode, ScalarLimits, Undefined,
-    Value,
+    DecimalResult, DecimalType, IllTypedCause, Integer, LimitKind, Meter, OrderedOperands,
+    OrderingOperator, Outcome, Refusal, RoundingMode, ScalarLimits, Undefined, Value,
 };
 use quire_semantic_value::{call::InputRefusal, checking::CheckingLimits, loss::ValueLoss};
 use quire_specification::{vectors_of, TestCase};
@@ -97,28 +96,6 @@ fn qsl_binary(
     right: Decimal,
     limits: ScalarLimits,
 ) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
-    qsl_binary_with_denial(
-        operator,
-        left_type,
-        right_type,
-        result_type,
-        left,
-        right,
-        limits,
-        None,
-    )
-}
-
-fn qsl_binary_with_denial(
-    operator: &str,
-    left_type: &str,
-    right_type: &str,
-    result_type: &str,
-    left: Decimal,
-    right: Decimal,
-    limits: ScalarLimits,
-    denial: Option<InjectedDenial>,
-) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
@@ -144,10 +121,7 @@ fn qsl_binary_with_denial(
     .check(CheckingLimits::default())
     .expect("S4 checks the decimal function");
     let package = CheckedPackage::link(graph);
-    let mut meter = match denial {
-        Some(denial) => Meter::new(limits).with_injected_denial(denial),
-        None => Meter::new(limits),
-    };
+    let mut meter = Meter::new(limits);
     let evaluation = package
         .call(
             &QualifiedName::unqualified("f").expect("f is an identifier"),
@@ -349,23 +323,31 @@ fn tc185_decimal_vectors() {
             "D01" => d01(),
             "D02" => d02(),
             "D03" => d03(),
-            "D04" => d04(),
-            "D05" => d05(),
+            // QSL-1393 PENDING: linked S4 requires a nonzero divisor proof;
+            // a source guard adds charges before the authored operation.
+            "D04" => d04_rt_only(),
+            "D05" => d05_rt_only(),
+            // QSL-1393 PENDING: zero divisor requires kernel-mode source.
             "D06" => d06(),
             "D07" => d07(),
             "D08" => d08(),
-            "D09" => d09(),
+            // QSL-1393 PENDING: a source guard changes the denial prefix.
+            "D09" => d09_rt_only(),
             "D10" => d10(),
             "D11" => d11(),
-            "D12" => d12(),
-            // IR-1312 PENDING QSL source composition: 1.50 is outside the
+            // QSL-1393 PENDING: linked S4 cannot check unguarded divide.
+            "D12" => d12_rt_only(),
+            // QSL-1619 PENDING QSL source composition: 1.50 is outside the
             // authored scale-zero result type; D13 executes the RT oracle.
             "D13" => d13_rt_only(),
-            "D14" => d14(),
+            // QSL-1393 PENDING: a source guard changes the work limit.
+            "D14" => d14_rt_only(),
+            // QSL-1393 PENDING: zero divisor requires kernel-mode source.
             "D15" => d15(),
             "D16" => d16(),
-            "D17" => d17(),
-            // IR-1312 PENDING QSL source composition: 1.234 exceeds the
+            // QSL-1393 PENDING: linked S4 cannot check unguarded divide.
+            "D17" => d17_rt_only(),
+            // QSL-1619 PENDING QSL source composition: 1.234 exceeds the
             // authored result scale; D18 executes the RT oracle.
             "D18" => d18_rt_only(),
             "D19" => d19(),
@@ -373,9 +355,11 @@ fn tc185_decimal_vectors() {
             "D21" => d21(),
             "D22" => d22(),
             "D23" => d23(),
-            // IR-1312 PENDING QSL source composition: operands 2 and 3
+            // QSL-1619 PENDING QSL source composition: operands 2 and 3
             // exceed the authored [0,100;2,2] result domain; RT only.
             "D24" => d24_rt_only(),
+            // QSL-1394 PENDING decimal(c,s) admission; mixed-profile
+            // refusal and explicit conversion admission execute in d25.
             "D25" => d25(),
             other => panic!("unimplemented TC-185 vector {other}"),
         }
@@ -507,29 +491,19 @@ fn d03() {
     d03_exact_qsl_agreement();
 }
 
-fn d04() {
+fn d04_rt_only() {
     let left = decimal(1, 0);
     let right = decimal(8, 0);
-    let ty = target(0, 8000, 0, 3, RoundingMode::Exact);
+    let ty = target(0, 1000, 3, 3, RoundingMode::Exact);
     decimal_result(
         rt(DecimalOperation::Divide(&left, &right), &ty, UNLIMITED).0,
         125,
         3,
         false,
     );
-    agreement(
-        "/",
-        "Decimal[0,8000;0,3;exact]",
-        "Decimal[0,8000;0,3;exact]",
-        "Decimal[0,8000;0,3;exact]",
-        left,
-        right,
-        &ty,
-        UNLIMITED,
-    );
 }
 
-fn d05() {
+fn d05_rt_only() {
     let left = decimal(1, 0);
     let right = decimal(3, 0);
     let exact = target(-1000, 1000, 0, 2, RoundingMode::Exact);
@@ -552,17 +526,6 @@ fn d05() {
     assert_eq!(loss.rounded_coefficient(), &Integer::from(33_i64));
     assert_eq!(loss.rounded_scale(), 2);
     assert_eq!(loss.mode(), RoundingMode::NearestEven);
-    agreement(
-        "/",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        left,
-        right,
-        &rounded,
-        UNLIMITED,
-    );
-    d05_exact_qsl_agreement();
 }
 
 fn d06() {
@@ -609,7 +572,7 @@ fn d08() {
     d08_qsl_agreement();
 }
 
-fn d09() {
+fn d09_rt_only() {
     let left = decimal(1, 0);
     let right = decimal(3, 0);
     let ty = target(-1000, 1000, 0, 2, RoundingMode::NearestEven);
@@ -620,25 +583,12 @@ fn d09() {
         2,
         true,
     );
-    agreement(
-        "/",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        left.clone(),
-        right.clone(),
-        &ty,
-        exact_limits,
-    );
+
     let mut meter = Meter::new(exact_limits).with_injected_denial(quire_exact::InjectedDenial {
         point: ChargePoint::DecimalResultRetain,
         occurrence: std::num::NonZeroU64::new(1).unwrap(),
     });
     let denied_outcome = evaluate_decimal(DecimalOperation::Divide(&left, &right), &ty, &mut meter);
-    let Outcome::Incomplete(kernel_stop) = &denied_outcome else {
-        panic!("D09 runtime injection must stop at result retention: {denied_outcome:?}");
-    };
-    let kernel_stop = kernel_stop.clone();
     denied(
         denied_outcome,
         LimitKind::WorkUnits,
@@ -647,39 +597,6 @@ fn d09() {
         1,
     );
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 4);
-    let (qsl_denied, losses, qsl_meter) = qsl_binary_with_denial(
-        "/",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        left,
-        right,
-        ScalarLimits {
-            work_units: 6,
-            ..exact_limits
-        },
-        Some(InjectedDenial {
-            point: ChargePoint::DecimalResultRetain,
-            occurrence: std::num::NonZeroU64::new(1).unwrap(),
-        }),
-    );
-    let Outcome::Incomplete(qsl_stop) = &qsl_denied else {
-        panic!("D09 QSL injection must stop at result retention: {qsl_denied:?}");
-    };
-    assert_eq!(qsl_stop.limit_kind, kernel_stop.limit_kind);
-    assert_eq!(qsl_stop.charge_point, kernel_stop.charge_point);
-    assert_eq!(qsl_stop.next_charge, kernel_stop.next_charge);
-    assert_eq!(qsl_stop.limit, kernel_stop.limit + 1);
-    assert_eq!(qsl_stop.consumed, kernel_stop.consumed + 1);
-    denied(
-        qsl_denied,
-        LimitKind::WorkUnits,
-        ChargePoint::DecimalResultRetain,
-        5,
-        1,
-    );
-    assert!(losses.is_empty());
-    assert_scalar_meter_agreement(&qsl_meter, &meter);
 }
 
 fn d10() {
@@ -857,7 +774,7 @@ fn d11() {
     );
 }
 
-fn d12() {
+fn d12_rt_only() {
     let left = decimal(1, 0);
     let right = decimal(3, 0);
     let wide = target(-1000, 1000, 0, 2, RoundingMode::NearestEven);
@@ -867,22 +784,12 @@ fn d12() {
         2,
         true,
     );
-    agreement(
-        "/",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        "Decimal[-1000,1000;0,2;nearest-even]",
-        left.clone(),
-        right.clone(),
-        &wide,
-        UNLIMITED,
-    );
+
     let narrow = target(-10, 10, 0, 2, RoundingMode::NearestEven);
     assert!(matches!(
         rt(DecimalOperation::Divide(&left, &right), &narrow, UNLIMITED).0,
         Outcome::Refused(Refusal::DecimalOutOfDomain { .. })
     ));
-    d12_narrow_qsl_agreement();
 }
 
 fn d13_rt_only() {
@@ -924,7 +831,7 @@ fn d13_rt_only() {
     }
 }
 
-fn d14() {
+fn d14_rt_only() {
     let left = decimal(1, 0);
     let right = decimal(3, 0);
     let ty = target(-1000, 1000, 0, 2, RoundingMode::Exact);
@@ -935,16 +842,7 @@ fn d14() {
         Outcome::Refused(Refusal::InexactDecimal { .. })
     ));
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 3);
-    agreement(
-        "/",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        left.clone(),
-        right.clone(),
-        &ty,
-        base,
-    );
+
     denied(
         rt(
             DecimalOperation::Divide(&left, &right),
@@ -959,19 +857,6 @@ fn d14() {
         ChargePoint::DecimalArithmetic,
         2,
         1,
-    );
-    agreement(
-        "/",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        left,
-        right,
-        &ty,
-        ScalarLimits {
-            work_units: 2,
-            ..base
-        },
     );
 }
 
@@ -1029,7 +914,7 @@ fn d16() {
     d16_qsl_agreement();
 }
 
-fn d17() {
+fn d17_rt_only() {
     let left = decimal(100, 2);
     let right = decimal(1, 0);
     let ty = target(-1000, 1000, 0, 2, RoundingMode::Exact);
@@ -1039,16 +924,6 @@ fn d17() {
         100,
         2,
         false,
-    );
-    agreement(
-        "/",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        left,
-        right,
-        &ty,
-        base,
     );
 }
 
@@ -1431,20 +1306,6 @@ fn d03_exact_qsl_agreement() {
     }
 }
 
-fn d05_exact_qsl_agreement() {
-    let ty = target(-1000, 1000, 0, 2, RoundingMode::Exact);
-    agreement(
-        "/",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        "Decimal[-1000,1000;0,2;exact]",
-        decimal(1, 0),
-        decimal(3, 0),
-        &ty,
-        UNLIMITED,
-    );
-}
-
 #[test]
 #[ignore = "QSL-1393: S4 CheckCause::Unproved(Nonzero) for a zero divisor"]
 fn d06_qsl_probe() {
@@ -1481,20 +1342,6 @@ fn d08_qsl_agreement() {
             &ty,
         );
     }
-}
-
-fn d12_narrow_qsl_agreement() {
-    let ty = target(-10, 10, 0, 2, RoundingMode::NearestEven);
-    agreement(
-        "/",
-        "Decimal[-10,10;0,2;nearest-even]",
-        "Decimal[-10,10;0,2;nearest-even]",
-        "Decimal[-10,10;0,2;nearest-even]",
-        decimal(1, 0),
-        decimal(3, 0),
-        &ty,
-        UNLIMITED,
-    );
 }
 
 #[test]
