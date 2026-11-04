@@ -212,7 +212,7 @@ fn refused_binding_is_withheld_as_bound_siblings_flow_to_codegen() {
     let driven = drive(
         &export,
         CompileInput {
-            source: SourceIdentity::new("agent-ix", "ir914-integration", "git", "1"),
+            source: SourceIdentity::new("agent-ix", "ir914-integration"),
             path: "ir914.native",
             bytes: source.as_bytes(),
             package_name: "agent-ix/it-013",
@@ -320,7 +320,7 @@ fn generation_input() -> GenerationInput<'static> {
 
 fn compile_input<'a>(source: &'a str, packages: &'a PackageInput) -> CompileInput<'a> {
     CompileInput {
-        source: SourceIdentity::new("agent-ix", "ir914-export-observation", "fixture", "1"),
+        source: SourceIdentity::new("agent-ix", "ir914-export-observation"),
         path: "ir914.native",
         bytes: source.as_bytes(),
         package_name: "agent-ix/it-013",
@@ -503,7 +503,7 @@ fn drive_integer_step() -> Driven {
     drive(
         &QslCg,
         CompileInput {
-            source: SourceIdentity::new("agent-ix", "it013-kani", "git", "1"),
+            source: SourceIdentity::new("agent-ix", "it013-kani"),
             path: "it013.native",
             bytes: source.as_bytes(),
             package_name: "agent-ix/it-013",

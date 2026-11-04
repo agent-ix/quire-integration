@@ -39,7 +39,7 @@ pub(crate) fn missing_division_result_bound_settles_requires_bound_without_execu
     let driven = drive(
         &QslCg,
         CompileInput {
-            source: SourceIdentity::new("agent-ix", "ir-669-div07", "fixture", "1"),
+            source: SourceIdentity::new("agent-ix", "ir-669-div07"),
             path: "ir669-div07.native",
             bytes: source.as_bytes(),
             package_name: "ir-669-div07",
