@@ -98,3 +98,7 @@ The initial FAIL verdict and earlier blocker statements above record their histo
 ## Disposition pass 9
 
 No new finding at the frozen PR head. The final delta updates six F and three IR-914 SourceIdentity constructor calls to the current two-argument API and normally refreshes the first-party dependency cohort. Checked that F agreement helpers still assert QSpec outcomes, independent QSL/runtime equality, ordered charge suffixes, and consumed counters; F20 requires the precise ill-typed admission cause with zero runtime charges. The exhaustive dispatcher still panics on an unknown F ID and routes conversion/negation work to IR-1283 as PENDING or partial. The lead reported focused dependency_cohort 1/1, IEEE F 19/19, IR-914 strict regression 1/1, touched Clippy/fmt/string-edge clean. These results are reviewed evidence, not tests rerun by this reviewer. The lead owns the final aggregate gate.
+
+## Disposition pass 10
+
+The final gate exposed nine remaining four-argument `SourceIdentity::new` calls in four existing integration test files. At head `f429337`, each call now passes only its original nonblank authority and identity to the pinned QSL two-argument constructor; path and bytes remain separate. The incremental diff changes no assertions, traces, charge logic, production code, or lockfile. Scoped code and Rust disposition: PASS, no new finding. The six non-proof final targets are rerunning on the next head; `make kani` remains unrun under the standing 16 GiB proof restriction.

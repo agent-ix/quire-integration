@@ -64,3 +64,7 @@ The initial FAIL verdict and earlier IR-1282/IR-1277 blockers above describe his
 ## Disposition pass 6
 
 No new trace or F-row coverage gap at the frozen PR head. Six F and three IR-914 SourceIdentity constructor changes preserve test routes and assertions. The full F dispatcher remains fail-closed for unknown IDs; F24/F25/F27/F28/F31/F32/F33 and the F26 conversion portion remain ticket-backed PENDING under IR-1283. The focused F and IR-914 test results were supplied by the coding lane; the lead owns the final aggregate gate.
+
+## Disposition pass 7
+
+The incremental `SourceIdentity::new` constructor migration at head `f429337` changes nine fixture calls across four existing tests without changing their trace tags, assertions, or oracle paths. Scoped gap disposition: PASS, no new finding. Final non-proof gate evidence remains pending on the next head; `make kani` is unrun under the standing 16 GiB proof restriction.
