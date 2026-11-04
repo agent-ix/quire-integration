@@ -24,10 +24,6 @@ use quire_semantic_value::{
 };
 use std::{collections::BTreeMap, rc::Rc};
 
-#[path = "support/producer_origin.rs"]
-mod producer_origin_support;
-mod support;
-
 fn admitted_key(id: &quire_contract_ir::CheckedNodeId) -> NodeKey {
     let structural = admitted()
         .structural_key(id)
