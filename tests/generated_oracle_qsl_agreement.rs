@@ -385,3 +385,6 @@ fn bounded_scalar_entry_retains_the_real_quantity_value_position_refusals() {
         );
     }
 }
+
+#[path = "support/function_agreement.rs"]
+mod function_agreement;
