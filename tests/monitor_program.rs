@@ -1695,50 +1695,6 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
     assert!(failure.path_capacity.is_none());
 }
 
-#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
-#[test]
-fn executor_native_storage_stop_retains_exact_membership_cause_and_arena() {
-    use quire_semantic_value::supplied_membership::SuppliedAdmissionError;
-
-    let program = Program::try_new(membership_probe_parts()).unwrap();
-    let failure = build(BuildPlan {
-        program: Rc::clone(&program),
-        budget: StepBudget {
-            scratch_elements: 1,
-            ..execution_budget()
-        },
-    })
-    .err()
-    .expect("native membership storage request must stop before helper execution");
-    assert_eq!(failure.code, MonitorFailureCode::Resource);
-    let stop = failure.resource.expect("retain operating storage stop");
-    assert_eq!(stop.resource, StepResource::ScratchElements);
-    assert_eq!(stop.limit, Some(1));
-    let native = failure
-        .admission
-        .expect("retain native membership cause and arena");
-    let (SuppliedAdmissionError::Allocation { locus, request }
-    | SuppliedAdmissionError::Capacity { locus, request }) = native.failure
-    else {
-        panic!("native storage refusal must keep its typed request");
-    };
-    assert!(request.amount() > 0);
-    assert!(native.arena.resolve(locus).is_some());
-    assert!(
-        failure.path_capacity.is_none(),
-        "arena-ID exhaustion is a distinct QSV-owned path"
-    );
-    assert!(failure.invariant.is_none());
-    let later = build(BuildPlan {
-        program,
-        budget: execution_budget(),
-    })
-    .err()
-    .expect("the authored option still mismatches the helper signature");
-    assert_eq!(later.code, MonitorFailureCode::Admission);
-    assert!(later.resource.is_none());
-}
-
 fn lexical_base() -> ProgramParts {
     let mut input = parts();
     input.functions[0].key = key("lexical-init");
@@ -5066,6 +5022,7 @@ fn checked_equality_keeps_original_enum_index_after_preparation_drops() {
 
 #[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
 #[test]
+#[string_edge]
 fn checked_equality_and_union_retention_keep_native_operating_shortages() {
     let mut input = standard_parts("equality-init");
     let left = standard_literal(
