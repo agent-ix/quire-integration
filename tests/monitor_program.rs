@@ -2,7 +2,7 @@
 //! RT construction controls using identities from a live QSL producer and strict IR reader.
 //! The controlled executable parts exercise construction, not temporal producer/executor qualification.
 
-use ix_trace_rs::trace;
+use ix_trace_rs::{string_edge, trace};
 use quire_contract_runtime::monitor::{
     build, Buffer, BuildPlan, Entries, Expression, ExpressionId, Function, FunctionId, Layout,
     LocalId, MonitorFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode, StepBudget,
@@ -6439,6 +6439,272 @@ fn event_position_parts() -> ProgramParts {
         input.functions[index].body = body;
     }
     input
+}
+
+/// Root locations of the checked State argument, its `now` read, the delta
+/// argument, and the addition in the authored `position_event` source.
+#[string_edge]
+fn admitted_position_sources() -> [NodeKey; 4] {
+    use quire_contract_ir::CheckedTerm;
+
+    let package = admitted();
+    let function_key = key("position-event");
+    let function = package
+        .graph()
+        .nodes
+        .iter()
+        .find(|node| admitted_key(&node.node_id) == function_key)
+        .expect("admitted position_event function");
+    let CheckedTerm::Aggregate { members } = &function.body else {
+        panic!("admitted function has an aggregate body");
+    };
+    let parameters = members
+        .iter()
+        .find_map(|member| match member {
+            CheckedTerm::Binding { name, value } if name.as_ref() == "parameters" => {
+                Some(value.as_ref())
+            }
+            _ => None,
+        })
+        .expect("admitted function has parameters");
+    let CheckedTerm::Aggregate { members } = parameters else {
+        panic!("admitted parameters are ordered references");
+    };
+    let [CheckedTerm::Reference { target: state }, CheckedTerm::Reference { target: delta }, ..] =
+        members.as_slice()
+    else {
+        panic!("position_event begins with State and delta parameters");
+    };
+    assert!(package.term(state).is_some());
+    assert!(package.term(delta).is_some());
+
+    let additions: Vec<_> = package
+        .graph()
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.body {
+            CheckedTerm::Application {
+                operation,
+                arguments,
+                ..
+            } if operation.identity() == Some("quire.op.integer.add")
+                && matches!(arguments.as_slice(), [_, CheckedTerm::Reference { target }] if target == delta) =>
+            {
+                Some((node, &arguments[0]))
+            }
+            _ => None,
+        })
+        .collect();
+    let [(addition, CheckedTerm::Reference { target: now })] = additions.as_slice() else {
+        panic!("one admitted s.now + delta node, found {}", additions.len());
+    };
+    let Some(CheckedTerm::Application {
+        operation,
+        arguments,
+        ..
+    }) = package.term(now)
+    else {
+        panic!("s.now is an admitted field projection");
+    };
+    let (_, field) = operation
+        .projection_field()
+        .expect("admitted operation views")
+        .expect("field projection");
+    assert_eq!(field, "now");
+    assert!(matches!(arguments.as_slice(), [CheckedTerm::Reference { target }] if target == state));
+    [
+        admitted_key(state),
+        admitted_key(now),
+        admitted_key(delta),
+        admitted_key(&addition.node_id),
+    ]
+}
+
+fn position_expression_ids(input: &ProgramParts, function: FunctionId) -> [ExpressionId; 4] {
+    let argument = |position| {
+        let found: Vec<_> = input
+            .expressions
+            .iter()
+            .enumerate()
+            .filter_map(|(index, expression)| {
+                matches!(&expression.operation, Operation::Argument { function: owner, position: slot } if *owner == function && *slot == position)
+                    .then_some(ExpressionId(index))
+            })
+            .collect();
+        let [id] = found.as_slice() else {
+            panic!("one argument {position} for function {}", function.0);
+        };
+        *id
+    };
+    let state = argument(0);
+    let delta = argument(1);
+    let now_member = MemberId::new(MemberOwner::Node(key("state")), "now").unwrap();
+    let projections: Vec<_> = input
+        .expressions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, expression)| match &expression.operation {
+            Operation::RecordField { value, member }
+                if *value == state && member == &now_member =>
+            {
+                Some(ExpressionId(index))
+            }
+            _ => None,
+        })
+        .collect();
+    let [now] = projections.as_slice() else {
+        panic!("one State.now projection for function {}", function.0);
+    };
+    let additions: Vec<_> = input
+        .expressions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, expression)| match &expression.operation {
+            Operation::IntegerAdd { left, right } if *left == *now && *right == delta => {
+                Some(ExpressionId(index))
+            }
+            _ => None,
+        })
+        .collect();
+    let [addition] = additions.as_slice() else {
+        panic!("one State.now + delta for function {}", function.0);
+    };
+    [state, *now, delta, *addition]
+}
+
+fn shared_position_parts() -> (ProgramParts, [[ExpressionId; 4]; 2], [NodeKey; 4]) {
+    let source = admitted_position_sources();
+    let mut input = event_position_parts();
+    let ids = [FunctionId(1), FunctionId(3)].map(|function| {
+        let ids = position_expression_ids(&input, function);
+        for (id, key) in ids.into_iter().zip(&source) {
+            let expression = &mut input.expressions[id.0];
+            expression.key = key.clone();
+            // Each selected location is the root of its admitted graph node.
+            expression.body_path.clear();
+        }
+        ids
+    });
+    (input, ids, source)
+}
+
+#[trace("TC-209", "IT-018-SC-03", "interface-002-AC-5")]
+#[test]
+fn admitted_position_nodes_keep_equal_locations_across_distinct_function_owners() {
+    let (input, ids, source) = shared_position_parts();
+    let function_keys = [key("position-event"), key("position-gap")];
+    let program =
+        Program::try_new(input).expect("distinct derived owners admit shared source nodes");
+    for (branch, function) in [FunctionId(1), FunctionId(3)].into_iter().enumerate() {
+        assert_eq!(
+            program.function(function).unwrap().key,
+            function_keys[branch]
+        );
+        for (id, expected_key) in ids[branch].into_iter().zip(&source) {
+            let retained = program.expression(id).unwrap();
+            assert_eq!(&retained.key, expected_key);
+            assert!(
+                retained.body_path.is_empty(),
+                "admitted node-body root path"
+            );
+        }
+        assert!(matches!(
+            &program.expression(ids[branch][0]).unwrap().operation,
+            Operation::Argument { function: owner, position: 0 } if *owner == function
+        ));
+        assert!(matches!(
+            &program.expression(ids[branch][2]).unwrap().operation,
+            Operation::Argument { function: owner, position: 1 } if *owner == function
+        ));
+        assert!(matches!(
+            &program.expression(ids[branch][3]).unwrap().operation,
+            Operation::IntegerAdd { left, right }
+                if *left == ids[branch][1] && *right == ids[branch][2]
+        ));
+    }
+    assert_ne!(
+        ids[0], ids[1],
+        "separate arena addresses retain equal source locations"
+    );
+}
+
+#[trace("TC-209", "IT-018-SC-03", "interface-002-AC-6")]
+#[test]
+fn admitted_position_locations_refuse_duplicate_and_foreign_bindings() {
+    let (mut same, ids, source) = shared_position_parts();
+    same.expressions.push(Expression {
+        key: source[0].clone(),
+        body_path: vec![],
+        value_type: same.expressions[ids[0][0].0].value_type.clone(),
+        operation: Operation::Argument {
+            function: FunctionId(1),
+            position: 0,
+        },
+    });
+    refused(same, ProgramRefusalCode::DuplicateKey);
+
+    let (mut neutral, _, _) = shared_position_parts();
+    for _ in 0..2 {
+        neutral.expressions.push(Expression {
+            key: key("condition"),
+            body_path: vec![],
+            value_type: ValueType::Boolean,
+            operation: Operation::Literal(Value::Boolean(true)),
+        });
+    }
+    refused(neutral, ProgramRefusalCode::DuplicateKey);
+
+    let (mut neutral_bound, _, _) = shared_position_parts();
+    for operation in [
+        Operation::Literal(Value::Integer(Integer::zero())),
+        Operation::Argument {
+            function: FunctionId(1),
+            position: 1,
+        },
+    ] {
+        neutral_bound.expressions.push(Expression {
+            key: key("condition"),
+            body_path: vec![],
+            value_type: ValueType::Integer,
+            operation,
+        });
+    }
+    refused(neutral_bound, ProgramRefusalCode::DuplicateKey);
+
+    let (mut mixed, ids, _) = shared_position_parts();
+    mixed.expressions[ids[0][2].0].operation = Operation::Argument {
+        function: FunctionId(3),
+        position: 1,
+    };
+    refused(mixed, ProgramRefusalCode::DuplicateKey);
+
+    let mut foreign_argument = event_position_parts();
+    let ids = position_expression_ids(&foreign_argument, FunctionId(1));
+    foreign_argument.expressions[ids[2].0].key = source[2].clone();
+    foreign_argument.expressions[ids[2].0].body_path.clear();
+    foreign_argument.expressions[ids[2].0].operation = Operation::Argument {
+        function: FunctionId(3),
+        position: 1,
+    };
+    refused(foreign_argument, ProgramRefusalCode::ForeignArgument);
+
+    for mixed_owner in [false, true] {
+        let mut foreign_local = event_position_parts();
+        let ids = position_expression_ids(&foreign_local, FunctionId(1));
+        foreign_local.expressions[ids[2].0].key = source[2].clone();
+        foreign_local.expressions[ids[2].0].body_path.clear();
+        foreign_local.expressions[ids[2].0].operation = Operation::Local(LocalId {
+            function: FunctionId(3),
+            position: 1,
+        });
+        if !mixed_owner {
+            foreign_local.expressions[ids[0].0].operation = Operation::Argument {
+                function: FunctionId(3),
+                position: 0,
+            };
+        }
+        refused(foreign_local, ProgramRefusalCode::InvalidBinding);
+    }
 }
 
 #[test]
