@@ -60,3 +60,7 @@ No new trace or runnable F-row gap in the driver forwarding and lockfile relock.
 ## Current status
 
 The initial FAIL verdict and earlier IR-1282/IR-1277 blockers above describe historical review passes. The reviewed runnable F rows now execute strict F01/F02/F17 metering, F20 admission refusal, FMA, ordering, identity, arithmetic, and named meter assertions. `cargo test --test ieee_source_agreement` passes (19 passed, zero failed or ignored), and the strict IR-914 export regression passes (1 passed). IR-1283 conversion and negation subcases remain ticket-backed PENDING. IR-1301's transitive QSL filament-core-data split holds the final aggregate gate; no full-gate result is claimed.
+
+## Disposition pass 6
+
+No new trace or F-row coverage gap at the frozen PR head. Six F and three IR-914 SourceIdentity constructor changes preserve test routes and assertions. The full F dispatcher remains fail-closed for unknown IDs; F24/F25/F27/F28/F31/F32/F33 and the F26 conversion portion remain ticket-backed PENDING under IR-1283. The focused F and IR-914 test results were supplied by the coding lane; the lead owns the final aggregate gate.

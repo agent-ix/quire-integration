@@ -88,3 +88,13 @@ The new driver forwarding and lockfile relock contain no code, Rust, or trace fi
 ## Current status
 
 The initial FAIL verdict and earlier blocker statements above record their historical review passes. The reviewed Rust and test-code findings are fixed; FND-009 identified this missing current-status record, which this appendix supplies for reviewer disposition. The strict `real_qsl_export_refusal_is_withheld_before_codegen` check passes (1 passed), and `cargo test --test ieee_source_agreement` passes (19 passed, zero failed or ignored). Scoped Clippy passed for both touched test targets with warnings denied. IR-1301 holds the final aggregate gate because QSL still resolves two transitive filament-core-data revisions. The F conversion and negation portions remain ticket-backed PENDING under IR-1283; they are outside the runnable F slice.
+
+## Disposition pass 8
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-009 | fixed | Both committed review artifacts have current-status appendices; the historical findings and blocker statements remain identifiable as earlier review results. |
+
+## Disposition pass 9
+
+No new finding at the frozen PR head. The final delta updates six F and three IR-914 SourceIdentity constructor calls to the current two-argument API and normally refreshes the first-party dependency cohort. Checked that F agreement helpers still assert QSpec outcomes, independent QSL/runtime equality, ordered charge suffixes, and consumed counters; F20 requires the precise ill-typed admission cause with zero runtime charges. The exhaustive dispatcher still panics on an unknown F ID and routes conversion/negation work to IR-1283 as PENDING or partial. The lead reported focused dependency_cohort 1/1, IEEE F 19/19, IR-914 strict regression 1/1, touched Clippy/fmt/string-edge clean. These results are reviewed evidence, not tests rerun by this reviewer. The lead owns the final aggregate gate.
