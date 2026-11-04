@@ -215,7 +215,7 @@ fn bounded_integer_source_executes_its_generated_oracle_and_observed_qsl_operati
     use qsl_eval::value::{ApplicationObservation, CheckedPackageEvaluation, QualifiedName};
     use qsl_semantics::model::object_environment::ObjectEnvironment;
     use quire_exact::{Integer, Meter, Outcome, Value};
-    let admitted = admit("function step using v(x: Int[0, 9]): Int[1, 10] pure { x + 1 }");
+    let admitted = admit("function step using v(x: Int[0, 9]): Integer pure { x + 1 }");
     let nodes = operation_nodes(&admitted.ir, "quire.op.integer.add");
     assert_eq!(
         nodes.len(),
