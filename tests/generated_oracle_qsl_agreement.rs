@@ -339,3 +339,49 @@ fn observe() {{
     );
     eprintln!("Generated body whole observation: {}", native[1]);
 }
+
+/// This bounded-profile entry has no public per-call profile override. These
+/// are real admitted source quantities, not manually assigned node labels.
+/// A typed bound refusal is not quantity-oracle agreement credit.
+#[trace("TC-099")]
+#[test]
+fn bounded_scalar_entry_retains_the_real_quantity_value_position_refusals() {
+    let admitted = admit(
+        "\
+        dimension Length;\n\
+        unit m : Length = rational(1, 1);\n\
+        unit cm : Length = rational(1, 100) * m;\n\
+        function qadd using v(a: Quantity<m>, b: Quantity<m>): Quantity<m> pure { a + b }\n\
+        function qconvert using v(a: Quantity<cm>): Quantity<m> pure { convert<Quantity<m>>(a) }\n\
+        function qless using v(a: Quantity<m>, b: Quantity<m>): Boolean pure { a < b }\n",
+    );
+    for identity in [
+        "quire.op.quantity.add",
+        "quire.op.quantity.convert",
+        "quire.op.quantity.lt",
+    ] {
+        let nodes = operation_nodes(&admitted.ir, identity);
+        assert_eq!(nodes.len(), 1, "one real {identity} source application");
+        let results = derive_exact_scalar_items(&admitted.ir, &nodes);
+        let [Err(quire_contract_codegen::ExactScalarRefusal::RequiresBound { unbounded_type })] =
+            results.as_slice()
+        else {
+            panic!("current bounded-profile {identity}: {results:?}")
+        };
+        let refused_type = admitted
+            .ir
+            .graph()
+            .nodes
+            .iter()
+            .find(|node| &node.node_id == unbounded_type)
+            .expect("the refused type is in the source graph");
+        assert_eq!(refused_type.node_tag.as_ref(), "scalar_type");
+        assert!(
+            matches!(
+                refused_type.semantic_form.as_ref(),
+                "unit" | "compound_unit" | "carried_quantity"
+            ),
+            "the actual quantity endpoint refuses, not a guessed scalar label: {refused_type:?}"
+        );
+    }
+}
