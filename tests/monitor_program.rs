@@ -854,6 +854,18 @@ fn retained_program_outlives_preparation_and_keeps_four_entry_keys() {
     assert_eq!(second.layout().package_lock.as_ref(), b"selected-lock");
     assert_eq!(second.layout().occurrence.as_ref(), b"occurrence");
     assert_eq!(
+        second.layout().clock_binding.as_ref(),
+        b"diagnostic-clock-value"
+    );
+    assert_eq!(
+        second.layout().admitted_order.as_ref(),
+        b"diagnostic-order-value"
+    );
+    assert_eq!(
+        second.layout().progress_context.as_ref(),
+        b"diagnostic-progress-value"
+    );
+    assert_eq!(
         second.layout().entries,
         Entries {
             init: FunctionId(0),
@@ -1615,14 +1627,7 @@ fn executor_selected_recursion_stops_on_the_explicit_stack() {
     assert!(failure.invariant.is_none());
 }
 
-#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
-#[test]
-fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
-    let budget = StepBudget {
-        work: 3,
-        ..execution_budget()
-    };
-    let expected = StepResource::Work;
+fn membership_probe_parts() -> ProgramParts {
     let mut input = parts();
     let option_integer = ValueType::option(ValueType::Integer);
     input.expressions.push(Expression {
@@ -1650,8 +1655,19 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
         body: ExpressionId(0),
     });
     input.functions[0].body = ExpressionId(5);
+    input
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
+#[test]
+fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
+    let budget = StepBudget {
+        work: 3,
+        ..execution_budget()
+    };
+    let expected = StepResource::Work;
     let failure = match build(BuildPlan {
-        program: Program::try_new(input).unwrap(),
+        program: Program::try_new(membership_probe_parts()).unwrap(),
         budget,
     }) {
         Err(failure) => failure,
@@ -1676,6 +1692,50 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
         _ => panic!("native cause must match the operating stop, without an invariant"),
     }
     assert!(failure.invariant.is_none());
+    assert!(failure.path_capacity.is_none());
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
+#[test]
+fn executor_native_storage_stop_retains_exact_membership_cause_and_arena() {
+    use quire_semantic_value::supplied_membership::SuppliedAdmissionError;
+
+    let program = Program::try_new(membership_probe_parts()).unwrap();
+    let failure = build(BuildPlan {
+        program: Rc::clone(&program),
+        budget: StepBudget {
+            scratch_bytes: 0,
+            ..execution_budget()
+        },
+    })
+    .err()
+    .expect("native membership storage request must stop before helper execution");
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    let stop = failure.resource.expect("retain operating storage stop");
+    assert_eq!(stop.resource, StepResource::ScratchBytes);
+    let native = failure
+        .admission
+        .expect("retain native membership cause and arena");
+    let (SuppliedAdmissionError::Allocation { locus, request }
+    | SuppliedAdmissionError::Capacity { locus, request }) = native.failure
+    else {
+        panic!("native storage refusal must keep its typed request");
+    };
+    assert!(request.amount() > 0);
+    assert!(native.arena.resolve(locus).is_some());
+    assert!(
+        failure.path_capacity.is_none(),
+        "arena-ID exhaustion is a distinct QSV-owned path"
+    );
+    assert!(failure.invariant.is_none());
+    let later = build(BuildPlan {
+        program,
+        budget: execution_budget(),
+    })
+    .err()
+    .expect("the authored option still mismatches the helper signature");
+    assert_eq!(later.code, MonitorFailureCode::Admission);
+    assert!(later.resource.is_none());
 }
 
 fn lexical_base() -> ProgramParts {
@@ -1764,7 +1824,40 @@ fn one_lexical_binding() -> ProgramParts {
 #[trace("TC-098", "IT-018-SC-06", "interface-004-AC-2")]
 #[test]
 fn lexical_value_is_evaluated_once_within_its_scoped_body() {
-    let program = Program::try_new(one_lexical_binding()).unwrap();
+    let input = one_lexical_binding();
+    let local = ExpressionId(4);
+    let let_body = input.functions[0].body;
+    let original_local = (
+        input.expressions[local.0].key.clone(),
+        input.expressions[local.0].body_path.clone(),
+    );
+    let original_let = (
+        input.expressions[let_body.0].key.clone(),
+        input.expressions[let_body.0].body_path.clone(),
+    );
+    assert_eq!(original_local.0, key("lexical-init"));
+    assert_eq!(original_let.0, key("lexical-init"));
+    let program = Program::try_new(input).unwrap();
+    let retained_local = program.expression(local).unwrap();
+    assert_eq!(
+        (&retained_local.key, &retained_local.body_path),
+        (&original_local.0, &original_local.1)
+    );
+    assert!(matches!(
+        &retained_local.operation,
+        Operation::Local(LocalId {
+            function: FunctionId(0),
+            position: 0
+        })
+    ));
+    let retained_let = program.expression(let_body).unwrap();
+    assert_eq!(
+        (&retained_let.key, &retained_let.body_path),
+        (&original_let.0, &original_let.1)
+    );
+    assert!(
+        matches!(&retained_let.operation, Operation::Let { binding: LocalId { function: FunctionId(0), position: 0 }, body, .. } if *body == local)
+    );
     let monitor = build(BuildPlan {
         program: Rc::clone(&program),
         budget: StepBudget {
@@ -2462,8 +2555,20 @@ fn tuple_projection_rejects_record_receivers_missing_positions_and_wrong_types()
 #[trace("TC-098", "IT-018-SC-08", "interface-006-AC-3")]
 #[test]
 fn tuple_projection_retained_addresses_respect_scratch_budget() {
-    let (input, _) = tuple_parts(1);
+    let (input, literal) = tuple_parts(1);
+    let projection = input.functions[0].body;
+    let source = (
+        &input.expressions[projection.0].key,
+        &input.expressions[projection.0].body_path,
+    );
+    let source = (source.0.clone(), source.1.clone());
     let program = Program::try_new(input).unwrap();
+    let retained = program.expression(projection).unwrap();
+    assert_eq!(retained.key, key("tuple-init"));
+    assert_eq!((&retained.key, &retained.body_path), (&source.0, &source.1));
+    assert!(
+        matches!(&retained.operation, Operation::TupleElement { value, position: 1 } if *value == literal)
+    );
     let failure = match build(BuildPlan {
         program: Rc::clone(&program),
         budget: StepBudget {
@@ -2707,8 +2812,20 @@ fn record_members_refuse_wrong_owner_missing_member_tuple_and_wrong_result() {
 #[trace("TC-098", "IT-018-SC-09", "interface-007-AC-3")]
 #[test]
 fn record_member_addresses_consume_scratch_before_returning_state() {
-    let (input, _) = record_parts("left_state");
+    let (input, literal) = record_parts("left_state");
+    let projection = input.functions[0].body;
+    let source = (
+        &input.expressions[projection.0].key,
+        &input.expressions[projection.0].body_path,
+    );
+    let source = (source.0.clone(), source.1.clone());
     let program = Program::try_new(input).unwrap();
+    let retained = program.expression(projection).unwrap();
+    assert_eq!(retained.key, key("record-init"));
+    assert_eq!((&retained.key, &retained.body_path), (&source.0, &source.1));
+    assert!(
+        matches!(&retained.operation, Operation::RecordField { value, member } if *value == literal && member == &MemberId::new(MemberOwner::Node(key("state-holder")), "left_state").unwrap())
+    );
     let mut budget = execution_budget();
     budget.scratch_elements = 1;
     let failure = build(BuildPlan {
@@ -4610,6 +4727,67 @@ fn sequence_visit_and_formation_stops_retain_native_causes_without_a_partial_val
     );
 }
 
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-3")]
+#[test]
+fn collection_result_retention_denials_keep_the_native_charge_and_no_partial_state() {
+    for limit_kind in [
+        quire_exact::LimitKind::ValueOccurrences,
+        quire_exact::LimitKind::ResultUnits,
+    ] {
+        let mut input = standard_parts("sequence-init");
+        let sequence = sequence_literals(&mut input, "sequence-init", &[1]);
+        let size = lexical_expression(
+            &mut input,
+            "sequence-init",
+            ValueType::Integer,
+            Operation::SequenceSize { value: sequence },
+        );
+        finish_integer_equal(&mut input, "sequence-init", size, "1");
+        let program = Program::try_new(input).unwrap();
+        let mut budget = execution_budget();
+        match limit_kind {
+            quire_exact::LimitKind::ValueOccurrences => budget.scalar.value_occurrences = 1,
+            quire_exact::LimitKind::ResultUnits => budget.scalar.result_units = 0,
+            _ => unreachable!("two exact retention counters"),
+        }
+        let failure = build(BuildPlan {
+            program: Rc::clone(&program),
+            budget,
+        })
+        .err()
+        .expect("the collection retain charge must stop before an initialized State exists");
+        assert_eq!(failure.code, MonitorFailureCode::Resource);
+        assert!(failure.invariant.is_none());
+        assert!(failure.admission.is_none());
+        assert_eq!(
+            failure.resource.as_ref().unwrap().resource,
+            StepResource::Scalar(limit_kind)
+        );
+        let native = failure.scalar.expect("keep the native collection stop");
+        assert_eq!(
+            native.site,
+            quire_contract_runtime::monitor::ExecutionSite::Expression(sequence)
+        );
+        let quire_exact::Outcome::Incomplete(cause) = native.outcome else {
+            panic!("retain denial has no partial collection value");
+        };
+        assert_eq!(
+            cause.charge_point,
+            quire_exact::ChargePoint::CollectionResultRetain
+        );
+        assert_eq!(cause.limit_kind, limit_kind);
+        assert_eq!(cause.next_charge, Integer::from(2_u64));
+        assert_now(
+            &build(BuildPlan {
+                program,
+                budget: execution_budget(),
+            })
+            .expect("later full-budget invocation starts clean"),
+            99,
+        );
+    }
+}
+
 #[trace("TC-098", "IT-018-SC-07", "interface-005-AC-3", "interface-008-AC-2")]
 #[test]
 fn short_circuit_boolean_native_retention_stops_without_evaluating_the_skipped_recursion() {
@@ -4994,6 +5172,132 @@ fn checked_equality_and_union_retention_keep_native_operating_shortages() {
         quire_exact::ChargePoint::CompositeResultRetain
     );
     assert_eq!(cause.next_charge, Integer::one());
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
+#[test]
+#[string_edge]
+fn equality_and_union_scratch_denials_leave_no_partial_initial_state() {
+    let mut equality_input = standard_parts("equality-init");
+    let left = standard_literal(
+        &mut equality_input,
+        "equality-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let right = standard_literal(
+        &mut equality_input,
+        "equality-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let checked = equality_input
+        .types
+        .check_equality(
+            EqualityOperator::Equal,
+            EqualityOperand::typed(ValueType::Boolean),
+            EqualityOperand::typed(ValueType::Boolean),
+            &EnumMemberIndex::default(),
+        )
+        .unwrap();
+    let equality = lexical_expression(
+        &mut equality_input,
+        "equality-init",
+        ValueType::Boolean,
+        Operation::Equality {
+            left,
+            right,
+            checked: Box::new(checked),
+        },
+    );
+    finish_boolean_condition(&mut equality_input, "equality-init", equality);
+    let equality_program = Program::try_new(equality_input).unwrap();
+    let failure = build(BuildPlan {
+        program: Rc::clone(&equality_program),
+        budget: StepBudget {
+            scratch_elements: 1,
+            ..execution_budget()
+        },
+    })
+    .err()
+    .expect("two equality operands cannot fit one scratch address");
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    let stop = failure.resource.expect("exact equality address shortage");
+    assert_eq!(stop.resource, StepResource::ScratchElements);
+    assert_eq!(
+        (stop.limit, stop.spent, stop.requested),
+        (Some(1), 1, Integer::one())
+    );
+    assert!(failure.scalar.is_none());
+    assert!(failure.invariant.is_none());
+    assert_now(
+        &build(BuildPlan {
+            program: equality_program,
+            budget: execution_budget(),
+        })
+        .expect("later equality invocation starts clean"),
+        99,
+    );
+
+    let mut union_input = standard_parts("union-init");
+    let members = verified_union(&mut union_input, "state-choice");
+    let variant = members
+        .iter()
+        .find(|member| member.identifier() == "Chosen")
+        .unwrap()
+        .variant()
+        .clone();
+    let state = union_input.layout.state.value_type.clone();
+    let state_value = state_at(&union_input, 0);
+    let payload = standard_literal(&mut union_input, "union-init", state, state_value);
+    let union = lexical_expression(
+        &mut union_input,
+        "union-init",
+        ValueType::Composite(key("state-choice")),
+        Operation::Union {
+            variant: variant.clone(),
+            positions: vec![payload],
+        },
+    );
+    let condition = lexical_expression(
+        &mut union_input,
+        "union-init",
+        ValueType::Boolean,
+        Operation::UnionIs {
+            value: union,
+            variant,
+        },
+    );
+    finish_boolean_condition(&mut union_input, "union-init", condition);
+    let union_program = Program::try_new(union_input).unwrap();
+    let failure = build(BuildPlan {
+        program: Rc::clone(&union_program),
+        budget: StepBudget {
+            scratch_bytes: 0,
+            ..execution_budget()
+        },
+    })
+    .err()
+    .expect("one union payload cannot fit zero scratch bytes");
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    let stop = failure.resource.expect("exact union byte shortage");
+    assert_eq!(stop.resource, StepResource::ScratchBytes);
+    assert_eq!(stop.limit, Some(0));
+    assert_eq!(stop.spent, 0);
+    assert_eq!(
+        stop.requested,
+        Integer::from(core::mem::size_of::<FieldValue>())
+    );
+    assert!(failure.scalar.is_none());
+    assert!(failure.invariant.is_none());
+    assert_now(
+        &build(BuildPlan {
+            program: union_program,
+            budget: execution_budget(),
+        })
+        .expect("later union invocation starts clean"),
+        99,
+    );
 }
 
 #[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
@@ -6208,6 +6512,31 @@ fn dispatch_checks_each_independent_context_component_before_executing() {
         .unwrap();
     assert_eq!(failure.input, Some(InputRefusal::ProgressContext));
     assert_now(&monitor, 0);
+    let invalid_scope = Value::Integer(Integer::zero());
+    let failure = monitor
+        .watermark(Watermark {
+            context: original,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted assertion",
+            inclusive_boundary: &boundary,
+            scope: &invalid_scope,
+        })
+        .err()
+        .expect("a wrong scope value refuses before progress commits");
+    assert_eq!(failure.input, Some(InputRefusal::Values));
+    assert_now(&monitor, 0);
+    let later = Integer::from(5_u64);
+    monitor
+        .watermark(Watermark {
+            context: original,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted assertion",
+            inclusive_boundary: &later,
+            scope: &scope,
+        })
+        .expect("the lower valid watermark proves rejected progress was not committed");
+    assert_now(&monitor, 5);
+    assert_eq!(monitor.baseline(), None);
     monitor
         .event(Event {
             reading: Reading {
