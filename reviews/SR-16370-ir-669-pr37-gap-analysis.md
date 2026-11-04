@@ -68,3 +68,21 @@ No new trace or F-row coverage gap at the frozen PR head. Six F and three IR-914
 ## Disposition pass 7
 
 The incremental `SourceIdentity::new` constructor migration at head `f429337` changes nine fixture calls across four existing tests without changing their trace tags, assertions, or oracle paths. Scoped gap disposition: PASS, no new finding. Final non-proof gate evidence remains pending on the next head; `make kani` is unrun under the standing 16 GiB proof restriction.
+
+## New findings (disposition pass 8)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-004 | medium | D13, D18 and D24 now execute only RT while their QSL composition is marked PENDING under IR-1312. IT-017-SC-01/05 and TC-097 require an open upstream owner ticket for each PENDING path; structured IR-1312 is the integration-owned D04/D05 fixture ticket, whose acceptance criteria do not own these three source-composition decisions. Their QSL observations are therefore not validly ticket-backed. | tests/scalar_agreement_decimal.rs:359-376, 888-927, 1055-1089, 1316-1358; spec/integration/IT-017-runtime-scalar-agreement.md:81-86,124-130 |
+
+## Disposition pass 8
+
+The unknown-ID panic and QSpec TC-185 dispatch remain exhaustive. D13/D18/D24 retain the RT-only values, losses and charge assertions, and D25 retains an exact S4 type-mismatch assertion. Those three rows cannot count as two-sided agreement while their QSL paths are absent. FND-004 remains open until each missing path has an actual upstream owner ticket and the PENDING routing names it; an integration-owned D04/D05 fixture ticket does not satisfy IT-017's owner requirement.
+
+## Disposition pass 9
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-004 | fixed | D13, D18 and D24 now cite QSL-1619, an open upstream QSL/QSpec ticket whose structured scope and acceptance criteria own all three missing source-composition paths. Their RT oracles remain active, and the rows are not claimed as QSL/RT agreement. |
+
+The repaired dispatcher names QSL-1393 PENDING for the division-source rows D04/D05/D06/D09/D12/D14/D15/D17 and QSL-1619 PENDING for D13/D18/D24. D25 remains partly PENDING under QSL-1394 while its mixed-profile refusal and explicit conversion admission run. Unknown QSpec IDs still panic. Titan's focused decimal run passed 1, failed 0, ignored 3 at the reviewed head. These PENDING paths are unqualified and do not complete IT-017 or TC-097; no new trace or gap finding in the repair delta.

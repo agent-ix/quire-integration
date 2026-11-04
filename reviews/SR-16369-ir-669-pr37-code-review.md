@@ -102,3 +102,21 @@ No new finding at the frozen PR head. The final delta updates six F and three IR
 ## Disposition pass 10
 
 The final gate exposed nine remaining four-argument `SourceIdentity::new` calls in four existing integration test files. At head `f429337`, each call now passes only its original nonblank authority and identity to the pinned QSL two-argument constructor; path and bytes remain separate. The incremental diff changes no assertions, traces, charge logic, production code, or lockfile. Scoped code and Rust disposition: PASS, no new finding. The six non-proof final targets are rerunning on the next head; `make kani` remains unrun under the standing 16 GiB proof restriction.
+
+## New findings (disposition pass 11)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-010 | high | D04's new shared Decimal type includes zero on the divisor side, so the unguarded source division cannot pass QSL's S4 nonzero proof. `qsl_binary_with_denial` expects S4 admission and panics before the intended two-sided value and charge assertions run. The same zero-inclusive divisor type appears in D05 and other changed admitted division sources. | tests/scalar_agreement_decimal.rs:510-529, 532-565; qsl-semantics/src/check/facts.rs:873-884 |
+
+## Disposition pass 11
+
+The incremental decimal-source edit retains the independent runtime oracle, typed loss comparisons and ordered scalar charge suffix checks on every admitted path. D25 now asserts the exact mixed-profile `IllTyped(TypeMismatch)` S4 cause. No separate Rust style defect was found. FND-010 remains open pending an S4-admissible source form that preserves TC-185's values and FR-140-AC-7's shared-type rule; the final focused decimal result was still running during this static disposition.
+
+## Disposition pass 12
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-010 | fixed | D04/D05/D09/D12/D14/D17 no longer invoke a zero-inclusive, unguarded QSL Divide at S4. Each row retains its RT oracle and is explicitly QSL-1393 PENDING for its unavailable QSL composition; none is claimed as two-sided agreement. |
+
+The current decimal source edit preserves the exact RT value, typed loss, and named charge assertions for the PENDING division rows. D25 still asserts S4 `IllTyped(TypeMismatch)` for mixed Decimal profiles. The QSpec dispatcher still fails on unknown IDs. Titan's focused `scalar_agreement_decimal` run at this reviewed head passed 1, failed 0, ignored 3; QSL-1393 and QSL-1619 paths remain unqualified and are not agreement evidence. No new code or Rust finding in the repair delta. The lead owns the final aggregate gate.
