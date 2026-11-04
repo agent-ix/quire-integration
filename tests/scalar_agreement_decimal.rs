@@ -192,7 +192,7 @@ fn qsl_convert(
     (outcome, losses, meter)
 }
 
-// QSL-1394: the parser admits decimal(c,s), but the forms stage still
+// QSL-1394 / QSL-1619: the parser admits decimal(c,s), but the forms stage still
 // refuses its ExactNumber expression. Keep this typed boundary executable so
 // these source rows fail visibly when the producer becomes representable.
 fn decimal_literal_source_pending(body: &str, result_type: &str) {
@@ -372,16 +372,16 @@ fn tc185_decimal_vectors() {
             "D22" => d22(),
             "D23" => d23(),
             "D24" => d24(),
-            // QSL-1394 PENDING: literal arms stop at S2; mixed named
+            // QSL-1394 / QSL-1619 PENDING: literal arms stop at S2; mixed named
             // Decimal admission/refusal still executes at S4.
             "D25" => d25(),
-            // QSL-1394 PENDING: source literal expression stops at S2;
+            // QSL-1394 / QSL-1619 PENDING: source literal expression stops at S2;
             // retained-operand RT oracle remains runnable.
             "D26" => d26(),
-            // QSL-1394 PENDING: source literal expression stops at S2;
+            // QSL-1394 / QSL-1619 PENDING: source literal expression stops at S2;
             // RT division and denial remain runnable.
             "D27" => d27(),
-            // QSL-1394 PENDING: S4 type-mismatch checks cannot run until
+            // QSL-1394 / QSL-1619 PENDING: S4 type-mismatch checks cannot run until
             // the literal expression passes S2.
             "D28" => d28(),
             other => panic!("unimplemented TC-185 vector {other}"),
@@ -1328,7 +1328,7 @@ fn d25() {
         refusal.cause,
         CheckCause::IllTyped(IllTypedCause::TypeMismatch)
     );
-    // QSL-1394 PENDING: ExactNumber expressions do not reach S4 yet.
+    // QSL-1394 / QSL-1619 PENDING: ExactNumber expressions do not reach S4 yet.
     for (body, result_type) in [
         ("let v = decimal(15,1) + decimal(225,2) in v", "P"),
         ("decimal(15,1) = decimal(150,2)", "Boolean"),
@@ -1385,7 +1385,7 @@ fn d26() {
             7,
             9,
         );
-        // QSL-1394 PENDING: authored literal body cannot reach S4/S6a.
+        // QSL-1394 / QSL-1619 PENDING: authored literal body cannot reach S4/S6a.
         decimal_literal_source_pending("decimal(100,2) * decimal(3,0)", result_type);
     }
 }
@@ -1425,7 +1425,7 @@ fn d27() {
         0,
         2,
     );
-    // QSL-1394 PENDING: authored literal body cannot reach S4/S6a.
+    // QSL-1394 / QSL-1619 PENDING: authored literal body cannot reach S4/S6a.
     decimal_literal_source_pending(
         "decimal(1200,3) / decimal(7,0)",
         "Decimal[-1000,1000;0,1;nearest-even]",
@@ -1433,7 +1433,7 @@ fn d27() {
 }
 
 fn d28() {
-    // QSL-1394 PENDING: type-mismatch refusals require S4, which ExactNumber
+    // QSL-1394 / QSL-1619 PENDING: type-mismatch refusals require S4, which ExactNumber
     // cannot reach. Assert the precise S2 producer blocker for all three arms.
     for (body, result_type) in [
         (
