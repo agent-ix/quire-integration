@@ -154,7 +154,7 @@ fn observed_binary(
         operation.symbol()
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "ieee.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -227,7 +227,7 @@ fn observed_sqrt(
          {{ quire::value::ieee::sqrt(a) }}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "ieee-root.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -284,7 +284,7 @@ fn observed_float_source(
          profile v = \"quire.value.complete/v1\";\n{function}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "ieee-callable.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -902,7 +902,7 @@ fn observed_numeric_equal(left: u32, right: u32, mut meter: Meter) -> (Outcome<V
          function equal using v(a: Float32[nearest-even], b: Float32[nearest-even]): \
          Boolean pure { a = b }\n";
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "ieee-equal.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -1176,7 +1176,7 @@ fn tc193_f06_cross_width_comparison_refuses_before_evaluation() {
          function mixed using v(a: Float32[nearest-even], b: Float64[nearest-even]): \
          Boolean pure { a = b }\n";
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "ieee-mixed.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -1224,7 +1224,7 @@ fn assert_f20_source_admission_refusal(function: &str) {
          profile v = \"quire.value.complete/v1\";\n{function}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "ieee-f20.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
