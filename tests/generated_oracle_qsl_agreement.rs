@@ -101,13 +101,13 @@ fn limits() -> quire_exact::ScalarLimits {
     }
 }
 
-fn integer_outcome(
+fn boolean_outcome(
     outcome: quire_exact::Outcome<quire_exact::Value>,
-) -> quire_exact::Outcome<quire_exact::Integer> {
+) -> quire_exact::Outcome<bool> {
     use quire_exact::{Outcome, Value};
     match outcome {
-        Outcome::Completed(Value::Integer(value)) => Outcome::Completed(value),
-        Outcome::Completed(other) => panic!("the authority must return an Integer: {other:?}"),
+        Outcome::Completed(Value::Boolean(value)) => Outcome::Completed(value),
+        Outcome::Completed(other) => panic!("the authority must return Boolean: {other:?}"),
         Outcome::Undefined(cause) => Outcome::Undefined(cause),
         Outcome::Refused(cause) => Outcome::Refused(cause),
         Outcome::Incomplete(cause) => Outcome::Incomplete(cause),
@@ -118,9 +118,9 @@ fn integer_outcome(
 /// complete scalar/composite/function coordinator executes their controls.
 #[trace("TC-099")]
 #[test]
-fn generated_integer_addition_matches_the_actual_qsl_body() {
-    let admitted = admit("function addition using v(): Int[0, 9] pure { 4 + 1 }");
-    let nodes = operation_nodes(&admitted.ir, "quire.op.integer.add");
+fn generated_boolean_negation_matches_the_actual_qsl_body() {
+    let admitted = admit("function negation using v(): Boolean pure { not false }");
+    let nodes = operation_nodes(&admitted.ir, "quire.op.boolean.not");
     let items = derive_exact_scalar_items(&admitted.ir, &nodes)
         .into_iter()
         .map(|item| item.expect("admitted scalar derives"))
@@ -128,15 +128,15 @@ fn generated_integer_addition_matches_the_actual_qsl_body() {
     let output = generate_exact_scalar_oracles(&admitted.ir, &items)
         .expect("actual selected source generates");
     let [claim] = output.claim_map.items.as_slice() else {
-        panic!("one addition claim")
+        panic!("one negation claim")
     };
     let quire_contract_codegen::ClaimDisposition::Generated(generated) = &claim.result else {
-        panic!("real addition must generate: {:?}", claim.result);
+        panic!("real negation must generate: {:?}", claim.result);
     };
     let identity = admitted
         .qsl
         .graph()
-        .function_identity("addition")
+        .function_identity("negation")
         .expect("the admitted function identity");
     let body = admitted
         .qsl
@@ -159,15 +159,15 @@ fn generated_integer_addition_matches_the_actual_qsl_body() {
         .into_iter()
         .map(|loss| loss.loss)
         .collect::<Vec<_>>();
-    let expected = oracle_observation::snapshot(&integer_outcome(qsl_outcome), &losses, &qsl_meter);
+    let expected = oracle_observation::snapshot(&boolean_outcome(qsl_outcome), &losses, &qsl_meter);
     let driver = format!(
         r#"
 mod oracle_observation;
-use quire_exact::{{Integer, Meter, ScalarLimits}};
+use quire_exact::{{Meter, ScalarLimits}};
 #[test]
 fn observe() {{
     let mut meter = Meter::new({:?});
-    let actual = quire_exact_scalar_oracles::{}(&Integer::from(4_i64), &Integer::from(1_i64), &mut meter)
+    let actual = quire_exact_scalar_oracles::{}(false, &mut meter)
         .expect("generated operand admission");
     let losses = Vec::<quire_semantic_value::loss::ValueLoss>::new();
     println!("IT019_OBSERVATION {{}}", oracle_observation::snapshot(&actual, &losses, &meter));
