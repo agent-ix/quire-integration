@@ -66,7 +66,7 @@ fn unit_selecting() -> String {
 /// check, link and emit, through the crates' public APIs.
 fn emit(unit: &str, document: &[u8]) -> Vec<u8> {
     let parsed = qsl_cst::parse(
-        SourceIdentity::new("agent-ix", "test:model-owner", "fixture", "fixture:1"),
+        SourceIdentity::new("agent-ix", "test:model-owner"),
         "program.native",
         unit.as_bytes(),
         qsl_cst::Limits::default(),

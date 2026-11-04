@@ -160,7 +160,7 @@ fn assembled_source(source: &str, facet: &str) -> PackageDeclarations {
          profile v = \"{facet}\";\n{source}"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669", "git", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir-669"),
         "scalar.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -739,7 +739,7 @@ fn integer_operator_source_spans_survive_form_building() {
              function op using v(): Integer pure {{ {expression} }}"
         );
         let parsed = qsl_cst::parse(
-            qsl_foundation::SourceIdentity::new("agent-ix", "ir-669-spans", "git", "1"),
+            qsl_foundation::SourceIdentity::new("agent-ix", "ir-669-spans"),
             "scalar.native",
             source.as_bytes(),
             qsl_cst::Limits::default(),

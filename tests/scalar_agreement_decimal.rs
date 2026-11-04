@@ -124,7 +124,7 @@ fn qsl_binary_with_denial(
          function f using v(a: {left_type}, b: {right_type}): {result_type} pure {{ a {operator} b }}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal", "fixture", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal"),
         "decimal.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -178,7 +178,7 @@ fn qsl_convert(
          function f using v(a: {input_type}): {result_type} pure {{ convert<{result_type}>(a) }}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal-convert", "fixture", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal-convert"),
         "decimal.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -708,7 +708,7 @@ fn qsl_type_admitted(lo: i64, hi: i64, first: u64, last: u64) -> bool {
          function f using v(a: T): T pure {{ a }}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-d10", "fixture", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-d10"),
         "decimal.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -766,7 +766,7 @@ fn qsl_membership_limited(type_spelling: &str, value: Decimal, limits: ScalarLim
          function f using v(a: {type_spelling}): {type_spelling} pure {{ a }}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal-membership", "fixture", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal-membership"),
         "decimal.native",
         source.as_bytes(),
         qsl_cst::Limits::default(),
@@ -1439,7 +1439,7 @@ fn d25_source(body: &str, result: &str) -> bool {
          function f using v(p: P, r: R): {result} pure {{ {body} }}\n"
     );
     let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-d25", "fixture", "1"),
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-d25"),
         "decimal.native",
         text.as_bytes(),
         qsl_cst::Limits::default(),

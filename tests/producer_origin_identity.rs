@@ -113,8 +113,11 @@ fn declaration_id(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
 
 /// Carry a key that came from the admitted IR graph into QSV's structural
 /// identity representation. This does not construct an identity from parts.
-fn admitted_key(id: &CheckedNodeId) -> NodeKey {
-    let wire = serde_json::to_value(id).expect("admitted node ID serializes");
+fn admitted_key(package: &CheckedPackageV2, id: &CheckedNodeId) -> NodeKey {
+    let structural = package
+        .structural_key(id)
+        .expect("node ID belongs to the admitted package");
+    let wire = serde_json::to_value(structural).expect("structural key serializes");
     node_key_from_json(&wire).expect("admitted structural node ID is a NodeKey")
 }
 
@@ -147,7 +150,7 @@ fn body_rational(body: &Value, member: &str) -> Rational {
 fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
     let package = admitted();
     let phase_node = declaration_node(package, "Phase");
-    let phase = admitted_key(&phase_node.node_id);
+    let phase = admitted_key(package, &phase_node.node_id);
     let CheckedTerm::NominalBody(body) = &phase_node.body else {
         panic!("admitted Phase has a nominal body: {:?}", phase_node.body);
     };
@@ -172,7 +175,7 @@ fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
         // owner; its checked semantic type names the source-owned enum.
         assert!(node.owner.is_none(), "enum member owner is its type");
         let case = value.as_str().expect("admitted case name");
-        let member_key = admitted_key(&node.node_id);
+        let member_key = admitted_key(package, &node.node_id);
         let member = declaration
             .member(case, member_key.clone())
             .expect("reader-admitted case belongs to its declaration");
@@ -186,7 +189,7 @@ fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
         .member("ABSENT", phase)
         .expect_err("a case outside the declaration refuses");
     assert_eq!(refusal.cause, SemanticGraphCause::UndeclaredCase);
-    let phase = admitted_key(&phase_node.node_id);
+    let phase = admitted_key(package, &phase_node.node_id);
     for members in [
         vec![],
         vec!["OPEN".to_owned(), "OPEN".to_owned()],
@@ -227,27 +230,27 @@ fn admitted_units() -> AdmittedUnits {
 
 fn admitted_units_from_package(package: &CheckedPackageV2) -> AdmittedUnits {
     let dimension_id = declaration_id(package, "Length");
-    let dimension = admitted_key(&dimension_id);
+    let dimension = admitted_key(package, &dimension_id);
     let time_id = declaration_id(package, "Time");
-    let time = admitted_key(&time_id);
+    let time = admitted_key(package, &time_id);
     let metre_id = declaration_id(package, "m");
-    let metre = admitted_key(&metre_id);
+    let metre = admitted_key(package, &metre_id);
     let centimetre_id = declaration_id(package, "cm");
-    let centimetre = admitted_key(&centimetre_id);
+    let centimetre = admitted_key(package, &centimetre_id);
     let kilometre_id = declaration_id(package, "km");
-    let kilometre = admitted_key(&kilometre_id);
+    let kilometre = admitted_key(package, &kilometre_id);
     let second_id = declaration_id(package, "s");
-    let second = admitted_key(&second_id);
+    let second = admitted_key(package, &second_id);
     let temperature_id = declaration_id(package, "Temperature");
-    let temperature = admitted_key(&temperature_id);
+    let temperature = admitted_key(package, &temperature_id);
     let kelvin_id = declaration_id(package, "K");
-    let kelvin = admitted_key(&kelvin_id);
+    let kelvin = admitted_key(package, &kelvin_id);
     let celsius_id = declaration_id(package, "degC");
-    let celsius = admitted_key(&celsius_id);
+    let celsius = admitted_key(package, &celsius_id);
     let area_id = declaration_id(package, "Area");
-    let area = admitted_key(&area_id);
+    let area = admitted_key(package, &area_id);
     let square_metre_id = declaration_id(package, "m2");
-    let square_metre = admitted_key(&square_metre_id);
+    let square_metre = admitted_key(package, &square_metre_id);
     let dimension_body = nominal_wire(declaration_node(package, "Length"));
     assert_eq!(dimension_body["term"], "dimension");
     assert_eq!(dimension_body["terms"], serde_json::json!([]));
@@ -287,7 +290,7 @@ fn admitted_units_from_package(package: &CheckedPackageV2) -> AdmittedUnits {
                 .expect("canonical exponent")
                 .parse::<Integer>()
                 .expect("admitted integer exponent");
-            (admitted_key(&id), exponent)
+            (admitted_key(package, &id), exponent)
         })
         .collect();
     let dimension_pairs = [
@@ -653,9 +656,9 @@ fn admitted_scale_and_offset_matrix_matches_independent_i128_oracle() {
     source.push_str("function keep using v(x: Int[0, 9]): Int[0, 9] pure { x }\n");
     let package = emit_and_read(&source);
     let dimension_id = declaration_id(&package, "Length");
-    let dimension = admitted_key(&dimension_id);
+    let dimension = admitted_key(&package, &dimension_id);
     let root_id = declaration_id(&package, "root");
-    let root = admitted_key(&root_id);
+    let root = admitted_key(&package, &root_id);
     let root_body = nominal_wire(declaration_node(&package, "root"));
     assert_eq!(body_id(&root_body, "dimension_node_id"), dimension_id);
     assert!(root_body["target_unit_node_id"].is_null());
@@ -679,7 +682,7 @@ fn admitted_scale_and_offset_matrix_matches_independent_i128_oracle() {
         for offset_index in 0..OFFSETS.len() {
             let name = format!("u{scale_index}{offset_index}");
             let id = declaration_id(&package, &name);
-            let key = admitted_key(&id);
+            let key = admitted_key(&package, &id);
             let body = nominal_wire(declaration_node(&package, &name));
             assert_eq!(body_id(&body, "dimension_node_id"), dimension_id);
             assert_eq!(body_id(&body, "target_unit_node_id"), root_id);
@@ -1174,8 +1177,8 @@ fn admitted_affine_power_refuses_and_distinct_length_units_combine_canonically()
 )]
 fn admitted_dimension_keys_expose_first_typed_term_cause() {
     let package = admitted();
-    let length = admitted_key(&declaration_id(package, "Length"));
-    let time = admitted_key(&declaration_id(package, "Time"));
+    let length = admitted_key(package, &declaration_id(package, "Length"));
+    let time = admitted_key(package, &declaration_id(package, "Time"));
     let ascending = if length < time {
         [length, time]
     } else {
@@ -1205,9 +1208,9 @@ fn admitted_dimension_keys_expose_first_typed_term_cause() {
         Err(SemanticGraphCause::UnsortedTerms)
     );
 
-    let area = admitted_key(&declaration_id(package, "Area"));
-    let length = admitted_key(&declaration_id(package, "Length"));
-    let time = admitted_key(&declaration_id(package, "Time"));
+    let area = admitted_key(package, &declaration_id(package, "Area"));
+    let length = admitted_key(package, &declaration_id(package, "Length"));
+    let time = admitted_key(package, &declaration_id(package, "Time"));
     let dimensions = BTreeMap::from([
         (length.clone(), checked(Vec::new()).expect("base length")),
         (
@@ -1240,12 +1243,12 @@ fn admitted_dimension_keys_expose_first_typed_term_cause() {
 )]
 fn admitted_unit_keys_expose_first_typed_edge_and_topology_cause() {
     let package = admitted();
-    let length = admitted_key(&declaration_id(package, "Length"));
-    let time = admitted_key(&declaration_id(package, "Time"));
-    let metre = admitted_key(&declaration_id(package, "m"));
-    let centimetre = admitted_key(&declaration_id(package, "cm"));
-    let kilometre = admitted_key(&declaration_id(package, "km"));
-    let second = admitted_key(&declaration_id(package, "s"));
+    let length = admitted_key(package, &declaration_id(package, "Length"));
+    let time = admitted_key(package, &declaration_id(package, "Time"));
+    let metre = admitted_key(package, &declaration_id(package, "m"));
+    let centimetre = admitted_key(package, &declaration_id(package, "cm"));
+    let kilometre = admitted_key(package, &declaration_id(package, "km"));
+    let second = admitted_key(package, &declaration_id(package, "s"));
     let ratio = |value: i64| Rational::from_integer(Integer::from(value));
     let unit = |dimension: NodeKey, target: Option<NodeKey>, scale, offset| {
         UnitNode::checked(
