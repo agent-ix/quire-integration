@@ -1208,10 +1208,8 @@ mod enum_rows {
 
     #[trace("TC-097", "IT-017-SC-01", "IT-017-SC-04")]
     #[test]
-    pub(super) fn tc186_t09_changed_owner_has_distinct_identity() {
+    pub(super) fn tc186_t09_changed_declaration_has_distinct_identity() {
         selected_vector("T09");
-        // Case/order identity is PENDING IR-1300 / QSL-1574: QSL currently
-        // retains the same declaration key when only the enum body changes.
         let old = assemble("ordered enum A { READY, DONE }");
         let changed_owner =
             assemble_with_package("ordered enum A { READY, DONE }", "ir-669-other-owner");
@@ -1228,6 +1226,46 @@ mod enum_rows {
         .expect_err("a changed admitted declaration has a new identity");
         assert_eq!(error.cause, IllTypedCause::DistinctEnumDeclarations);
         assert!(meter.admitted_charges().is_empty());
+
+        for (difference, source) in [
+            ("case set", "ordered enum A { READY, DONE, FAILED }"),
+            ("case order", "ordered enum A { DONE, READY }"),
+        ] {
+            let changed = assemble(source);
+            let changed = &changed.enums[0];
+            assert_eq!(
+                old.declaration.key(),
+                changed.declaration.key(),
+                "{difference}: owner and qualified name still key the declaration"
+            );
+            let mut meter = Meter::new(UNBOUNDED);
+            let error = compare_enum(
+                ComparisonOperator::Equal,
+                member(old, "READY"),
+                member(changed, "READY"),
+                &mut meter,
+            )
+            .expect_err("changed admitted enum content is a distinct declaration");
+            assert_eq!(
+                error.cause,
+                IllTypedCause::DistinctEnumDeclarations,
+                "{difference}"
+            );
+            assert!(meter.admitted_charges().is_empty(), "{difference}");
+        }
+
+        let same = assemble("ordered enum A { READY, DONE }");
+        let mut meter = Meter::new(UNBOUNDED);
+        assert_eq!(
+            compare_enum(
+                ComparisonOperator::Equal,
+                member(old, "READY"),
+                member(&same.enums[0], "READY"),
+                &mut meter,
+            ),
+            Ok(Outcome::Completed(true))
+        );
+        assert!(!meter.admitted_charges().is_empty());
         checked_ill_typed(
             "ordered enum A { READY, DONE }\nordered enum B { READY, CLOSED }\n\
              function compare using v(): Boolean pure { A::READY = B::READY }",
@@ -1272,74 +1310,37 @@ mod enum_rows {
     }
 }
 
-enum TRoute {
-    Runnable(fn()),
-    Partial {
-        run: fn(),
-        ticket: &'static str,
-        missing: &'static str,
-    },
-}
-
 #[ix_trace_rs::string_edge]
-fn t_route(id: &str) -> TRoute {
-    // Branch-gating QSpec ID match: a new row must have a runnable or ticket-backed route.
+fn t_route(id: &str) -> fn() {
+    // Branch-gating QSpec ID match: a new row must have a runnable route.
     match id {
-        "T01" | "T02" => {
-            TRoute::Runnable(tc186_t01_t02_text_profiles_agree_from_checked_source_to_runtime)
-        }
-        "T03" => {
-            TRoute::Runnable(tc186_t03_compatibility_profiles_agree_from_checked_source_to_runtime)
-        }
-        "T04" | "T05" => TRoute::Runnable(tc186_t04_t05_text_bounds_admit_and_refuse),
-        "T05b" => TRoute::Runnable(tc186_t05b_bare_text_type_refuses_at_source_recognition),
-        "T06" => TRoute::Runnable(tc186_t06_invalid_utf8_refuses_at_both_reader_boundaries),
-        "T06b" => TRoute::Runnable(tc186_t06b_checked_text_values_agree_with_runtime_bytes),
-        "T07" => TRoute::Runnable(
-            enum_rows::tc186_t07_cross_declaration_is_ill_typed_at_source_and_runtime,
-        ),
-        "T08" => {
-            TRoute::Runnable(enum_rows::tc186_t08_ordered_members_agree_and_unordered_order_refuses)
-        }
-        "T09" => TRoute::Partial {
-            run: enum_rows::tc186_t09_changed_owner_has_distinct_identity,
-            ticket: "IR-1300",
-            missing: "QSL must change enum identity when cases or their order change",
-        },
-        "T10" => TRoute::Runnable(tc186_t10_distinct_text_profiles_refuse_before_charge),
-        "T11" => TRoute::Runnable(tc186_t11_nfc_exact_limits_and_named_denials_agree),
-        "T12" => TRoute::Runnable(tc186_t12_scalar_and_unsigned_utf8_order_agree),
-        "T13" => TRoute::Runnable(tc186_t13_normalized_length_controls_admission),
-        "T14" => TRoute::Runnable(tc186_t14_non_normalizing_comparison_and_one_under_agree),
-        "T15" => TRoute::Runnable(
-            enum_rows::tc186_t15_precedence_is_ill_typed_with_zero_limits_and_no_charge,
-        ),
-        "T16" => TRoute::Runnable(tc186_t16_admission_limit_precedence_is_exact),
+        "T01" | "T02" => tc186_t01_t02_text_profiles_agree_from_checked_source_to_runtime,
+        "T03" => tc186_t03_compatibility_profiles_agree_from_checked_source_to_runtime,
+        "T04" | "T05" => tc186_t04_t05_text_bounds_admit_and_refuse,
+        "T05b" => tc186_t05b_bare_text_type_refuses_at_source_recognition,
+        "T06" => tc186_t06_invalid_utf8_refuses_at_both_reader_boundaries,
+        "T06b" => tc186_t06b_checked_text_values_agree_with_runtime_bytes,
+        "T07" => enum_rows::tc186_t07_cross_declaration_is_ill_typed_at_source_and_runtime,
+        "T08" => enum_rows::tc186_t08_ordered_members_agree_and_unordered_order_refuses,
+        "T09" => enum_rows::tc186_t09_changed_declaration_has_distinct_identity,
+        "T10" => tc186_t10_distinct_text_profiles_refuse_before_charge,
+        "T11" => tc186_t11_nfc_exact_limits_and_named_denials_agree,
+        "T12" => tc186_t12_scalar_and_unsigned_utf8_order_agree,
+        "T13" => tc186_t13_normalized_length_controls_admission,
+        "T14" => tc186_t14_non_normalizing_comparison_and_one_under_agree,
+        "T15" => enum_rows::tc186_t15_precedence_is_ill_typed_with_zero_limits_and_no_charge,
+        "T16" => tc186_t16_admission_limit_precedence_is_exact,
         other => panic!("unrouted QSpec TC-186 T vector {other}"),
     }
 }
 
 #[trace("TC-097", "IT-017-SC-01")]
 #[test]
-fn tc186_every_published_t_row_has_a_runnable_or_ticket_backed_route() {
+fn tc186_every_published_t_row_has_a_runnable_route() {
     let mut seen = 0usize;
     for row in vectors_of(TestCase::Tc186) {
         seen += 1;
-        match t_route(row.id) {
-            TRoute::Runnable(run) => run(),
-            TRoute::Partial {
-                run,
-                ticket,
-                missing,
-            } => {
-                assert!(
-                    !ticket.is_empty() && !missing.is_empty(),
-                    "{id} has a precise pending owner",
-                    id = row.id
-                );
-                run();
-            }
-        }
+        t_route(row.id)();
     }
     assert!(seen > 0, "QSpec TC-186 offers no vectors");
 }
