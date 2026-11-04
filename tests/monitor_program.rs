@@ -1704,7 +1704,7 @@ fn executor_native_storage_stop_retains_exact_membership_cause_and_arena() {
     let failure = build(BuildPlan {
         program: Rc::clone(&program),
         budget: StepBudget {
-            scratch_bytes: 0,
+            scratch_elements: 1,
             ..execution_budget()
         },
     })
@@ -1712,7 +1712,8 @@ fn executor_native_storage_stop_retains_exact_membership_cause_and_arena() {
     .expect("native membership storage request must stop before helper execution");
     assert_eq!(failure.code, MonitorFailureCode::Resource);
     let stop = failure.resource.expect("retain operating storage stop");
-    assert_eq!(stop.resource, StepResource::ScratchBytes);
+    assert_eq!(stop.resource, StepResource::ScratchElements);
+    assert_eq!(stop.limit, Some(1));
     let native = failure
         .admission
         .expect("retain native membership cause and arena");
