@@ -28,6 +28,20 @@ use std::{collections::BTreeMap, rc::Rc};
 mod producer_origin_support;
 mod support;
 
+fn admitted_key(id: &quire_contract_ir::CheckedNodeId) -> NodeKey {
+    let structural = admitted()
+        .structural_key(id)
+        .expect("node ID belongs to the admitted package");
+    let wire = serde_json::to_value(structural).expect("structural key serializes");
+    qsl_foundation::node_wire::node_key_from_json(&wire).expect("structural key is a NodeKey")
+}
+
+fn admitted_key_from_wire(value: &serde_json::Value) -> NodeKey {
+    let id: quire_contract_ir::CheckedNodeId =
+        serde_json::from_value(value.clone()).expect("admitted node ID decodes");
+    admitted_key(&id)
+}
+
 fn admitted() -> &'static quire_contract_ir::CheckedPackageV2 {
     static PACKAGE: std::sync::OnceLock<quire_contract_ir::CheckedPackageV2> =
         std::sync::OnceLock::new();
@@ -65,16 +79,15 @@ fn key(name: &str) -> NodeKey {
                 _ => "record",
             };
             assert_eq!(node.semantic_form.as_ref(), expected_form, "retain declaration meaning for {declaration}");
-            let wire = serde_json::to_value(&node.node_id).expect("admitted identity serializes");
-            let key = qsl_foundation::node_wire::node_key_from_json(&wire).expect("carry admitted identity");
+            let key = admitted_key(&node.node_id);
             ((*label).to_owned(), key)
         }).collect();
         let step_node = package.graph().nodes.iter().find(|node| {
-            qsl_foundation::node_wire::node_key_from_json(&serde_json::to_value(&node.node_id).unwrap()).unwrap() == keys["step"]
+            admitted_key(&node.node_id) == keys["step"]
         }).expect("Step declaration retains its admitted tuple body");
         let body = serde_json::to_value(&step_node.body).unwrap();
         assert_eq!(body["term"], "aggregate");
-        let results = qsl_foundation::node_wire::node_key_from_json(&body["members"][1]["target"]).expect("Step's second position is the admitted result sequence");
+        let results = admitted_key_from_wire(&body["members"][1]["target"]);
         assert!(results.path().iter().any(|part| matches!(part, quire_exact::PathSegment::Node(_))));
         keys.insert("results".to_owned(), results.clone());
         // This diagnostic layout key tests storage, not temporal-plan admission.
@@ -96,20 +109,11 @@ fn admitted_time_units() -> UnitTable {
                 .graph()
                 .nodes
                 .iter()
-                .find(|node| {
-                    qsl_foundation::node_wire::node_key_from_json(
-                        &serde_json::to_value(&node.node_id).unwrap(),
-                    )
-                    .unwrap()
-                        == unit_key
-                })
+                .find(|node| admitted_key(&node.node_id) == unit_key)
                 .expect("unit owner remains in admitted graph");
             let body = serde_json::to_value(&node.body).unwrap();
             assert_eq!(body["term"], "unit");
-            let carry = |name: &str| {
-                qsl_foundation::node_wire::node_key_from_json(&body[name])
-                    .expect("admitted unit reference")
-            };
+            let carry = |name: &str| admitted_key_from_wire(&body[name]);
             let ratio = |name: &str| {
                 let part = |field: &str| {
                     body[name][field]
@@ -4796,12 +4800,8 @@ fn checked_equality_keeps_original_enum_index_after_preparation_drops() {
         let [node] = nodes.as_slice() else {
             panic!("one original enum member {name}")
         };
-        let original = serde_json::to_value(node).unwrap();
-        assert_eq!(
-            qsl_foundation::node_wire::node_key_from_json(&original["semantic_type"]).unwrap(),
-            key("capture-mode")
-        );
-        let member = qsl_foundation::node_wire::node_key_from_json(&original["node_id"]).unwrap();
+        assert_eq!(admitted_key(&node.semantic_type), key("capture-mode"));
+        let member = admitted_key(&node.node_id);
         let value = declaration.member(name, member).unwrap();
         index.record(value.clone());
         values.push(value);
