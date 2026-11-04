@@ -24,10 +24,6 @@ use quire_semantic_value::{
 };
 use std::{collections::BTreeMap, rc::Rc};
 
-#[path = "support/producer_origin.rs"]
-mod producer_origin_support;
-mod support;
-
 fn admitted_key(id: &quire_contract_ir::CheckedNodeId) -> NodeKey {
     let structural = admitted()
         .structural_key(id)
@@ -46,15 +42,40 @@ fn admitted() -> &'static quire_contract_ir::CheckedPackageV2 {
     static PACKAGE: std::sync::OnceLock<quire_contract_ir::CheckedPackageV2> =
         std::sync::OnceLock::new();
     PACKAGE.get_or_init(|| {
-        producer_origin_support::emit_and_read_checked_v2(
-            producer_origin_support::CheckedProducerRequest {
-                source_path: "monitor-construction.native",
-                source: SOURCE,
-                package_name: "agent-ix/monitor-construction",
-                models: &[],
-                execution_points: None,
+        let emitted = qsl_replay::compile_package(
+            qsl_replay::CompileUnit {
+                source: qsl_foundation::SourceIdentity::new(
+                    "local",
+                    "source:monitor-construction.native",
+                ),
+                package_name: "agent-ix/monitor-construction".to_owned(),
+                path: "monitor-construction.native",
+                bytes: SOURCE.as_bytes(),
             },
+            std::iter::empty::<&[u8]>(),
+            &qsl_replay::spine::DependencyInput::default(),
+            qsl_replay::StageLimits::default(),
+            qsl_replay::ReplayLimits::default(),
         )
+        .expect("the lock-selected QSL public compiler emits the authored monitor source");
+        let wire: serde_json::Value =
+            serde_json::from_slice(emitted.bytes()).expect("QSL emits checked-package JSON");
+        let mut evidence = quire_contract_ir::CheckedPackageEvidence::new();
+        for feature in wire["lock"]["required_features"]
+            .as_array()
+            .expect("producer lock feature list")
+        {
+            evidence.support_feature(feature.as_str().expect("producer feature name"));
+        }
+        let read = quire_contract_ir::read_checked_package(
+            emitted.bytes(),
+            quire_contract_ir::CheckedPackageReadLimits::bounded(),
+            &evidence,
+        );
+        let quire_contract_ir::CheckedPackageDispatchResult::AdmittedV2(package) = read else {
+            panic!("IR refused the emitted monitor source: {read:?}");
+        };
+        *package
     })
 }
 
