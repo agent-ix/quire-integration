@@ -1689,7 +1689,7 @@ fn d29() {
             "Decimal[-100,100;2,2]",
             "Decimal[-100,100;2,2;exact]",
             "dimension Length;\nunit m : Length = rational(1, 1);\ntype P = Quantity<m, Decimal[-100,100;2,2]>;\nfunction f using v(q: P): P pure { q }\n",
-            -100, 100, 2, 125,
+            -100, 100, 2, 75,
         ),
     ].into_iter().enumerate() {
         let source = format!("{HEADER}{body}");
