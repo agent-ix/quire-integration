@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Checked-package declaration and body selection shared by host and native tests.
 
-use quire_contract_model::{CheckedNodeId, CheckedPackageV2, CheckedTerm};
+use super::{CheckedNodeId, CheckedPackageV2, CheckedTerm};
 
 /// Select exactly one original function declaration, without a first-match fallback.
 pub fn declared(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
