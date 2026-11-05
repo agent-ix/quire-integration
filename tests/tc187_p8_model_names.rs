@@ -31,36 +31,80 @@ fn public_row(id: &str) {
     let [row] = rows.as_slice() else {
         panic!("one public {id}: {rows:?}")
     };
-    assert!(!row.inputs.is_empty() && !row.expected.is_empty());
-    match id {
-        "U34" => {
-            assert!(
-                row.inputs.contains("unit tick : M::Rate") && row.inputs.contains("Length"),
-                "{}",
-                row.inputs
-            );
-            assert!(
-                row.expected.contains("/semantic_graph/nodes/0/owner")
-                    && row.expected.contains("scalar_type"),
-                "{}",
-                row.expected
-            );
-        }
-        "U35" => {
-            assert!(
-                row.inputs.contains("dimension Speed = R::Time")
-                    && row.inputs.contains("two dimensions of identity"),
-                "{}",
-                row.inputs
-            );
-            assert!(
-                row.expected.contains("later `Dimension.identity`")
-                    && row.expected.contains("three distinct dimensions"),
-                "{}",
-                row.expected
-            );
-        }
+    let (inputs, expected) = match id {
+        "U34" => (
+            &[
+                "dimension Time",
+                "unit ms : Time",
+                "model M",
+                "base dimension `Rate`",
+                "`us`",
+                "`target` `us`",
+                "`scale` `1000`",
+                "f(d: Quantity<ms>)",
+                "g(d: Quantity<M::ms>)",
+                "unit tick : M::Rate",
+                "unit tick : Rate",
+                "Length",
+                "dimension Area",
+                "unit m2",
+            ][..],
+            &[
+                "source `ms` node",
+                "ix://acme/rpc/unit/ms",
+                "carries no declaration",
+                "scalar_type",
+                "ModelOwner",
+                "distinct",
+                "tick",
+                "missing-name",
+                "at `Rate`",
+                "/semantic_graph/nodes/0/owner",
+                "ix://acme/rpc/dimension/Length",
+                "m2",
+            ][..],
+        ),
+        "U35" => (
+            &[
+                "dimension Time",
+                "model R",
+                "model F",
+                "root unit `s`",
+                "unit tenth : R::Time",
+                "dimension Speed = R::Time",
+                "unit x : Time",
+                "source `Time` removed",
+                "Z::Time",
+                "R::Speed",
+                "second source",
+                "two dimensions of identity",
+            ][..],
+            &[
+                "three distinct dimensions",
+                "missing-name",
+                "at the name",
+                "ambiguous-name",
+                "invalid_model_binding",
+                "conflicting-binding",
+                "at intake",
+                "later `Dimension.identity`",
+            ][..],
+        ),
         other => panic!("unassigned public row {other}"),
+    };
+    for input in inputs {
+        assert!(
+            row.inputs.contains(input),
+            "{id} public input no longer declares {input}: {}",
+            row.inputs
+        );
+    }
+    for result in expected {
+        assert!(
+            row.expected.contains(result),
+            "{id} public result no longer declares {result}: {}",
+            row.expected
+        );
     }
 }
 
@@ -159,12 +203,10 @@ fn emitted(
             )
             .expect("original document evidence");
     }
+    let admitted = read_checked_package(bytes, CheckedPackageReadLimits::bounded(), &evidence);
     assert!(
-        matches!(
-            read_checked_package(bytes, CheckedPackageReadLimits::bounded(), &evidence),
-            CheckedPackageDispatchResult::AdmittedV2(_)
-        ),
-        "strict IR admits original emission"
+        matches!(admitted, CheckedPackageDispatchResult::AdmittedV2(_)),
+        "strict IR admits original emission: {admitted:?}"
     );
     wire
 }
@@ -434,7 +476,7 @@ fn three_time_owners_compose_and_missing_names_remain_missing() {
     );
 }
 
-#[trace("TC-110", "QSpec-TC-187", "QSpec-FR-142-AC-20")]
+#[trace("TC-110", "QSpec-TC-187")]
 #[test]
 fn duplicate_model_dimension_identity_characterizes_current_malformed_intake() {
     public_row("U35");
