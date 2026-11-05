@@ -80,16 +80,30 @@ fn ordinary_ms_type_and_quantity_ms_select_distinct_original_nodes() {
             })
         })
         .expect("inspect emitted");
-    let parameters = function.body["parameters"]
-        .as_array()
-        .expect("function parameters");
+    let quire_contract_ir::CheckedTerm::Aggregate { members } = admitted
+        .term(&function.node_id)
+        .expect("original function term")
+    else {
+        panic!("function aggregate");
+    };
+    let quire_contract_ir::CheckedTerm::Binding { name, value } = &members[0] else {
+        panic!("parameters binding");
+    };
+    assert_eq!(name.as_ref(), "parameters");
+    let quire_contract_ir::CheckedTerm::Group {
+        members: parameters,
+    } = value.as_ref()
+    else {
+        panic!("parameter group: {value:?}");
+    };
     assert_eq!(parameters.len(), 2);
     for (parameter, expected) in parameters.iter().zip([record, unit]) {
-        let id: quire_contract_ir::CheckedNodeId =
-            serde_json::from_value(parameter.clone()).expect("original parameter id");
+        let quire_contract_ir::CheckedTerm::Reference { target } = parameter else {
+            panic!("original parameter reference");
+        };
         let parameter = nodes
             .iter()
-            .find(|node| node.node_id == id)
+            .find(|node| &node.node_id == target)
             .expect("original parameter node");
         assert_eq!(parameter.semantic_type, expected.node_id);
     }

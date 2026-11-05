@@ -5,11 +5,12 @@
 mod source;
 
 use ix_trace_rs::trace;
-use qsl_semantics::check::{PackageDeclarations, ValueType};
+use qsl_semantics::check::PackageDeclarations;
 use qsl_semantics::model::{
     accounting::ModelNormalizationLimits,
     intake::{admit_unit, package_input, SelectedModels},
 };
+use quire_exact::ValueType;
 use quire_semantic_value::checking::CheckingLimits;
 use serde_json::{json, Value};
 
@@ -111,6 +112,14 @@ fn admitted_operation_parameter_names_the_original_ms_unit() {
         ModelNormalizationLimits::default(),
     )
     .expect("native domain intake");
+    let owner = models[0]
+        .view
+        .type_identities()
+        .iter()
+        .find(|(key, _)| key.node == TIMER)
+        .expect("admitted Timer owner")
+        .1
+        .clone();
     let graph = PackageDeclarations::assemble(
         raw,
         "agent-ix/tc187-p8-member".to_owned(),
@@ -128,6 +137,7 @@ fn admitted_operation_parameter_names_the_original_ms_unit() {
     let operations: Vec<_> = graph
         .scope()
         .operations()
+        .declared_by(owner)
         .iter()
         .filter(|operation| operation.name() == "delay")
         .collect();
