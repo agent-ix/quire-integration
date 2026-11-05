@@ -205,7 +205,7 @@ fn subtraction_multiplication_and_nested_call_match_fresh_qsl_sessions() {
             .claim_map
             .items
             .iter()
-            .filter(|claim| claim.call_node_id == calls[index])
+            .filter(|claim| claim.node_id == calls[index])
             .collect::<Vec<_>>();
         let [claim] = claims.as_slice() else {
             panic!("one exact requested call claim");

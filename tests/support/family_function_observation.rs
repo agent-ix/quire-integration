@@ -115,7 +115,14 @@ fn same_envelope(expected: &Evaluation, actual: &Evaluation) {
     }
 }
 
-fn required(name: &str, expected: i64, work: u64, result: &Evaluation, meter: &Meter) {
+fn required(
+    name: &str,
+    source_index: usize,
+    expected: i64,
+    work: u64,
+    result: &Evaluation,
+    meter: &Meter,
+) {
     assert!(result.losses.is_empty());
     if work == 1024 {
         assert!(
@@ -136,7 +143,7 @@ fn required(name: &str, expected: i64, work: u64, result: &Evaluation, meter: &M
             .as_ref()
             .expect("a stopped checked body has its location");
         assert!(
-            matches!(&location.origin, Origin::Body { function, index: 0 } if function == name)
+            matches!(&location.origin, Origin::Body { function, index } if function == name && *index == source_index)
         );
         assert_eq!(location.depth(), 0);
         assert_eq!(location.last_index(), None);
@@ -191,7 +198,10 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
     };
     let handle = acquisition.handle();
     let owner = LibraryName::new(package.name().to_owned()).unwrap();
-    for (name, expected) in [("difference", 1_i64), ("product", 12), ("relay", 1)] {
+    for (source_index, (name, expected)) in [("difference", 1_i64), ("product", 12), ("relay", 1)]
+        .into_iter()
+        .enumerate()
+    {
         let key = checked_function_key(&package, &selected(&package, name)).unwrap();
         let selection = handle.lookup_callable(&owner, &key).unwrap();
         let foreign = SOURCE.replace("left - right", "left + right");
@@ -241,8 +251,22 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
             .expect("original generated source authenticates")
             .expect("required generated evaluation");
             same_envelope(&authority, &actual);
-            required(name, expected, work, &authority, &authority_meter);
-            required(name, expected, work, &actual, &generated_meter);
+            required(
+                name,
+                source_index,
+                expected,
+                work,
+                &authority,
+                &authority_meter,
+            );
+            required(
+                name,
+                source_index,
+                expected,
+                work,
+                &actual,
+                &generated_meter,
+            );
             assert_eq!(
                 authority_meter.admitted_charges(),
                 generated_meter.admitted_charges()
