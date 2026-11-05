@@ -192,10 +192,11 @@ fn qsl_convert(
     (outcome, losses, meter)
 }
 
-// QSL-1394 / QSL-1619: the parser admits decimal(c,s), but the forms stage still
-// refuses its ExactNumber expression. Keep this typed boundary executable so
-// these source rows fail visibly when the producer becomes representable.
-fn decimal_literal_source_pending(body: &str, result_type: &str) {
+fn qsl_decimal_literal(
+    body: &str,
+    result_type: &str,
+    limits: ScalarLimits,
+) -> Result<(Outcome<Value>, Vec<ValueLoss>, Meter), Vec<CheckRefusal>> {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
@@ -209,15 +210,35 @@ fn decimal_literal_source_pending(body: &str, result_type: &str) {
     )
     .expect("S1 parses Decimal literal source");
     assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
-    let refusal = qsl_forms::build_unit(&parsed)
-        .expect_err("QSL-1394 PENDING: ExactNumber must be represented before S4 agreement");
-    assert_eq!(
-        refusal.cause,
-        qsl_forms::FormsCause::UnrepresentedConstruct {
-            production: qsl_cst::Production::ExactNumber,
-        },
-        "QSL-1394 source body {body}"
-    );
+    let unit = qsl_forms::build_unit(&parsed).expect("S2 builds Decimal literal source");
+    let graph = PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "ir-669".to_owned(),
+        unit,
+        SelectedModels::default(),
+        Vec::new(),
+    )
+    .expect("S3 assembles Decimal literal source")
+    .check(CheckingLimits::default())?;
+    let package = CheckedPackage::link(graph);
+    let mut meter = Meter::new(limits);
+    let evaluation = package
+        .call(
+            &QualifiedName::unqualified("f").expect("f is an identifier"),
+            Vec::new(),
+            &ObjectEnvironment::default(),
+            &mut meter,
+        )
+        .expect("S6a calls Decimal literal function");
+    let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
+        panic!("expected a kernel outcome, got {:?}", evaluation.outcome);
+    };
+    let losses = evaluation
+        .losses
+        .into_iter()
+        .map(|loss| loss.loss)
+        .collect();
+    Ok((outcome, losses, meter))
 }
 
 fn conversion_agreement(input: Decimal, input_type: &str, result_type: &str, target: &DecimalType) {
@@ -1328,15 +1349,19 @@ fn d25() {
         refusal.cause,
         CheckCause::IllTyped(IllTypedCause::TypeMismatch)
     );
-    // QSL-1394 / QSL-1619 PENDING: ExactNumber expressions do not reach S4 yet.
     for (body, result_type) in [
         ("let v = decimal(15,1) + decimal(225,2) in v", "P"),
         ("decimal(15,1) = decimal(150,2)", "Boolean"),
-        ("p + decimal(15,1)", "P"),
-        ("decimal(15,1) + decimal(225,2)", "P"),
     ] {
-        decimal_literal_source_pending(body, result_type);
+        let refusals = d25_source(body, result_type)
+            .expect_err("S4 refuses literals with no unique Decimal type");
+        assert!(refusals.iter().any(|refusal| {
+            refusal.cause == CheckCause::IllTyped(IllTypedCause::AmbiguousLiteral)
+        }));
     }
+    d25_source("p + decimal(15,1)", "P").expect("S4 types literal from P operand");
+    d25_source("decimal(15,1) + decimal(225,2)", "P")
+        .expect("S4 types literals from declared result");
 }
 
 fn d26() {
@@ -1385,8 +1410,40 @@ fn d26() {
             7,
             9,
         );
-        // QSL-1394 / QSL-1619 PENDING: authored literal body cannot reach S4/S6a.
-        decimal_literal_source_pending("decimal(100,2) * decimal(3,0)", result_type);
+        let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+            "decimal(100,2) * decimal(3,0)",
+            result_type,
+            ScalarLimits {
+                work_units: base.work_units + 1,
+                ..base
+            },
+        )
+        .expect("S4 admits D26 Decimal literals");
+        let (kernel, kernel_meter) = rt(DecimalOperation::Multiply(&left, &right), &ty, base);
+        assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+        for limited in [
+            ScalarLimits {
+                work_units: 3,
+                ..base
+            },
+            ScalarLimits {
+                integer_bits: 8,
+                ..base
+            },
+        ] {
+            let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+                "decimal(100,2) * decimal(3,0)",
+                result_type,
+                ScalarLimits {
+                    work_units: limited.work_units + 1,
+                    ..limited
+                },
+            )
+            .expect("S4 admits D26 Decimal literals with a limited meter");
+            let (kernel, kernel_meter) =
+                rt(DecimalOperation::Multiply(&left, &right), &ty, limited);
+            assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+        }
     }
 }
 
@@ -1425,16 +1482,35 @@ fn d27() {
         0,
         2,
     );
-    // QSL-1394 / QSL-1619 PENDING: authored literal body cannot reach S4/S6a.
-    decimal_literal_source_pending(
+    let (qsl, losses, qsl_meter) = qsl_decimal_literal(
         "decimal(1200,3) / decimal(7,0)",
         "Decimal[-1000,1000;0,1;nearest-even]",
-    );
+        ScalarLimits {
+            work_units: base.work_units + 1,
+            ..base
+        },
+    )
+    .expect("S4 admits D27 Decimal literals");
+    let (kernel, kernel_meter) = rt(DecimalOperation::Divide(&left, &right), &ty, base);
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+    let limited = ScalarLimits {
+        scale_expansion: 1,
+        ..base
+    };
+    let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+        "decimal(1200,3) / decimal(7,0)",
+        "Decimal[-1000,1000;0,1;nearest-even]",
+        ScalarLimits {
+            work_units: limited.work_units + 1,
+            ..limited
+        },
+    )
+    .expect("S4 admits D27 Decimal literals with a limited meter");
+    let (kernel, kernel_meter) = rt(DecimalOperation::Divide(&left, &right), &ty, limited);
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
 }
 
 fn d28() {
-    // QSL-1394 / QSL-1619 PENDING: type-mismatch refusals require S4, which ExactNumber
-    // cannot reach. Assert the precise S2 producer blocker for all three arms.
     for (body, result_type) in [
         (
             "decimal(150,2) * decimal(2,0)",
@@ -1444,13 +1520,20 @@ fn d28() {
             "decimal(1234,3) / decimal(2,0)",
             "Decimal[-1000,1000;0,1;nearest-even]",
         ),
-        (
-            "decimal(100,2) * decimal(3,0)",
-            "Decimal[-9,9;0,0;toward-zero]",
-        ),
     ] {
-        decimal_literal_source_pending(body, result_type);
+        let refusals = qsl_decimal_literal(body, result_type, UNLIMITED)
+            .expect_err("S4 refuses a literal outside the declared Decimal type");
+        assert!(refusals
+            .iter()
+            .any(|refusal| { refusal.cause == CheckCause::IllTyped(IllTypedCause::TypeMismatch) }));
     }
+    let (outcome, _, _) = qsl_decimal_literal(
+        "decimal(100,2) * decimal(3,0)",
+        "Decimal[-9,9;0,0;toward-zero]",
+        UNLIMITED,
+    )
+    .expect("S4 admits the D26 source form");
+    assert!(matches!(outcome, Outcome::Completed(Value::Decimal(_))));
 }
 
 fn d03_exact_qsl_agreement() {
