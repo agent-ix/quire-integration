@@ -25,7 +25,8 @@ shared-DAG and compatible-entry controls specified by IT-018.
 Run `monitor_selected_facts` separately for FR-357-AC-9. Obtain a real final
 QSL `PlanRoot.emission`, admit its bytes strictly, and select model declaration,
 field and equality application/occurrence IDs from that same emission. Translate
-its closed equality-row vocabulary without changing values. Compare exact model
+its closed equality-row vocabulary through the producer-owned public
+`equality_witness` adapter without changing values. Compare exact model
 rows and field order, presence and type, then compare the public selected-fact
 read with the native FR-353 equality result. A native unavailable-witness refusal
 must retain its precise typed cause and locus, with no partial selected view.
@@ -36,10 +37,6 @@ Every IT-018 success criterion passes. Producer or reader refusal is a failure;
 no test skips an unavailable boundary or remints an identity from constituent parts.
 
 The selected-fact control remains Planned/Unrun until its focused target passes.
-The current producer returns equality witness rows whose `EqualityFactWitness`,
-`EqualityFactWitnessRow`, `EqualityOperandTypeRole` and `EqualityUnitRole` types
-are not publicly exported by `qsl-package`; the external typed translation
-cannot compile until that owning API is exposed. No selected-fact test has run.
 Its intended qualification covers only explicit representable model facts and
 the selected equality's opaque decision or native typed missing-witness result.
 It does not traverse monitor entries or establish a complete generated-source

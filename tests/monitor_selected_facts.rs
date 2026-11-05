@@ -6,145 +6,14 @@ mod support;
 use ix_trace_rs::trace;
 use qsl_analyze::monitor_root::{emit_plan_root, PlanRootRequest};
 use qsl_foundation::SourceIdentity;
-use qsl_package::{EqualityFactWitness as ProducerFact, EqualityFactWitnessRow};
 use qsl_replay::{spine::SpineLimits, MonitorTarget, TimingObligationSettings};
 use qsl_semantics::{library::LibraryName, model::intake::package_input};
 use quire_contract_ir::{
     read_checked_package, AdmittedEqualityReadErrorCode, CheckedPackageDispatchResult,
-    CheckedPackageReadLimits, EqualityDimensionRole, EqualityFactWitness, EqualityOperandTypeRole,
-    EqualityUnitRole, SelectedEqualityApplicationRow, SelectedEqualityFactRow,
-    SelectedExactIdentities, SelectedFactEqualityId, SelectedFactFieldId, SelectedFactIds,
-    SelectedFactRows, SelectedFactsErrorCode,
+    CheckedPackageReadLimits, SelectedExactIdentities, SelectedFactEqualityId, SelectedFactFieldId,
+    SelectedFactIds, SelectedFactRows, SelectedFactsErrorCode,
 };
 use quire_exact::{Cancel, Integer, IntegerInterval, Presence, Rational, ValueType};
-
-fn operand_role(role: qsl_package::EqualityOperandTypeRole) -> EqualityOperandTypeRole {
-    match role {
-        qsl_package::EqualityOperandTypeRole::Source => EqualityOperandTypeRole::Source,
-        qsl_package::EqualityOperandTypeRole::ConversionTarget => {
-            EqualityOperandTypeRole::ConversionTarget
-        }
-    }
-}
-
-// Translate the existing closed producer/reader vocabularies without deriving
-// identities, discarding fields, or reconstructing checker decisions.
-fn fact(row: &EqualityFactWitnessRow) -> SelectedEqualityFactRow {
-    let witness = match row.fact() {
-        ProducerFact::OperandType { position, role } => EqualityFactWitness::OperandType {
-            position: *position,
-            role: operand_role(*role),
-        },
-        ProducerFact::TextPlanType { position, role } => EqualityFactWitness::TextPlanType {
-            position: *position,
-            role: operand_role(*role),
-        },
-        ProducerFact::Unit {
-            unit_id,
-            quantity_type,
-            operand_position,
-            role,
-        } => EqualityFactWitness::Unit {
-            unit_id: unit_id.clone(),
-            quantity_type: quantity_type.clone(),
-            operand_position: *operand_position,
-            role: match role {
-                qsl_package::EqualityUnitRole::Source => EqualityUnitRole::Source,
-                qsl_package::EqualityUnitRole::ConversionTarget => {
-                    EqualityUnitRole::ConversionTarget
-                }
-            },
-        },
-        ProducerFact::DimensionDeclaration {
-            unit_id,
-            operand_position,
-            role,
-            ordinal,
-        } => EqualityFactWitness::DimensionDeclaration {
-            unit_id: unit_id.clone(),
-            operand_position: *operand_position,
-            ordinal: *ordinal,
-            role: match role {
-                qsl_semantics::check::EqualityDimensionRole::UnitDimension => {
-                    EqualityDimensionRole::UnitDimension
-                }
-                qsl_semantics::check::EqualityDimensionRole::ConversionDimension => {
-                    EqualityDimensionRole::ConversionDimension
-                }
-                qsl_semantics::check::EqualityDimensionRole::CompoundBase => {
-                    EqualityDimensionRole::CompoundBase
-                }
-                qsl_semantics::check::EqualityDimensionRole::BaseDimension => {
-                    EqualityDimensionRole::BaseDimension
-                }
-            },
-        },
-        ProducerFact::DimensionTerm {
-            unit_id,
-            operand_position,
-            ordinal,
-            base,
-            base_node,
-            exponent,
-        } => EqualityFactWitness::DimensionTerm {
-            unit_id: unit_id.clone(),
-            operand_position: *operand_position,
-            ordinal: *ordinal,
-            base: base.clone(),
-            base_node: base_node.clone(),
-            exponent: exponent.clone(),
-        },
-        ProducerFact::ConversionEdge {
-            unit_id,
-            operand_position,
-            ordinal,
-            target,
-            target_node,
-            scale,
-            offset,
-        } => EqualityFactWitness::ConversionEdge {
-            unit_id: unit_id.clone(),
-            operand_position: *operand_position,
-            ordinal: *ordinal,
-            target: target.clone(),
-            target_node: target_node.clone(),
-            scale: scale.clone(),
-            offset: offset.clone(),
-        },
-        ProducerFact::EnumMember {
-            source_declaration,
-            source_declaration_node,
-            declaration,
-            declaration_node,
-            member,
-            member_node,
-            case,
-            ordinal,
-            ordered,
-        } => EqualityFactWitness::EnumMember {
-            source_declaration: source_declaration.clone(),
-            source_declaration_node: source_declaration_node.clone(),
-            declaration: declaration.clone(),
-            declaration_node: declaration_node.clone(),
-            member: member.clone(),
-            member_node: member_node.clone(),
-            case: case.clone(),
-            ordinal: *ordinal,
-            ordered: *ordered,
-        },
-    };
-    SelectedEqualityFactRow {
-        application: row.application().clone(),
-        checked_application: row.checked_application().clone(),
-        occurrence: row.occurrence().clone(),
-        source_map_entry: row.source_map_entry().clone(),
-        structural_key: row.structural_key().clone(),
-        structural_node: row.structural_node().clone(),
-        owner: row.owner().cloned(),
-        value_type: row.value_type().cloned(),
-        fact: witness,
-    }
-}
 
 #[trace("TC-098", "FR-357-AC-9")]
 #[test]
@@ -240,29 +109,51 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         record: selected_field.record_node.clone(),
         original_identity: selected_field.field_original_identity.clone(),
     }];
-    let applications: Vec<_> = emission
-        .equality_producer_identity_rows()
-        .iter()
-        .map(|row| SelectedEqualityApplicationRow {
-            application: row.checked_node().clone(),
-            occurrence: row.occurrence().clone(),
-            source_map_entry: row.source_map_entry().clone(),
-            node_key: row.application().clone(),
-            location: row.location().clone(),
-        })
-        .collect();
-    let facts: Vec<_> = emission
-        .equality_fact_witness_rows()
-        .iter()
-        .map(fact)
-        .collect();
+    // The producer's public handoff adapter owns the exhaustive translation
+    // and retains only witnesses for nodes in this final emitted package.
+    let equality_rows = emission.equality_witness(&package);
+    let applications = equality_rows.applications();
+    let facts = equality_rows.facts();
     assert!(!applications.is_empty() && !facts.is_empty());
+    for application in applications {
+        let producer = emission
+            .equality_producer_identity_rows()
+            .iter()
+            .find(|row| {
+                row.checked_node() == &application.application
+                    && row.occurrence() == &application.occurrence
+            })
+            .expect("the handoff application comes from this final emission");
+        assert_eq!(application.source_map_entry, *producer.source_map_entry());
+        assert_eq!(application.node_key, *producer.application());
+        assert_eq!(application.location, *producer.location());
+    }
+    for fact in facts {
+        let producer = emission
+            .equality_fact_witness_rows()
+            .iter()
+            .find(|row| {
+                row.checked_application() == &fact.checked_application
+                    && row.occurrence() == &fact.occurrence
+                    && row.structural_node() == &fact.structural_node
+                    && row.source_map_entry() == &fact.source_map_entry
+            })
+            .expect("the handoff fact comes from this final emission");
+        assert_eq!(fact.application, *producer.application());
+        assert_eq!(fact.structural_key, *producer.structural_key());
+        assert_eq!(fact.owner.as_ref(), producer.owner());
+        assert_eq!(fact.value_type.as_ref(), producer.value_type());
+    }
+    assert_eq!(
+        equality_rows.source_units(),
+        emission.selected_source_unit_rows()
+    );
     let rows = || SelectedFactRows {
         declarations,
         fields,
         source_units: emission.selected_source_unit_rows(),
-        equality_applications: &applications,
-        equality_facts: &facts,
+        equality_applications: applications,
+        equality_facts: facts,
     };
     let selected = package
         .project_selected_facts(
@@ -292,8 +183,8 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     let decision = package.admitted_equality(
         &equality.application,
         &equality.occurrence,
-        &applications,
-        &facts,
+        applications,
+        facts,
         emission.selected_source_unit_rows(),
         1_000_000,
     );
@@ -312,6 +203,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     );
     match decision {
         Ok(decision) => {
+            eprintln!("selected equality outcome: opaque native decision");
             let joined = joined.expect("the native equality also joins the selected read");
             assert_eq!(joined.declarations, selected.declarations);
             assert_eq!(joined.fields, selected.fields);
@@ -320,6 +212,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             assert_eq!(joined.equalities[0].decision, decision);
         }
         Err(native) => {
+            eprintln!("selected equality outcome: {:?}", native.code);
             assert_eq!(
                 native.code,
                 AdmittedEqualityReadErrorCode::UnavailableEqualityWitness
