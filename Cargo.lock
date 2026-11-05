@@ -1633,7 +1633,7 @@ dependencies = [
 [[package]]
 name = "quire-specification-qualification"
 version = "0.0.0"
-source = "git+https://github.com/agent-ix/quire-specification?branch=main#8f46a3aff76be37bce7fac20709012030484bed0"
+source = "git+https://github.com/agent-ix/quire-specification?branch=main#860e089028fddad4f18058ca280f613c6fe58695"
 
 [[package]]
 name = "quire-verification-contracts"

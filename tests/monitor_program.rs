@@ -2,7 +2,7 @@
 //! RT construction controls using identities from a live QSL producer and strict IR reader.
 //! The controlled executable parts exercise construction, not temporal producer/executor qualification.
 
-use ix_trace_rs::trace;
+use ix_trace_rs::{string_edge, trace};
 use quire_contract_runtime::monitor::{
     build, Buffer, BuildPlan, Entries, Expression, ExpressionId, Function, FunctionId, Layout,
     LocalId, MonitorFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode, StepBudget,
@@ -854,6 +854,18 @@ fn retained_program_outlives_preparation_and_keeps_four_entry_keys() {
     assert_eq!(second.layout().package_lock.as_ref(), b"selected-lock");
     assert_eq!(second.layout().occurrence.as_ref(), b"occurrence");
     assert_eq!(
+        second.layout().clock_binding.as_ref(),
+        b"diagnostic-clock-value"
+    );
+    assert_eq!(
+        second.layout().admitted_order.as_ref(),
+        b"diagnostic-order-value"
+    );
+    assert_eq!(
+        second.layout().progress_context.as_ref(),
+        b"diagnostic-progress-value"
+    );
+    assert_eq!(
         second.layout().entries,
         Entries {
             init: FunctionId(0),
@@ -1615,14 +1627,7 @@ fn executor_selected_recursion_stops_on_the_explicit_stack() {
     assert!(failure.invariant.is_none());
 }
 
-#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
-#[test]
-fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
-    let budget = StepBudget {
-        work: 3,
-        ..execution_budget()
-    };
-    let expected = StepResource::Work;
+fn membership_probe_parts() -> ProgramParts {
     let mut input = parts();
     let option_integer = ValueType::option(ValueType::Integer);
     input.expressions.push(Expression {
@@ -1650,8 +1655,19 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
         body: ExpressionId(0),
     });
     input.functions[0].body = ExpressionId(5);
+    input
+}
+
+#[trace("TC-098", "IT-018-SC-05", "interface-003-AC-3")]
+#[test]
+fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
+    let budget = StepBudget {
+        work: 3,
+        ..execution_budget()
+    };
+    let expected = StepResource::Work;
     let failure = match build(BuildPlan {
-        program: Program::try_new(input).unwrap(),
+        program: Program::try_new(membership_probe_parts()).unwrap(),
         budget,
     }) {
         Err(failure) => failure,
@@ -1676,6 +1692,7 @@ fn executor_public_membership_work_stop_keeps_native_cause_and_arena() {
         _ => panic!("native cause must match the operating stop, without an invariant"),
     }
     assert!(failure.invariant.is_none());
+    assert!(failure.path_capacity.is_none());
 }
 
 fn lexical_base() -> ProgramParts {
@@ -1764,7 +1781,40 @@ fn one_lexical_binding() -> ProgramParts {
 #[trace("TC-098", "IT-018-SC-06", "interface-004-AC-2")]
 #[test]
 fn lexical_value_is_evaluated_once_within_its_scoped_body() {
-    let program = Program::try_new(one_lexical_binding()).unwrap();
+    let input = one_lexical_binding();
+    let local = ExpressionId(4);
+    let let_body = input.functions[0].body;
+    let original_local = (
+        input.expressions[local.0].key.clone(),
+        input.expressions[local.0].body_path.clone(),
+    );
+    let original_let = (
+        input.expressions[let_body.0].key.clone(),
+        input.expressions[let_body.0].body_path.clone(),
+    );
+    assert_eq!(original_local.0, key("lexical-init"));
+    assert_eq!(original_let.0, key("lexical-init"));
+    let program = Program::try_new(input).unwrap();
+    let retained_local = program.expression(local).unwrap();
+    assert_eq!(
+        (&retained_local.key, &retained_local.body_path),
+        (&original_local.0, &original_local.1)
+    );
+    assert!(matches!(
+        &retained_local.operation,
+        Operation::Local(LocalId {
+            function: FunctionId(0),
+            position: 0
+        })
+    ));
+    let retained_let = program.expression(let_body).unwrap();
+    assert_eq!(
+        (&retained_let.key, &retained_let.body_path),
+        (&original_let.0, &original_let.1)
+    );
+    assert!(
+        matches!(&retained_let.operation, Operation::Let { binding: LocalId { function: FunctionId(0), position: 0 }, body, .. } if *body == local)
+    );
     let monitor = build(BuildPlan {
         program: Rc::clone(&program),
         budget: StepBudget {
@@ -2462,8 +2512,20 @@ fn tuple_projection_rejects_record_receivers_missing_positions_and_wrong_types()
 #[trace("TC-098", "IT-018-SC-08", "interface-006-AC-3")]
 #[test]
 fn tuple_projection_retained_addresses_respect_scratch_budget() {
-    let (input, _) = tuple_parts(1);
+    let (input, literal) = tuple_parts(1);
+    let projection = input.functions[0].body;
+    let source = (
+        &input.expressions[projection.0].key,
+        &input.expressions[projection.0].body_path,
+    );
+    let source = (source.0.clone(), source.1.clone());
     let program = Program::try_new(input).unwrap();
+    let retained = program.expression(projection).unwrap();
+    assert_eq!(retained.key, key("tuple-init"));
+    assert_eq!((&retained.key, &retained.body_path), (&source.0, &source.1));
+    assert!(
+        matches!(&retained.operation, Operation::TupleElement { value, position: 1 } if *value == literal)
+    );
     let failure = match build(BuildPlan {
         program: Rc::clone(&program),
         budget: StepBudget {
@@ -2707,8 +2769,20 @@ fn record_members_refuse_wrong_owner_missing_member_tuple_and_wrong_result() {
 #[trace("TC-098", "IT-018-SC-09", "interface-007-AC-3")]
 #[test]
 fn record_member_addresses_consume_scratch_before_returning_state() {
-    let (input, _) = record_parts("left_state");
+    let (input, literal) = record_parts("left_state");
+    let projection = input.functions[0].body;
+    let source = (
+        &input.expressions[projection.0].key,
+        &input.expressions[projection.0].body_path,
+    );
+    let source = (source.0.clone(), source.1.clone());
     let program = Program::try_new(input).unwrap();
+    let retained = program.expression(projection).unwrap();
+    assert_eq!(retained.key, key("record-init"));
+    assert_eq!((&retained.key, &retained.body_path), (&source.0, &source.1));
+    assert!(
+        matches!(&retained.operation, Operation::RecordField { value, member } if *value == literal && member == &MemberId::new(MemberOwner::Node(key("state-holder")), "left_state").unwrap())
+    );
     let mut budget = execution_budget();
     budget.scratch_elements = 1;
     let failure = build(BuildPlan {
@@ -4610,6 +4684,67 @@ fn sequence_visit_and_formation_stops_retain_native_causes_without_a_partial_val
     );
 }
 
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-3")]
+#[test]
+fn collection_result_retention_denials_keep_the_native_charge_and_no_partial_state() {
+    for limit_kind in [
+        quire_exact::LimitKind::ValueOccurrences,
+        quire_exact::LimitKind::ResultUnits,
+    ] {
+        let mut input = standard_parts("sequence-init");
+        let sequence = sequence_literals(&mut input, "sequence-init", &[1]);
+        let size = lexical_expression(
+            &mut input,
+            "sequence-init",
+            ValueType::Integer,
+            Operation::SequenceSize { value: sequence },
+        );
+        finish_integer_equal(&mut input, "sequence-init", size, "1");
+        let program = Program::try_new(input).unwrap();
+        let mut budget = execution_budget();
+        match limit_kind {
+            quire_exact::LimitKind::ValueOccurrences => budget.scalar.value_occurrences = 1,
+            quire_exact::LimitKind::ResultUnits => budget.scalar.result_units = 0,
+            _ => unreachable!("two exact retention counters"),
+        }
+        let failure = build(BuildPlan {
+            program: Rc::clone(&program),
+            budget,
+        })
+        .err()
+        .expect("the collection retain charge must stop before an initialized State exists");
+        assert_eq!(failure.code, MonitorFailureCode::Resource);
+        assert!(failure.invariant.is_none());
+        assert!(failure.admission.is_none());
+        assert_eq!(
+            failure.resource.as_ref().unwrap().resource,
+            StepResource::Scalar(limit_kind)
+        );
+        let native = failure.scalar.expect("keep the native collection stop");
+        assert_eq!(
+            native.site,
+            quire_contract_runtime::monitor::ExecutionSite::Expression(sequence)
+        );
+        let quire_exact::Outcome::Incomplete(cause) = native.outcome else {
+            panic!("retain denial has no partial collection value");
+        };
+        assert_eq!(
+            cause.charge_point,
+            quire_exact::ChargePoint::CollectionResultRetain
+        );
+        assert_eq!(cause.limit_kind, limit_kind);
+        assert_eq!(cause.next_charge, Integer::from(2_u64));
+        assert_now(
+            &build(BuildPlan {
+                program,
+                budget: execution_budget(),
+            })
+            .expect("later full-budget invocation starts clean"),
+            99,
+        );
+    }
+}
+
 #[trace("TC-098", "IT-018-SC-07", "interface-005-AC-3", "interface-008-AC-2")]
 #[test]
 fn short_circuit_boolean_native_retention_stops_without_evaluating_the_skipped_recursion() {
@@ -4887,6 +5022,7 @@ fn checked_equality_keeps_original_enum_index_after_preparation_drops() {
 
 #[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
 #[test]
+#[string_edge]
 fn checked_equality_and_union_retention_keep_native_operating_shortages() {
     let mut input = standard_parts("equality-init");
     let left = standard_literal(
@@ -4994,6 +5130,132 @@ fn checked_equality_and_union_retention_keep_native_operating_shortages() {
         quire_exact::ChargePoint::CompositeResultRetain
     );
     assert_eq!(cause.next_charge, Integer::one());
+}
+
+#[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
+#[test]
+#[string_edge]
+fn equality_and_union_scratch_denials_leave_no_partial_initial_state() {
+    let mut equality_input = standard_parts("equality-init");
+    let left = standard_literal(
+        &mut equality_input,
+        "equality-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let right = standard_literal(
+        &mut equality_input,
+        "equality-init",
+        ValueType::Boolean,
+        Value::Boolean(true),
+    );
+    let checked = equality_input
+        .types
+        .check_equality(
+            EqualityOperator::Equal,
+            EqualityOperand::typed(ValueType::Boolean),
+            EqualityOperand::typed(ValueType::Boolean),
+            &EnumMemberIndex::default(),
+        )
+        .unwrap();
+    let equality = lexical_expression(
+        &mut equality_input,
+        "equality-init",
+        ValueType::Boolean,
+        Operation::Equality {
+            left,
+            right,
+            checked: Box::new(checked),
+        },
+    );
+    finish_boolean_condition(&mut equality_input, "equality-init", equality);
+    let equality_program = Program::try_new(equality_input).unwrap();
+    let failure = build(BuildPlan {
+        program: Rc::clone(&equality_program),
+        budget: StepBudget {
+            scratch_elements: 1,
+            ..execution_budget()
+        },
+    })
+    .err()
+    .expect("two equality operands cannot fit one scratch address");
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    let stop = failure.resource.expect("exact equality address shortage");
+    assert_eq!(stop.resource, StepResource::ScratchElements);
+    assert_eq!(
+        (stop.limit, stop.spent, stop.requested),
+        (Some(1), 1, Integer::one())
+    );
+    assert!(failure.scalar.is_none());
+    assert!(failure.invariant.is_none());
+    assert_now(
+        &build(BuildPlan {
+            program: equality_program,
+            budget: execution_budget(),
+        })
+        .expect("later equality invocation starts clean"),
+        99,
+    );
+
+    let mut union_input = standard_parts("union-init");
+    let members = verified_union(&mut union_input, "state-choice");
+    let variant = members
+        .iter()
+        .find(|member| member.identifier() == "Chosen")
+        .unwrap()
+        .variant()
+        .clone();
+    let state = union_input.layout.state.value_type.clone();
+    let state_value = state_at(&union_input, 0);
+    let payload = standard_literal(&mut union_input, "union-init", state, state_value);
+    let union = lexical_expression(
+        &mut union_input,
+        "union-init",
+        ValueType::Composite(key("state-choice")),
+        Operation::Union {
+            variant: variant.clone(),
+            positions: vec![payload],
+        },
+    );
+    let condition = lexical_expression(
+        &mut union_input,
+        "union-init",
+        ValueType::Boolean,
+        Operation::UnionIs {
+            value: union,
+            variant,
+        },
+    );
+    finish_boolean_condition(&mut union_input, "union-init", condition);
+    let union_program = Program::try_new(union_input).unwrap();
+    let failure = build(BuildPlan {
+        program: Rc::clone(&union_program),
+        budget: StepBudget {
+            scratch_bytes: 0,
+            ..execution_budget()
+        },
+    })
+    .err()
+    .expect("one union payload cannot fit zero scratch bytes");
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    let stop = failure.resource.expect("exact union byte shortage");
+    assert_eq!(stop.resource, StepResource::ScratchBytes);
+    assert_eq!(stop.limit, Some(0));
+    assert_eq!(stop.spent, 0);
+    assert_eq!(
+        stop.requested,
+        Integer::from(core::mem::size_of::<FieldValue>())
+    );
+    assert!(failure.scalar.is_none());
+    assert!(failure.invariant.is_none());
+    assert_now(
+        &build(BuildPlan {
+            program: union_program,
+            budget: execution_budget(),
+        })
+        .expect("later union invocation starts clean"),
+        99,
+    );
 }
 
 #[trace("TC-098", "IT-018-SC-13", "interface-011-AC-3")]
@@ -6208,6 +6470,31 @@ fn dispatch_checks_each_independent_context_component_before_executing() {
         .unwrap();
     assert_eq!(failure.input, Some(InputRefusal::ProgressContext));
     assert_now(&monitor, 0);
+    let invalid_scope = Value::Integer(Integer::zero());
+    let failure = monitor
+        .watermark(Watermark {
+            context: original,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted assertion",
+            inclusive_boundary: &boundary,
+            scope: &invalid_scope,
+        })
+        .err()
+        .expect("a wrong scope value refuses before progress commits");
+    assert_eq!(failure.input, Some(InputRefusal::Values));
+    assert_now(&monitor, 0);
+    let later = Integer::from(5_u64);
+    monitor
+        .watermark(Watermark {
+            context: original,
+            progress_context: &program.layout().progress_context,
+            assertion: b"diagnostic admitted assertion",
+            inclusive_boundary: &later,
+            scope: &scope,
+        })
+        .expect("the lower valid watermark proves rejected progress was not committed");
+    assert_now(&monitor, 5);
+    assert_eq!(monitor.baseline(), None);
     monitor
         .event(Event {
             reading: Reading {
@@ -6439,6 +6726,276 @@ fn event_position_parts() -> ProgramParts {
         input.functions[index].body = body;
     }
     input
+}
+
+/// Root locations of the checked State argument, its `now` read, the delta
+/// argument, and the addition in the authored `position_event` source.
+#[string_edge]
+fn admitted_position_sources() -> [NodeKey; 4] {
+    use quire_contract_ir::CheckedTerm;
+
+    let package = admitted();
+    let function_key = key("position-event");
+    let function = package
+        .graph()
+        .nodes
+        .iter()
+        .find(|node| admitted_key(&node.node_id) == function_key)
+        .expect("admitted position_event function");
+    let CheckedTerm::Aggregate { members } = &function.body else {
+        panic!("admitted function has an aggregate body");
+    };
+    let parameters = members
+        .iter()
+        .find_map(|member| match member {
+            CheckedTerm::Binding { name, value } if name.as_ref() == "parameters" => {
+                Some(value.as_ref())
+            }
+            _ => None,
+        })
+        .expect("admitted function has parameters");
+    let CheckedTerm::Aggregate { members } = parameters else {
+        panic!("admitted parameters are ordered references");
+    };
+    let [CheckedTerm::Reference { target: state }, CheckedTerm::Reference { target: delta }, ..] =
+        members.as_slice()
+    else {
+        panic!("position_event begins with State and delta parameters");
+    };
+    assert!(package.term(state).is_some());
+    assert!(package.term(delta).is_some());
+
+    let additions: Vec<_> = package
+        .graph()
+        .nodes
+        .iter()
+        .filter_map(|node| match &node.body {
+            CheckedTerm::Application {
+                operation,
+                arguments,
+                ..
+            } if operation.identity() == Some("quire.op.integer.add")
+                && matches!(arguments.as_slice(), [_, CheckedTerm::Reference { target }] if target == delta) =>
+            {
+                Some((node, &arguments[0]))
+            }
+            _ => None,
+        })
+        .collect();
+    let [(addition, CheckedTerm::Reference { target: now })] = additions.as_slice() else {
+        panic!("one admitted s.now + delta node, found {}", additions.len());
+    };
+    let Some(CheckedTerm::Application {
+        operation,
+        arguments,
+        ..
+    }) = package.term(now)
+    else {
+        panic!("s.now is an admitted field projection");
+    };
+    let (_, field) = operation
+        .projection_field()
+        .expect("admitted operation views")
+        .expect("field projection");
+    assert_eq!(field, "now");
+    assert!(matches!(arguments.as_slice(), [CheckedTerm::Reference { target }] if target == state));
+    [
+        admitted_key(state),
+        admitted_key(now),
+        admitted_key(delta),
+        admitted_key(&addition.node_id),
+    ]
+}
+
+fn position_expression_ids(input: &ProgramParts, function: FunctionId) -> [ExpressionId; 4] {
+    let argument = |position| {
+        let found: Vec<_> = input
+            .expressions
+            .iter()
+            .enumerate()
+            .filter_map(|(index, expression)| {
+                matches!(&expression.operation, Operation::Argument { function: owner, position: slot } if *owner == function && *slot == position)
+                    .then_some(ExpressionId(index))
+            })
+            .collect();
+        let [id] = found.as_slice() else {
+            panic!("one argument {position} for function {}", function.0);
+        };
+        *id
+    };
+    let state = argument(0);
+    let delta = argument(1);
+    let now_member = MemberId::new(MemberOwner::Node(key("state")), "now").unwrap();
+    let projections: Vec<_> = input
+        .expressions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, expression)| match &expression.operation {
+            Operation::RecordField { value, member }
+                if *value == state && member == &now_member =>
+            {
+                Some(ExpressionId(index))
+            }
+            _ => None,
+        })
+        .collect();
+    let [now] = projections.as_slice() else {
+        panic!("one State.now projection for function {}", function.0);
+    };
+    let additions: Vec<_> = input
+        .expressions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, expression)| match &expression.operation {
+            Operation::IntegerAdd { left, right } if *left == *now && *right == delta => {
+                Some(ExpressionId(index))
+            }
+            _ => None,
+        })
+        .collect();
+    let [addition] = additions.as_slice() else {
+        panic!("one State.now + delta for function {}", function.0);
+    };
+    [state, *now, delta, *addition]
+}
+
+fn shared_position_parts() -> (ProgramParts, [[ExpressionId; 4]; 2], [NodeKey; 4]) {
+    let source = admitted_position_sources();
+    let mut input = event_position_parts();
+    let ids = [FunctionId(1), FunctionId(3)].map(|function| {
+        let ids = position_expression_ids(&input, function);
+        for (id, key) in ids.into_iter().zip(&source) {
+            let expression = &mut input.expressions[id.0];
+            expression.key = key.clone();
+            // Each selected location is the root of its admitted graph node.
+            expression.body_path.clear();
+        }
+        ids
+    });
+    (input, ids, source)
+}
+
+#[trace("TC-209", "IT-018-SC-03", "interface-002-AC-5")]
+#[test]
+fn admitted_position_nodes_keep_equal_locations_across_distinct_function_owners() {
+    let (input, ids, source) = shared_position_parts();
+    let function_keys = [key("position-event"), key("position-gap")];
+    let program =
+        Program::try_new(input).expect("distinct derived owners admit shared source nodes");
+    for (branch, function) in [FunctionId(1), FunctionId(3)].into_iter().enumerate() {
+        assert_eq!(
+            program.function(function).unwrap().key,
+            function_keys[branch]
+        );
+        for (id, expected_key) in ids[branch].into_iter().zip(&source) {
+            let retained = program.expression(id).unwrap();
+            assert_eq!(&retained.key, expected_key);
+            assert!(
+                retained.body_path.is_empty(),
+                "admitted node-body root path"
+            );
+        }
+        assert!(matches!(
+            &program.expression(ids[branch][0]).unwrap().operation,
+            Operation::Argument { function: owner, position: 0 } if *owner == function
+        ));
+        assert!(matches!(
+            &program.expression(ids[branch][2]).unwrap().operation,
+            Operation::Argument { function: owner, position: 1 } if *owner == function
+        ));
+        assert!(matches!(
+            &program.expression(ids[branch][3]).unwrap().operation,
+            Operation::IntegerAdd { left, right }
+                if *left == ids[branch][1] && *right == ids[branch][2]
+        ));
+    }
+    assert_ne!(
+        ids[0], ids[1],
+        "separate arena addresses retain equal source locations"
+    );
+}
+
+#[trace("TC-209", "IT-018-SC-03", "interface-002-AC-6")]
+#[test]
+fn admitted_position_locations_refuse_duplicate_and_foreign_bindings() {
+    let (mut same, ids, source) = shared_position_parts();
+    same.expressions.push(Expression {
+        key: source[0].clone(),
+        body_path: vec![],
+        value_type: same.expressions[ids[0][0].0].value_type.clone(),
+        operation: Operation::Argument {
+            function: FunctionId(1),
+            position: 0,
+        },
+    });
+    refused(same, ProgramRefusalCode::DuplicateKey);
+
+    let (mut neutral, _, _) = shared_position_parts();
+    for _ in 0..2 {
+        neutral.expressions.push(Expression {
+            key: key("condition"),
+            body_path: vec![],
+            value_type: ValueType::Boolean,
+            operation: Operation::Literal(Value::Boolean(true)),
+        });
+    }
+    refused(neutral, ProgramRefusalCode::DuplicateKey);
+
+    let (mut neutral_bound, _, _) = shared_position_parts();
+    for operation in [
+        Operation::Literal(Value::Integer(Integer::zero())),
+        Operation::Argument {
+            function: FunctionId(1),
+            position: 1,
+        },
+    ] {
+        neutral_bound.expressions.push(Expression {
+            key: key("condition"),
+            body_path: vec![],
+            value_type: ValueType::Integer,
+            operation,
+        });
+    }
+    refused(neutral_bound, ProgramRefusalCode::DuplicateKey);
+
+    let (mut mixed, ids, _) = shared_position_parts();
+    mixed.expressions[ids[0][3].0].operation = Operation::IntegerAdd {
+        left: ids[0][1],
+        right: ids[1][2],
+    };
+    let mixed_refusal = Program::try_new(mixed)
+        .err()
+        .expect("a mixed owner cannot reuse the admitted addition location");
+    assert_eq!(mixed_refusal.code, ProgramRefusalCode::DuplicateKey);
+    assert_eq!(mixed_refusal.node.as_ref(), Some(&source[3]));
+
+    let mut foreign_argument = event_position_parts();
+    let ids = position_expression_ids(&foreign_argument, FunctionId(1));
+    foreign_argument.expressions[ids[2].0].key = source[2].clone();
+    foreign_argument.expressions[ids[2].0].body_path.clear();
+    foreign_argument.expressions[ids[2].0].operation = Operation::Argument {
+        function: FunctionId(3),
+        position: 1,
+    };
+    refused(foreign_argument, ProgramRefusalCode::ForeignArgument);
+
+    for mixed_owner in [false, true] {
+        let mut foreign_local = event_position_parts();
+        let ids = position_expression_ids(&foreign_local, FunctionId(1));
+        foreign_local.expressions[ids[2].0].key = source[2].clone();
+        foreign_local.expressions[ids[2].0].body_path.clear();
+        foreign_local.expressions[ids[2].0].operation = Operation::Local(LocalId {
+            function: FunctionId(3),
+            position: 1,
+        });
+        if !mixed_owner {
+            foreign_local.expressions[ids[0].0].operation = Operation::Argument {
+                function: FunctionId(3),
+                position: 0,
+            };
+        }
+        refused(foreign_local, ProgramRefusalCode::InvalidBinding);
+    }
 }
 
 #[test]
