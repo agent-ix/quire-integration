@@ -268,12 +268,12 @@ fn all_ten_affine_arithmetic_cases_refuse_before_value_charges() {
                 (5, 9, 45967, 180)
             };
             assert_eq!(
-                point.scale(),
+                point.canonical().scale(),
                 &Rational::new(Integer::from(scale_n), Integer::from(scale_d))
                     .expect("nonzero scale denominator")
             );
             assert_eq!(
-                point.offset(),
+                point.canonical().offset(),
                 &Rational::new(Integer::from(offset_n), Integer::from(offset_d))
                     .expect("nonzero offset denominator")
             );
@@ -336,8 +336,14 @@ fn same_named_base_dimensions_keep_distinct_actual_owners() {
             unit.dimension().exponents().collect::<Vec<_>>(),
             vec![(unit.dimension_node(), &Integer::one())]
         );
-        assert_eq!(unit.scale(), &Rational::from_integer(Integer::one()));
-        assert_eq!(unit.offset(), &Rational::from_integer(Integer::zero()));
+        assert_eq!(
+            unit.canonical().scale(),
+            &Rational::from_integer(Integer::one())
+        );
+        assert_eq!(
+            unit.canonical().offset(),
+            &Rational::from_integer(Integer::zero())
+        );
         assert_eq!(unit.root(), unit.key());
     }
     native(
