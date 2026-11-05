@@ -9,6 +9,7 @@ use qsl_replay::{
     SourceIdentity, StageLimits,
 };
 
+/// Original declarations, selected call occurrences and closed input constructors.
 pub const SOURCE: &str = concat!(
     "language \"ix:native\" edition \"1-draft\";\n",
     "profile v = \"quire.value.complete/v1\";\n",
@@ -46,6 +47,7 @@ pub const SOURCE: &str = concat!(
 
 );
 
+/// Independently check, emit and strictly admit the provided original source.
 pub fn acquire(bytes: &[u8]) -> (CheckedClosureCompilation, CheckedPackageV2) {
     let acquisition = acquire_checked_closure(
         CompileUnit {
@@ -72,6 +74,7 @@ pub fn acquire(bytes: &[u8]) -> (CheckedClosureCompilation, CheckedPackageV2) {
     (acquisition, *package)
 }
 
+/// Selected equality declarations in original source order.
 pub const NAMES: [&str; 10] = [
     "boolEqual",
     "boolNotEqual",
@@ -84,6 +87,7 @@ pub const NAMES: [&str; 10] = [
     "choiceEqual",
     "choiceNotEqual",
 ];
+/// Distinct original call occurrences for each selected equality declaration.
 pub const EXERCISES: [&str; 10] = [
     "exerciseBoolEqual",
     "exerciseBoolNotEqual",

@@ -25,7 +25,7 @@ mod family_function_equality_source;
 
 #[trace("TC-104", "IT-019-SC-05")]
 #[test]
-fn primitive_function_equality_matches_fresh_qsl_sessions() {
+fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
     let (_, package) = family_function_equality_source::acquire(
         family_function_equality_source::SOURCE.as_bytes(),
     );
@@ -165,12 +165,29 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
     assert_eq!(output.claim_map.items.len(), names.len());
     // These are requests over original source nodes, not rewritten IR.
     use quire_contract_codegen::ExactFunctionRefusal;
-    for boundary in ["result", "capability", "occurrence", "duplicate"] {
+    for boundary in [
+        "result",
+        "capability",
+        "occurrence",
+        "duplicate",
+        "parameter",
+        "arity",
+        "ambiguous",
+        "declaring-node",
+    ] {
         let mut declarations = functions.clone();
         let mut requests = vec![items[0].clone(), items[9].clone()];
         let mut requested_positions = vec![item_positions[0], item_positions[9]];
         match boundary {
             "result" => declarations[0].result_type = integer.clone(),
+            "parameter" => declarations[0].parameters[1].type_node_id = integer.clone(),
+            "arity" => {
+                requests[0].argument_node_ids.pop();
+            }
+            "ambiguous" => declarations[1].name = declarations[0].name.clone(),
+            "declaring-node" => {
+                declarations.push(declarations[0].clone());
+            }
             "capability" => {
                 declarations[0].capability_requirements =
                     vec!["unsupported-equality-capability".to_owned()]
@@ -213,6 +230,23 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
             );
         };
         match boundary {
+            "parameter" => assert!(matches!(
+                refusal,
+                ExactFunctionRefusal::SignatureMismatch { .. }
+            )),
+            "arity" => assert_eq!(
+                refusal,
+                &ExactFunctionRefusal::ArityMismatch {
+                    expected: 2,
+                    found: 1
+                }
+            ),
+            "ambiguous" => assert!(
+                matches!(refusal, ExactFunctionRefusal::AmbiguousFunctionName { name } if name == "boolEqual")
+            ),
+            "declaring-node" => assert!(
+                matches!(refusal, ExactFunctionRefusal::DuplicateDeclaringNode { node_id } if node_id == &bodies[0])
+            ),
             "result" => assert!(matches!(
                 refusal,
                 ExactFunctionRefusal::SignatureMismatch { .. }
@@ -341,7 +375,7 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
     );
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
-        ["SC05 primitive function equality: 78 envelopes, 32 input refusals, 10 owner refusals"]
+        ["SC05 function equality: 78 envelopes, 32 input refusals, 10 owner refusals"]
     );
 }
 

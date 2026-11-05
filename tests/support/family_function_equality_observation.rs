@@ -300,6 +300,6 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
         }
     }
     println!(
-        "IT019_OBSERVATION SC05 primitive function equality: {envelopes} envelopes, {input_refusals} input refusals, {owner_refusals} owner refusals"
+        "IT019_OBSERVATION SC05 function equality: {envelopes} envelopes, {input_refusals} input refusals, {owner_refusals} owner refusals"
     );
 }

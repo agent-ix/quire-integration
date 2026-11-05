@@ -3,6 +3,7 @@
 use quire_eval::{Evaluation, FamilyOutcome};
 use quire_exact::{Outcome, Value};
 
+/// Compare every public evaluation field while retaining the measured value variants.
 pub fn same_envelope(expected: &Evaluation, actual: &Evaluation) {
     assert_eq!(expected.location, actual.location, "entire result location");
     assert_eq!(expected.losses, actual.losses, "ordered located losses");
@@ -20,7 +21,7 @@ pub fn same_envelope(expected: &Evaluation, actual: &Evaluation) {
             FamilyOutcome::Evaluated(Outcome::Incomplete(actual)),
         ) => assert_eq!(expected, actual),
         _ => panic!(
-            "required Boolean completion or exact incomplete shape: {:?} versus {:?}",
+            "required Boolean/Integer completion or exact incomplete shape: {:?} versus {:?}",
             expected.outcome, actual.outcome
         ),
     }

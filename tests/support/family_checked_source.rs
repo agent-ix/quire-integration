@@ -4,6 +4,7 @@ use qsl_package::CheckedPackage;
 use qsl_semantics::{check::PackageDeclarations, model::intake::SelectedModels};
 use quire_semantic_value::checking::CheckingLimits;
 
+/// Check the authored operation source without reusing producer evaluation state.
 pub fn checked(source: &str) -> CheckedPackage {
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "scalar-operations"),
