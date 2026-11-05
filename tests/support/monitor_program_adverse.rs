@@ -41,12 +41,24 @@ pub fn target() -> MonitorTarget {
 }
 
 pub fn read(emission: &Emission, identity: &str, document: &[u8]) -> Box<CheckedPackageV2> {
+    match read_result(emission, identity, document, emission.package().bytes()) {
+        CheckedPackageDispatchResult::AdmittedV2(package) => package,
+        other => panic!("the actual producer emission must admit: {other:?}"),
+    }
+}
+
+fn read_result(
+    emission: &Emission,
+    identity: &str,
+    document: &[u8],
+    bytes: &[u8],
+) -> CheckedPackageDispatchResult {
     let mut evidence = emission.evidence().clone();
     evidence
         .insert_domain_package_document(identity, document.to_vec())
         .expect("the original model document supplies reader evidence");
-    match read_checked_package(
-        emission.package().bytes(),
+    read_checked_package(
+        bytes,
         CheckedPackageReadLimits {
             bytes: 8 * 1024 * 1024,
             nodes: 100_000,
@@ -56,10 +68,7 @@ pub fn read(emission: &Emission, identity: &str, document: &[u8]) -> Box<Checked
             work: 100_000_000,
         },
         &evidence,
-    ) {
-        CheckedPackageDispatchResult::AdmittedV2(package) => package,
-        other => panic!("the actual producer emission must admit: {other:?}"),
-    }
+    )
 }
 
 impl Produced {
@@ -114,6 +123,11 @@ temporal Construction using timed over (candidate: Selected::ConfigVersion) cloc
             source_identity,
             library,
         }
+    }
+
+    /// Read an adverse byte input against the original final producer evidence.
+    pub fn read_bytes(&self, bytes: &[u8]) -> CheckedPackageDispatchResult {
+        read_result(&self.root.emission, &self.identity, &self.document, bytes)
     }
 
     /// Recheck owner-generated entry source and let the producer assign all new keys.
