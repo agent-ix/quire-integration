@@ -15,8 +15,9 @@ states which paths each test composes.
 </picture>
 
 > **Status: prerelease, private repository.** The library crate is a
-> placeholder with one function (`src/lib.rs`) and is not published. The
-> integration tests hold all current functionality. The composed runtime
+> unpublished library with a checked subject/classification binding validator
+> and a bounded checked-formula to TL owner-formula constructor. Other current
+> functionality lives in integration tests. The composed runtime
 > described in the repository's early charter (ordered execution bundles,
 > effect-adapter coordination, model views) is not implemented.
 
@@ -35,6 +36,16 @@ not author an abstraction relation.
 | `tests/ir914_bound_export.rs` | QSL compilation, the driver's relationless skip and real per-item binding export, CG generation, and a separate real Kani scalar path | The skip sends every item to CG; a real QSL refusal is withheld with its original index; the integer proof verifies and its arithmetic mutant falsifies |
 | `tests/qsl_model_owner_admission.rs` | A QSL unit emitted as `checked-package/v2` bytes, read by contract IR and passed to CG's scalar claim API | Model ownership stays content based; integer addition and Boolean negation produce checked CG claims |
 | `tests/integration.rs` | The placeholder library | It links |
+
+The temporal formula component accepts an instance-bound QSL checked subject and
+classification, preserves occurrence order and original checked predicate handles,
+and constructs and strictly admits an actual TL owner formula. Its node, component
+visit and byte ceilings are separate from owner-internal limits. It retains every
+outstanding classification premise; it establishes no runtime Boolean totality and
+runs neither evaluator. Full projection, valuation/history/request admission,
+correspondence, result joins, bridge readers and the remaining limits stay Planned.
+`tests/temporal_formula.rs` covers this narrow IT-020/TC-101 boundary; none of the
+whole FR-350 criteria is claimed complete by this component.
 
 The plain-language test descriptions are in `spec/integration/`, one file per
 scenario, each with its objective, preconditions, procedure and expected result.
