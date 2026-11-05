@@ -13,7 +13,49 @@ use quire_contract_ir::{
     CheckedPackageReadLimits, SelectedExactIdentities, SelectedFactEqualityId, SelectedFactFieldId,
     SelectedFactIds, SelectedFactRows, SelectedFactsErrorCode,
 };
-use quire_exact::{Cancel, Integer, IntegerInterval, Presence, Rational, ValueType};
+use quire_exact::{Cancel, Integer, Presence, Rational, ValueType};
+
+// An original model source for the representable record-field selection.
+// The monitor subject remains the separate QSL-owned ConfigVersion model.
+fn selected_record_document() -> Vec<u8> {
+    let origin = |identity: &str| {
+        serde_json::json!({"generated": {
+            "generatorIdentity": identity,
+            "generatorVersion": "1.0.0",
+            "inputIdentities": [identity]
+        }})
+    };
+    serde_json::to_vec(&serde_json::json!({
+        "contractVersion": "2.0.0",
+        "canonicalization": {"algorithm": "rfc8785-v1"},
+        "source": {"identity": "ix://agent-ix/selected-facts-model/source",
+                   "version": "1.0.0", "dialect": "spec-bundle"},
+        "package": {"identity": "agent-ix/selected-facts-model", "version": "1.0.0",
+                    "mappingVersions": [], "profileVersions": []},
+        "constructs": [{
+            "kind": {"module": "agent-ix/selected-facts-model", "name": "record"},
+            "moduleVersion": "1.0.0",
+            "construct": {"identity": "none", "shape": "record", "members": {},
+                          "meaning": "quire.meaning.model.record-value-type/v1"}
+        }],
+        "types": [{
+            "identity": "ix://agent-ix/selected-facts-model/Snapshot", "displayName": "Snapshot",
+            "kind": {"module": "agent-ix/selected-facts-model", "name": "record"},
+            "roles": [], "constraints": [], "extensions": [], "unknownPolicy": "reject",
+            "origin": origin("ix://agent-ix/selected-facts-model/Snapshot"),
+            "supertypes": [],
+            "fields": [{
+                "identity": "ix://agent-ix/selected-facts-model/Snapshot/count", "name": "count",
+                "typeRef": "ix://quire/native/Integer", "presence": "required",
+                "nullable": false, "defaultKind": "none",
+                "multiplicity": {"lower": 1, "upper": 1, "ordered": false, "unique": true},
+                "origin": origin("ix://agent-ix/selected-facts-model/Snapshot/count")
+            }]
+        }],
+        "occurrences": [], "extensions": []
+    }))
+    .expect("the original selected model document serializes")
+}
 
 #[trace("TC-098", "FR-357-AC-9")]
 #[test]
@@ -25,13 +67,17 @@ fn real_plan_root_rows_join_selected_model_and_equality_facts() {
             .expect("QSL owns the domain fixture");
     let domain: serde_json::Value = serde_json::from_slice(&document).unwrap();
     let identity = domain["package"]["identity"].as_str().unwrap();
-    let packages = package_input([document.as_slice()]).expect("the authored model admits");
+    let selected_document = selected_record_document();
+    let packages = package_input([document.as_slice(), selected_document.as_slice()])
+        .expect("both original model documents admit");
     let text = format!(
         r#"language "ix:native" edition "1-draft";
 profile v = "quire.value.complete/v1";
 profile timed = "quire.temporal.timed/v1";
 profile complete = "quire.temporal.complete/v1";
 model Selected = "{identity}";
+model Facts = "agent-ix/selected-facts-model";
+function selected_count using v(value: Facts::Snapshot): Integer pure {{ value.count }}
 dimension Time;
 unit second : Time = rational(1, 1);
 unit ms : Time = rational(1, 1000) * second;
@@ -72,6 +118,9 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     evidence
         .insert_domain_package_document(identity, document)
         .expect("selected model evidence");
+    evidence
+        .insert_domain_package_document("agent-ix/selected-facts-model", selected_document)
+        .expect("selected record model evidence");
     let package = match read_checked_package(
         emission.package().bytes(),
         CheckedPackageReadLimits {
@@ -99,7 +148,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     .expect("IR joins exact original producer identities");
     let mut matching_fields = fields
         .iter()
-        .filter(|row| row.field_original_identity.ends_with("/versionNumber"));
+        .filter(|row| row.field_original_identity.ends_with("/Snapshot/count"));
     let selected_field = matching_fields
         .next()
         .expect("select the model's original numeric field");
@@ -176,16 +225,10 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     assert_eq!(selected.declarations, [selected_declaration.clone()]);
     assert_eq!(selected.fields.len(), 1);
     assert_eq!(selected.fields[0].row, *selected_field);
-    assert_eq!(selected.fields[0].name.as_ref(), "versionNumber");
+    assert_eq!(selected.fields[0].name.as_ref(), "count");
     assert_eq!(selected.fields[0].order, 0);
     assert_eq!(selected.fields[0].presence, Presence::Required);
-    assert_eq!(
-        selected.fields[0].value_type,
-        ValueType::Int(IntegerInterval::spanning(
-            Integer::zero(),
-            Integer::from(1000_u64)
-        ))
-    );
+    assert_eq!(selected.fields[0].value_type, ValueType::Integer);
     let equality = &applications[0];
     let decision = package.admitted_equality(
         &equality.application,
