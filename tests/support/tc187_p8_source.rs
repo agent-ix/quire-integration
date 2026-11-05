@@ -10,11 +10,14 @@ use quire_contract_ir::{
 use quire_specification::{vectors_of, TestCase};
 use serde_json::Value;
 
+/// Complete source language and value profile selections.
 pub const HEADER: &str =
     "language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n";
+/// Original time dimension and millisecond unit declarations.
 pub const UNITS: &str =
     "dimension T;\nunit s : T = rational(1, 1);\nunit ms : T = rational(1, 1000) * s;\n";
 
+/// Bind one complete public vector cell without importing a fixture corpus.
 pub fn vector(id: &str, input: &str, expected: &str) {
     let rows: Vec<_> = vectors_of(TestCase::Tc187)
         .filter(|row| row.id == id)
@@ -26,6 +29,7 @@ pub fn vector(id: &str, input: &str, expected: &str) {
     assert_eq!(row.expected, expected, "{id} complete expectation");
 }
 
+/// Parse and form an original source document, retaining its source identity.
 pub fn parsed(name: &str, text: &str) -> (RawSourceRef, qsl_forms::ParsedUnit) {
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", name),
@@ -41,6 +45,7 @@ pub fn parsed(name: &str, text: &str) -> (RawSourceRef, qsl_forms::ParsedUnit) {
     )
 }
 
+/// Link and emit the original checked graph, then strictly admit its bytes.
 pub fn emitted(graph: CheckedGraph, model: Option<(&str, &[u8])>) -> CheckedPackageV2 {
     let emission = emit_checked(&CheckedPackage::link(graph)).expect("checked source emits");
     assert!(emission.omitted().is_empty(), "{:?}", emission.omitted());

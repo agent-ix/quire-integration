@@ -10,6 +10,7 @@ use qsl_semantics::model::{
     accounting::ModelNormalizationLimits,
     intake::{admit_unit, package_input, SelectedModels},
 };
+use quire_contract_ir::{CheckedNodeOwner, CheckedTerm, LiteralKind};
 use quire_exact::ValueType;
 use quire_semantic_value::checking::CheckingLimits;
 use serde_json::{json, Value};
@@ -59,13 +60,11 @@ fn original_call_literal_is_typed_by_the_declared_ms_node() {
     let literals: Vec<_> = nodes
         .iter()
         .filter_map(|node| match &node.body {
-            quire_contract_ir::CheckedTerm::Literal {
+            CheckedTerm::Literal {
                 type_id,
                 value_kind,
                 value,
-            } if serde_json::to_value(value_kind).expect("literal kind") == "quantity" => {
-                Some((node, type_id, value))
-            }
+            } if *value_kind == LiteralKind::Quantity => Some((node, type_id, value)),
             _ => None,
         })
         .collect();
@@ -75,6 +74,16 @@ fn original_call_literal_is_typed_by_the_declared_ms_node() {
     assert_eq!(**value, json!("3"));
     assert_eq!(literal.semantic_type, ms.node_id);
     assert_eq!(**type_id, ms.node_id);
+    let start = text.find("3 ms").expect("original call literal");
+    assert!(
+        admitted
+            .source_map()
+            .iter()
+            .any(|entry| entry.node_id == literal.node_id
+                && entry.regions.iter().any(|region| (region.start, region.end)
+                    == (start as u64, (start + "3 ms".len()) as u64))),
+        "literal correspondence retains the original call argument"
+    );
 }
 
 const MODEL: &str = "agent-ix/namespace-clock";
@@ -174,7 +183,7 @@ fn admitted_operation_parameter_names_the_original_ms_unit() {
     let [clause] = clauses.as_slice() else {
         panic!("one original Delay clause: {clauses:?}");
     };
-    let quire_contract_ir::CheckedTerm::Application {
+    let CheckedTerm::Application {
         operation,
         arguments,
         ..
@@ -183,15 +192,13 @@ fn admitted_operation_parameter_names_the_original_ms_unit() {
         panic!("state clause application");
     };
     assert_eq!(operation.identity(), Some("quire.op.state.clause"));
-    let [quire_contract_ir::CheckedTerm::Aggregate {
+    let [CheckedTerm::Aggregate {
         members: parameters,
-    }, quire_contract_ir::CheckedTerm::Reference { target: anchor }, _] = arguments.as_slice()
+    }, CheckedTerm::Reference { target: anchor }, _] = arguments.as_slice()
     else {
         panic!("clause signature and original anchor: {arguments:?}");
     };
-    let [_, quire_contract_ir::CheckedTerm::Reference { target: parameter }] =
-        parameters.as_slice()
-    else {
+    let [_, CheckedTerm::Reference { target: parameter }] = parameters.as_slice() else {
         panic!("self and elapsed parameters: {parameters:?}");
     };
     let parameter = nodes
@@ -204,14 +211,28 @@ fn admitted_operation_parameter_names_the_original_ms_unit() {
         .iter()
         .find(|node| &node.node_id == anchor)
         .expect("original delay operation anchor");
-    let quire_contract_ir::CheckedTerm::OperationAnchorBody(body) = &anchor.body else {
+    let CheckedTerm::OperationAnchorBody(body) = &anchor.body else {
         panic!("typed operation anchor");
     };
-    let quire_contract_ir::CheckedTerm::Binding { name, value } = &body.members[1] else {
+    let CheckedTerm::Binding { name, value } = &body.members[0] else {
+        panic!("context binding");
+    };
+    assert_eq!(name.as_ref(), "context");
+    let CheckedTerm::Reference { target } = value.as_ref() else {
+        panic!("original context reference");
+    };
+    let context = nodes
+        .iter()
+        .find(|node| &node.node_id == target)
+        .expect("original Timer model node");
+    assert!(
+        matches!(&context.owner, Some(CheckedNodeOwner::Model { identity, node }) if identity.as_ref() == MODEL && node.as_ref() == TIMER)
+    );
+    let CheckedTerm::Binding { name, value } = &body.members[1] else {
         panic!("operation binding");
     };
     assert_eq!(name.as_ref(), "operation");
-    let quire_contract_ir::CheckedTerm::Literal { value, .. } = value.as_ref() else {
+    let CheckedTerm::Literal { value, .. } = value.as_ref() else {
         panic!("operation name literal");
     };
     assert_eq!(value, "delay");
