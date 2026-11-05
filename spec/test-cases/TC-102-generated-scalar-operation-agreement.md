@@ -21,7 +21,7 @@ Neither evaluator is reproduced.
 ## Test Procedure
 
 1. Check original QSL source, emit its exact checked-package/v2 bytes and strictly
-   admit them. Select each bounded function's original body using the shared
+   admit them. Select each closed function's original body using the shared
    declaration selector. Derive scalar items and require genuine generated claims
    with original node identities.
 2. Independently reacquire the source through parsing, assembly and checking.
@@ -31,8 +31,9 @@ Neither evaluator is reproduced.
 3. Exercise Boolean Not and full binary truth tables for And, Or, Implies,
    Equality/Boolean Equal and NotEqual: 22 authored cases across six public
    operation rows. Boolean variants explicitly use `right_may_stop=false`; the
-   `right_may_stop=true` lazy and supplied-stop controls remain Planned. Independently require authored expected truth values rather
-   than merely mutual agreement.
+   `right_may_stop=true` lazy and supplied-stop controls remain Planned.
+   Independently require authored expected truth values rather than merely
+   mutual agreement.
 4. Compare complete typed operation outcomes, ordered losses, ordered admitted
    charges and all LimitKind consumed counters at generous work and work zero/one.
    Require genuine incomplete WorkUnits terminal records under exhausted work;
@@ -52,6 +53,12 @@ Neither evaluator is reproduced.
 Every selected generated symbol executes natively and agrees with its independent
 QSL operation authority on the complete exposed observation. Independent Boolean
 truth values distinguish matching wrong computations. Exhausted
-work preserves the typed stop and all accounting without normalization. Any row
+work preserves the typed stop and all accounting without normalization.
+At work zero, connectives stop at BooleanResultRetain with next charge 1;
+equality stops at EqualityPlanForm with next charge 2. Work one completes every
+connective and still stops equality at EqualityPlanForm. Each stopped body has
+its real location, no losses, no admitted charges and zero consumption in every
+LimitKind counter. All 22 cases execute at work 0, 1 and 1024: 66 complete
+operation observations. Any row
 that does not genuinely derive is reported separately and receives no agreement
 credit. Full IT-019-SC-05 and family closure remain Planned under IR-842.
