@@ -393,17 +393,13 @@ fn tc185_decimal_vectors() {
             "D22" => d22(),
             "D23" => d23(),
             "D24" => d24(),
-            // QSL-1394 / QSL-1619 PENDING: literal arms stop at S2; mixed named
-            // Decimal admission/refusal still executes at S4.
+            // Literal and named Decimal admission/refusal execute at S4.
             "D25" => d25(),
-            // QSL-1394 / QSL-1619 PENDING: source literal expression stops at S2;
-            // retained-operand RT oracle remains runnable.
+            // Authored literal source and retained-operand RT oracles agree at S6a.
             "D26" => d26(),
-            // QSL-1394 / QSL-1619 PENDING: source literal expression stops at S2;
-            // RT division and denial remain runnable.
+            // Authored literal source and RT division/denial agree at S6a.
             "D27" => d27(),
-            // QSL-1394 / QSL-1619 PENDING: S4 type-mismatch checks cannot run until
-            // the literal expression passes S2.
+            // Two literal sources refuse at S4; the D26 counterpart is admitted.
             "D28" => d28(),
             other => panic!("unimplemented TC-185 vector {other}"),
         }
@@ -1355,9 +1351,13 @@ fn d25() {
     ] {
         let refusals = d25_source(body, result_type)
             .expect_err("S4 refuses literals with no unique Decimal type");
-        assert!(refusals.iter().any(|refusal| {
-            refusal.cause == CheckCause::IllTyped(IllTypedCause::AmbiguousLiteral)
-        }));
+        let [refusal] = refusals.as_slice() else {
+            panic!("D25 {body} must have one ambiguous-literal refusal: {refusals:?}");
+        };
+        assert_eq!(
+            refusal.cause,
+            CheckCause::IllTyped(IllTypedCause::AmbiguousLiteral)
+        );
     }
     d25_source("p + decimal(15,1)", "P").expect("S4 types literal from P operand");
     d25_source("decimal(15,1) + decimal(225,2)", "P")
@@ -1523,9 +1523,13 @@ fn d28() {
     ] {
         let refusals = qsl_decimal_literal(body, result_type, UNLIMITED)
             .expect_err("S4 refuses a literal outside the declared Decimal type");
-        assert!(refusals
-            .iter()
-            .any(|refusal| { refusal.cause == CheckCause::IllTyped(IllTypedCause::TypeMismatch) }));
+        let [refusal] = refusals.as_slice() else {
+            panic!("D28 {body} must have one type-mismatch refusal: {refusals:?}");
+        };
+        assert_eq!(
+            refusal.cause,
+            CheckCause::IllTyped(IllTypedCause::TypeMismatch)
+        );
     }
     let (outcome, _, _) = qsl_decimal_literal(
         "decimal(100,2) * decimal(3,0)",
