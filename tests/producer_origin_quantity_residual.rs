@@ -830,10 +830,10 @@ fn admitted_equality_operand_failures_keep_distinct_typed_causes() {
         result
     };
     let refusal = |result, cause| {
-        assert_eq!(
+        assert!(matches!(
             result,
-            Err(Stop::Refused(Refusal::CheckedInvariant { cause }))
-        );
+            Err(Stop::Refused(Refusal::CheckedInvariant { cause: actual })) if actual == cause
+        ));
     };
     refusal(
         failure(
