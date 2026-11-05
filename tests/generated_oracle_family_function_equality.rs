@@ -601,6 +601,10 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
         &refused.claim_map.items[9].result,
         ClaimDisposition::Generated(_)
     ));
+    assert_eq!(
+        refused.claim_map.items[9], output.claim_map.items[9],
+        "changed Integer descriptor preserves the complete healthy sibling claim and binding"
+    );
     let authority = family_checked_source::checked(&source);
     let mut expected = Vec::new();
     let mut driver = String::from(
