@@ -788,15 +788,24 @@ fn admitted_quantity_equality_converts_left_operand_before_comparison() {
             .map(|charge| charge.point)
             .collect();
         assert_eq!(points.first(), Some(&ChargePoint::UnitIdentityRead));
-        assert!(points.contains(&ChargePoint::UnitResultRetain));
-        assert!(points.contains(&ChargePoint::OrderingResultRetain));
+        assert_eq!(points.last(), Some(&ChargePoint::UnitResultRetain));
+        assert_eq!(
+            points
+                .iter()
+                .filter(|point| **point == ChargePoint::UnitResultRetain)
+                .count(),
+            2
+        );
         let conversion_end = points
             .iter()
             .position(|point| *point == ChargePoint::UnitResultRetain)
             .expect("left operand conversion retains its result");
         let comparison_start = points
             .iter()
-            .position(|point| *point == ChargePoint::OrderingOperands)
+            .enumerate()
+            .find_map(|(index, point)| {
+                (index > 0 && *point == ChargePoint::UnitIdentityRead).then_some(index)
+            })
             .expect("converted quantities are compared");
         assert!(conversion_end < comparison_start, "{points:?}");
     }
