@@ -151,9 +151,9 @@ fn compare(
             let loss = result
                 .loss()
                 .expect("U07 retains the complete rounding loss");
-            assert_eq!(loss.exact_numerator(), &Integer::from(127));
-            assert_eq!(loss.exact_denominator(), Integer::from(5000));
-            assert_eq!(loss.rounded_coefficient(), &Integer::from(3));
+            assert_eq!(loss.exact_numerator(), &Integer::from(127_i64));
+            assert_eq!(loss.exact_denominator(), Integer::from(5000_i64));
+            assert_eq!(loss.rounded_coefficient(), &Integer::from(3_i64));
             assert_eq!(loss.rounded_scale(), 2);
             assert_eq!(loss.mode(), RoundingMode::NearestEven);
         } else {
