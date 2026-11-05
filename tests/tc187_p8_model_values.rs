@@ -286,7 +286,14 @@ fn agree(package: &CheckedPackage, whole: bool, native: &Outcome<Quantity>, nati
         Outcome::Refused(reason) => Outcome::Refused(reason),
         Outcome::Incomplete(reason) => Outcome::Incomplete(reason),
     };
-    assert_eq!(outcome, actual, "entire original outcome");
+    let Outcome::Completed(Value::Quantity(quantity)) = &outcome else {
+        panic!("original stage must complete with a quantity: {outcome:?}");
+    };
+    assert_eq!(
+        native,
+        &Outcome::Completed(quantity.clone()),
+        "entire typed quantity outcome"
+    );
     let losses = Vec::<quire_semantic_value::loss::ValueLoss>::new();
     assert_eq!(
         observation::snapshot(&outcome, &losses, &meter),
