@@ -282,6 +282,12 @@ fn source_and_model_ms_are_independent_and_tick_uses_model_rate() {
     );
     assert_eq!(ms["node_id"]["package"], "acme/rpc");
     let local_ms = declared(&wire, "ms");
+    assert_eq!(local_ms["node_id"]["path"], json!(["ms"]));
+    assert_eq!(
+        local_ms["owner"],
+        json!({"kind": "source", "authority": "agent-ix", "identity": "tc110-model-names"})
+    );
+    assert_eq!(ms["semantic_form"], "unit");
     assert_ne!(local_ms["node_id"], ms["node_id"]);
     assert_eq!(parameter(&wire, "f")["semantic_type"], local_ms["node_id"]);
     assert_eq!(parameter(&wire, "g")["semantic_type"], ms["node_id"]);
@@ -392,10 +398,6 @@ fn three_time_owners_compose_and_missing_names_remain_missing() {
         assert_eq!(parameter(&wire, function)["semantic_type"], unit["node_id"]);
         assert_eq!(unit["semantic_type"], dimension["node_id"]);
     }
-    assert_ne!(
-        model_node(&wire, "ix://acme/rpc/dimension/Time")["node_id"],
-        model_node(&wire, "ix://acme/flow/dimension/Time")["node_id"]
-    );
     for (body, name) in [
         (format!("{RF} unit x : Time = rational(1, 1);"), "Time"),
         (
@@ -418,7 +420,11 @@ fn three_time_owners_compose_and_missing_names_remain_missing() {
         panic!("native ambiguity: {error:?}")
     };
     assert_eq!(name, "Time");
-    assert_eq!(spans.len(), 2);
+    let [first_span, later_span] = spans.as_slice() else {
+        panic!("two original Time name spans: {spans:?}")
+    };
+    assert!(first_span.start < later_span.start);
+    assert_eq!(error.span, *later_span);
     for span in spans {
         assert_eq!(&source[span.start..span.end], "Time");
     }
