@@ -306,18 +306,19 @@ fn u07_original_carried_exact_and_nearest_even_preserve_loss_and_precedence() {
                 .iter()
                 .map(|charge| charge.point)
                 .collect();
-            assert_eq!(
-                &points[..4],
-                &[
-                    ChargePoint::UnitIdentityRead,
-                    ChargePoint::UnitEdge,
-                    ChargePoint::UnitRationalArithmetic,
-                    ChargePoint::UnitRationalArithmetic
-                ]
-            );
-            if mode == RoundingMode::Exact {
-                assert_eq!(points.len(), 4);
+            let mut expected_points = vec![
+                ChargePoint::UnitIdentityRead,
+                ChargePoint::UnitEdge,
+                ChargePoint::UnitRationalArithmetic,
+                ChargePoint::UnitRationalArithmetic,
+            ];
+            if mode == RoundingMode::NearestEven && allowance.work_units == 6 {
+                expected_points.push(ChargePoint::UnitTargetDomain);
+                if allowance.result_units == 1 {
+                    expected_points.push(ChargePoint::UnitResultRetain);
+                }
             }
+            assert_eq!(points, expected_points);
         }
     }
 }
@@ -343,6 +344,21 @@ fn u08_original_carried_boundaries_refuse_atomically_after_target_domain() {
                 &target,
                 limits(2, 1, 0, work, 1),
                 (work == 3 && n.abs() == 2).then_some((n, 0, false)),
+            );
+            let mut expected_points = vec![ChargePoint::UnitIdentityRead];
+            if work == 3 {
+                expected_points.push(ChargePoint::UnitTargetDomain);
+                if n.abs() == 2 {
+                    expected_points.push(ChargePoint::UnitResultRetain);
+                }
+            }
+            assert_eq!(
+                meter
+                    .admitted_charges()
+                    .iter()
+                    .map(|c| c.point)
+                    .collect::<Vec<_>>(),
+                expected_points
             );
             if work == 1 {
                 stop(
