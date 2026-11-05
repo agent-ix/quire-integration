@@ -24,7 +24,9 @@ shared-DAG and compatible-entry controls specified by IT-018.
 
 Run `monitor_selected_facts` separately for FR-357-AC-9. Obtain a real final
 QSL `PlanRoot.emission`, admit its bytes strictly, and select model declaration,
-field and equality application/occurrence IDs from that same emission. Translate
+field and equality application/occurrence IDs from that same emission. The
+selected record model document is authored by this test; the monitor subject
+uses QSL's ConfigVersion document by reference. Translate
 its closed equality-row vocabulary through the producer-owned public
 `equality_witness` adapter without changing values. Compare exact model
 rows and field order, presence and type, then compare the public selected-fact
@@ -36,9 +38,12 @@ must retain its precise typed cause and locus, with no partial selected view.
 Every IT-018 success criterion passes. Producer or reader refusal is a failure;
 no test skips an unavailable boundary or remints an identity from constituent parts.
 
-The selected-fact control remains Planned/Unrun until its focused target passes.
-Its intended qualification covers only explicit representable model facts and
-the selected equality's opaque decision or native typed missing-witness result.
+The focused selected-fact control passes with successful joins for the selected
+original record and required integer field, followed by an opaque native FR-353
+equality decision preserved in the public selected-fact result. It also retains
+the precise assertion path for a future native typed missing-witness result;
+that alternative was not observed in this run. This qualification covers only
+these explicit representable model facts and the selected equality.
 It does not traverse monitor entries or establish a complete generated-source
 closure, `TypeEnvironment`, RT `ProgramParts` or temporal execution readiness.
 FR-357 AC1-4 remain outside this control.
