@@ -163,7 +163,7 @@ temporal Construction using timed over (candidate: Selected::ConfigVersion) cloc
         let emitted = emit_checked(checked.package()).unwrap();
         let mut evidence = emitted.evidence().clone();
         evidence
-            .insert_domain_package_document(&self.identity, self.document.clone())
+            .insert_domain_package_document(self.identity.as_str(), self.document.clone())
             .unwrap();
         let plan = &self.root.plan;
         let premises = plan.root_premises();
