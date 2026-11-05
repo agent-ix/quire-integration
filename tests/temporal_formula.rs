@@ -84,6 +84,10 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
                     },
                     unit: "tick".into(),
                 }
+            } else if profile.contains("timestamped-event") {
+                ClockConfiguration::TimestampedEvent {
+                    timestamp_unit: "tick".into(),
+                }
             } else {
                 ClockConfiguration::EventPosition {
                     sequence_authority: "events".into(),
@@ -427,7 +431,7 @@ fn binding_and_unsupported_stops_never_produce_a_component() {
     let TlFormulaError::Unsupported(retained) = error else {
         panic!("unsupported classification")
     };
-    assert_eq!(retained, classification);
+    assert_eq!(*retained, classification);
     assert_eq!(
         retained.support,
         Support::Unsupported {
@@ -541,7 +545,7 @@ fn unbounded_source_retains_original_infinite_trace_classification_and_codes_rou
     let TlFormulaError::Unsupported(retained) = &error else {
         panic!("original owner disposition: {error:?}")
     };
-    assert_eq!(retained, &classification);
+    assert_eq!(retained.as_ref(), &classification);
     assert_eq!(
         retained.support,
         Support::Unsupported {
@@ -553,4 +557,66 @@ fn unbounded_source_retains_original_infinite_trace_classification_and_codes_rou
         assert_eq!(TlFormulaCode::from_code(code.as_str()), Some(code));
     }
     assert_eq!(TlFormulaCode::from_code("foreign-code"), None);
+}
+
+#[trace("IT-020-SC-02")]
+#[test]
+fn all_owner_unsupported_dimensions_are_retained_in_order() {
+    let (package, _, clause) = packages(
+        "eventually[0,2] (once[0,1] holds(true))",
+        "quire.temporal.timestamped-event.finite-window/v1",
+    );
+    let subject = temporal_subject(&package, &clause).expect("subject");
+    let classification = mapping_support(&subject, Closure::Complete).expect("classification");
+    let error = construct_tl_formula(
+        &package,
+        &subject,
+        &classification,
+        Closure::Complete,
+        TlFormulaLimits::default(),
+    )
+    .expect_err("two unsupported dimensions");
+    let TlFormulaError::Unsupported(retained) = error else {
+        panic!("original unsupported classification")
+    };
+    assert_eq!(*retained, classification);
+    assert_eq!(
+        retained.support,
+        Support::Unsupported {
+            dimensions: vec![Unmatched::FiniteWindow, Unmatched::MixedDirection]
+        }
+    );
+}
+
+#[trace("IT-020-SC-01", "IT-020-SC-04")]
+#[test]
+fn bounded_endpoint_conversion_is_exact_and_out_of_owner_range_refuses() {
+    let result = component(
+        "eventually[4294967295,4294967295] holds(true)",
+        EVENT,
+        Closure::Complete,
+    );
+    assert_eq!(
+        result.formula().nodes().last().expect("root").kind,
+        NodeKind::Future {
+            interval: Interval::new(u32::MAX, u32::MAX).expect("endpoint"),
+            operand: NodeId(0)
+        }
+    );
+    let (package, _, clause) = packages("eventually[4294967296,4294967296] holds(true)", EVENT);
+    let subject = temporal_subject(&package, &clause).expect("subject");
+    let classification = mapping_support(&subject, Closure::Complete).expect("classification");
+    let error = construct_tl_formula(
+        &package,
+        &subject,
+        &classification,
+        Closure::Complete,
+        TlFormulaLimits::default(),
+    )
+    .expect_err("owner endpoint range");
+    assert_eq!(error.code(), TlFormulaCode::Representation);
+    let TlFormulaError::Representation(node) = error else {
+        panic!("typed representation refusal")
+    };
+    assert_eq!(&node, subject.formula_graph()[0].node);
 }

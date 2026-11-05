@@ -116,14 +116,14 @@ pub enum TlFormulaError {
     Binding(MappingBindingRefusal),
     /// Exact original unsupported classification.
     #[error("the owner classification has unsupported dimensions")]
-    Unsupported(Classification),
+    Unsupported(Box<Classification>),
     /// Original checked interval requiring end/history premises.
     #[error("an unbounded interval requires projection premises")]
     UnboundedInterval {
         /// Original formula occurrence handle.
         node: CheckedNodeId,
         /// Original owner interval.
-        interval: Option<CheckedOperationInterval>,
+        interval: Box<Option<CheckedOperationInterval>>,
     },
     /// Original checked node cannot be represented by the TL owner.
     #[error("checked node cannot be represented by the bounded TL owner")]
@@ -244,7 +244,9 @@ pub fn construct_tl_formula(
         .map_err(TlFormulaError::Binding)?;
     let profile = match &classification.support {
         Support::Unsupported { .. } => {
-            return Err(TlFormulaError::Unsupported(classification.clone()))
+            return Err(TlFormulaError::Unsupported(Box::new(
+                classification.clone(),
+            )))
         }
         Support::Supported { target, .. } => match target {
             Target::ClosedTrace => SemanticProfile::ClosedTraceV1,
@@ -383,7 +385,7 @@ fn node_kind(used: &FormulaNodeUse<'_>, operands: &[NodeId]) -> Result<NodeKind,
         None | Some(CheckedOperationInterval::Integer { upper: None, .. }) => {
             Err(TlFormulaError::UnboundedInterval {
                 node: used.node.clone(),
-                interval: used.interval.clone(),
+                interval: Box::new(used.interval.clone()),
             })
         }
         Some(CheckedOperationInterval::Timed { .. }) => Err(invalid()),
