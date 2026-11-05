@@ -11,11 +11,10 @@ use qsl_replay::{spine::SpineLimits, MonitorTarget, TimingObligationSettings};
 use qsl_semantics::{library::LibraryName, model::intake::package_input};
 use quire_contract_ir::{
     read_checked_package, AdmittedEqualityReadErrorCode, CheckedPackageDispatchResult,
-    CheckedPackageReadLimits,
-    EqualityDimensionRole, EqualityFactWitness, EqualityOperandTypeRole, EqualityUnitRole,
-    SelectedEqualityApplicationRow, SelectedEqualityFactRow, SelectedExactIdentities,
-    SelectedFactEqualityId, SelectedFactFieldId, SelectedFactIds, SelectedFactRows,
-    SelectedFactsErrorCode,
+    CheckedPackageReadLimits, EqualityDimensionRole, EqualityFactWitness, EqualityOperandTypeRole,
+    EqualityUnitRole, SelectedEqualityApplicationRow, SelectedEqualityFactRow,
+    SelectedExactIdentities, SelectedFactEqualityId, SelectedFactFieldId, SelectedFactIds,
+    SelectedFactRows, SelectedFactsErrorCode,
 };
 use quire_exact::{Cancel, Integer, IntegerInterval, Presence, Rational, ValueType};
 
@@ -228,7 +227,10 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     let selected_field = matching_fields
         .next()
         .expect("select the model's original numeric field");
-    assert!(matching_fields.next().is_none(), "the original field is unique");
+    assert!(
+        matching_fields.next().is_none(),
+        "the original field is unique"
+    );
     let selected_declaration = declarations
         .iter()
         .find(|row| row.structural_node == selected_field.record_node)
@@ -287,29 +289,27 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         ))
     );
     let equality = &applications[0];
-    let decision = package
-        .admitted_equality(
-            &equality.application,
-            &equality.occurrence,
-            &applications,
-            &facts,
-            emission.selected_source_unit_rows(),
-            1_000_000,
-        );
+    let decision = package.admitted_equality(
+        &equality.application,
+        &equality.occurrence,
+        &applications,
+        &facts,
+        emission.selected_source_unit_rows(),
+        1_000_000,
+    );
     let equality_ids = [SelectedFactEqualityId {
         application: equality.application.clone(),
         occurrence: equality.occurrence.clone(),
     }];
-    let joined = package
-        .project_selected_facts(
-            SelectedFactIds {
-                declarations: &selected_declarations,
-                fields: &selected_fields,
-                equalities: &equality_ids,
-            },
-            rows(),
-            1_000_000,
-        );
+    let joined = package.project_selected_facts(
+        SelectedFactIds {
+            declarations: &selected_declarations,
+            fields: &selected_fields,
+            equalities: &equality_ids,
+        },
+        rows(),
+        1_000_000,
+    );
     match decision {
         Ok(decision) => {
             let joined = joined.expect("the native equality also joins the selected read");
@@ -320,9 +320,15 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             assert_eq!(joined.equalities[0].decision, decision);
         }
         Err(native) => {
-            assert_eq!(native.code, AdmittedEqualityReadErrorCode::UnavailableEqualityWitness);
+            assert_eq!(
+                native.code,
+                AdmittedEqualityReadErrorCode::UnavailableEqualityWitness
+            );
             assert_eq!(*native.application, equality.application);
-            assert!(native.witness.is_some(), "the missing witness has a native kind");
+            assert!(
+                native.witness.is_some(),
+                "the missing witness has a native kind"
+            );
             assert_eq!(native.attempted_work, 0);
             let refused = joined.expect_err("a missing native witness yields no partial view");
             assert_eq!(refused.code, SelectedFactsErrorCode::Equality);

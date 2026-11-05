@@ -35,7 +35,8 @@ must retain its precise typed cause and locus, with no partial selected view.
 Every IT-018 success criterion passes. Producer or reader refusal is a failure;
 no test skips an unavailable boundary or remints an identity from constituent parts.
 
-The selected-fact control qualifies only explicit representable model facts and
+The selected-fact control remains Planned/Unrun until its focused target passes.
+Its intended qualification covers only explicit representable model facts and
 the selected equality's opaque decision or native typed missing-witness result.
 It does not traverse monitor entries or establish a complete generated-source
 closure, `TypeEnvironment`, RT `ProgramParts` or temporal execution readiness.
