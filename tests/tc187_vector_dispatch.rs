@@ -22,7 +22,7 @@ enum RowDispatch {
     Admission(AdmissionCase),
     Topology(&'static str),
     Planned {
-        ticket: &'static str,
+        tickets: &'static [&'static str],
         missing: &'static str,
     },
 }
@@ -33,7 +33,7 @@ enum RowDispatch {
 fn dispatch(id: &str) -> Option<RowDispatch> {
     let pending = |missing| {
         Some(RowDispatch::Planned {
-            ticket: "IR-842",
+            tickets: &["IR-842"],
             missing,
         })
     };
@@ -45,10 +45,18 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11d" => Some(RowDispatch::Topology("incompatible-definition")),
         "U11f" => Some(RowDispatch::Topology("definition-cycle")),
         "U11l" => Some(RowDispatch::Topology("definition-cycle")),
-        "U01" | "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
+        "U01" => Some(RowDispatch::Planned {
+            tickets: &["QSL-1737", "IR-1345"],
+            missing: "public checked-package BoundedQuantity emission and carried_quantity lowerer bounds-policy correction",
+        }),
+        "U11g3" => Some(RowDispatch::Planned {
+            tickets: &["QSL-1738"],
+            missing: "semantic-value derived dimension N = L / L must have an empty map, not N^1",
+        }),
+        "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
             pending("QSL/IR/CG/native per-operation dispatch and comparison")
         }
-        "U11e" | "U11h" | "U11i" | "U11j" | "U11k" | "U11g1" | "U11g2" | "U11g3" | "U11g4"
+        "U11e" | "U11h" | "U11i" | "U11j" | "U11k" | "U11g1" | "U11g2" | "U11g4"
         | "U11m" | "U11n" | "U11o" | "U11p" | "U11q" | "U11r" | "U11s" | "U11t" | "U11u"
         | "U11w" | "U11x" | "U11y" | "U11z1" | "U11z2" | "U11z3" => {
             pending("QSL admission and mixed-operation disposition")
@@ -197,9 +205,21 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 );
                 observed.insert(vector.id);
             }
-            RowDispatch::Planned { ticket, missing } => {
-                assert_eq!(ticket, "IR-842");
+            RowDispatch::Planned { tickets, missing } => {
+                let expected_tickets: &[&str] = match vector.id {
+                    "U01" => &["QSL-1737", "IR-1345"],
+                    "U11g3" => &["QSL-1738"],
+                    _ => &["IR-842"],
+                };
+                assert_eq!(tickets, expected_tickets, "{} owners", vector.id);
                 assert!(!missing.is_empty(), "{} missing route", vector.id);
+                if vector.id == "U01" {
+                    assert!(missing.contains("BoundedQuantity"));
+                    assert!(missing.contains("carried_quantity"));
+                }
+                if vector.id == "U11g3" {
+                    assert!(missing.contains("empty map"));
+                }
                 planned += 1;
             }
         }
