@@ -13,7 +13,8 @@ use qsl_replay::{
 };
 use quire_contract_codegen::{checked_function_key, CheckedFunctionError, CheckedFunctionSource};
 use quire_contract_model::{
-    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
+    CheckedNodeId, CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2,
+    CheckedPackageV2ReadResult, CheckedTerm,
 };
 use quire_eval::{CallFailure, Evaluation, FamilyOutcome};
 use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};

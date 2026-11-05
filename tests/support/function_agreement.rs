@@ -18,8 +18,9 @@ use quire_contract_codegen::{
     ExactFunctionDeclaration, ExactFunctionItem, FunctionParameter,
 };
 use quire_contract_ir::{
-    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
-    CheckedTerm, ContractDependencies, ContractPackageReadResult, ContractPackageWireV1,
+    CheckedNodeId, CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2,
+    CheckedPackageV2ReadResult, CheckedTerm, ContractDependencies, ContractPackageReadResult,
+    ContractPackageWireV1,
 };
 
 #[trace("TC-099", "IT-019-SC-01", "IT-019-SC-02")]
