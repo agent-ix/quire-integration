@@ -642,7 +642,10 @@ fn admitted_membership_foreign_reference_names_retained_member_first() {
             supplied: candidate_universe,
         })
     );
-    assert_eq!(admitted_points(&charged), [ChargePoint::CollectionMemberWalk]);
+    assert_eq!(
+        admitted_points(&charged),
+        [ChargePoint::CollectionMemberWalk]
+    );
 }
 
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-5.
