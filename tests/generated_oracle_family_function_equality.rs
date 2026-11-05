@@ -266,6 +266,16 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
             .iter()
             .find(|claim| claim.node_id == calls[9])
             .expect("healthy nominal sibling retained");
+        let original_sibling = output
+            .claim_map
+            .items
+            .iter()
+            .find(|claim| claim.node_id == calls[9])
+            .expect("original healthy sibling claim");
+        assert_eq!(
+            sibling, original_sibling,
+            "{boundary}: exact sibling claim remains unchanged"
+        );
         assert!(
             matches!(sibling.result, ClaimDisposition::Generated(_)),
             "{boundary}: healthy sibling: {:?}",

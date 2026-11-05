@@ -11,11 +11,14 @@ mod family_scalar_limits {
 
 use family_function_selection::declared;
 use family_scalar_limits::limits;
-mod family_function_envelope { include!("family_function_envelope.rs"); }
+mod family_function_envelope {
+    include!("family_function_envelope.rs");
+}
 use family_function_envelope::same_envelope;
 
 use qsl_replay::{
-    ApplicationBeginRefusal, ApplicationEnvironment, DependencyInput, LibraryName, ReplayLimits, SourceIdentity, StageLimits,
+    ApplicationBeginRefusal, ApplicationEnvironment, DependencyInput, LibraryName, ReplayLimits,
+    SourceIdentity, StageLimits,
 };
 use quire_contract_codegen::{checked_function_key, CheckedFunctionError, CheckedFunctionSource};
 use quire_contract_model::{
@@ -26,8 +29,10 @@ use quire_eval::{CallFailure, Evaluation, FamilyOutcome};
 use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, Value};
 use quire_semantic_value::{call::InputRefusal, location::Origin, object_closure::ObjectClosure};
 
-mod family_function_equality_source { include!("family_function_equality_source.rs"); }
-use family_function_equality_source::{acquire, SOURCE, NAMES};
+mod family_function_equality_source {
+    include!("family_function_equality_source.rs");
+}
+use family_function_equality_source::{acquire, NAMES, SOURCE};
 
 fn generated(
     name: &str,
@@ -72,13 +77,62 @@ fn generated(
             ObjectClosure::default(),
             meter,
         ),
-        "intNotEqual" => quire_exact_function_oracles::__SYMBOL_3__(source, package, package, arguments, ObjectClosure::default(), meter),
-        "pairEqual" => quire_exact_function_oracles::__SYMBOL_4__(source, package, package, arguments, ObjectClosure::default(), meter),
-        "pairNotEqual" => quire_exact_function_oracles::__SYMBOL_5__(source, package, package, arguments, ObjectClosure::default(), meter),
-        "flagEqual" => quire_exact_function_oracles::__SYMBOL_6__(source, package, package, arguments, ObjectClosure::default(), meter),
-        "flagNotEqual" => quire_exact_function_oracles::__SYMBOL_7__(source, package, package, arguments, ObjectClosure::default(), meter),
-        "choiceEqual" => quire_exact_function_oracles::__SYMBOL_8__(source, package, package, arguments, ObjectClosure::default(), meter),
-        "choiceNotEqual" => quire_exact_function_oracles::__SYMBOL_9__(source, package, package, arguments, ObjectClosure::default(), meter),
+        "intNotEqual" => quire_exact_function_oracles::__SYMBOL_3__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
+        "pairEqual" => quire_exact_function_oracles::__SYMBOL_4__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
+        "pairNotEqual" => quire_exact_function_oracles::__SYMBOL_5__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
+        "flagEqual" => quire_exact_function_oracles::__SYMBOL_6__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
+        "flagNotEqual" => quire_exact_function_oracles::__SYMBOL_7__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
+        "choiceEqual" => quire_exact_function_oracles::__SYMBOL_8__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
+        "choiceNotEqual" => quire_exact_function_oracles::__SYMBOL_9__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
         _ => panic!("unselected function row"),
     }
 }
@@ -159,10 +213,52 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
     for (source_index, name) in NAMES.into_iter().enumerate() {
         let boolean = source_index < 2;
         let samples: Vec<(Value, Value, bool)> = match name {
-            "boolEqual" => vec![(Value::Boolean(false),Value::Boolean(false),true),(Value::Boolean(false),Value::Boolean(true),false),(Value::Boolean(true),Value::Boolean(false),false),(Value::Boolean(true),Value::Boolean(true),true)],
-            "boolNotEqual" => vec![(Value::Boolean(false),Value::Boolean(false),false),(Value::Boolean(false),Value::Boolean(true),true),(Value::Boolean(true),Value::Boolean(false),true),(Value::Boolean(true),Value::Boolean(true),false)],
-            "intEqual" => vec![(Value::Integer(Integer::from(3_i64)),Value::Integer(Integer::from(3_i64)),true),(Value::Integer(Integer::from(2_i64)),Value::Integer(Integer::from(3_i64)),false),(Value::Integer(Integer::from(4_i64)),Value::Integer(Integer::from(3_i64)),false)],
-            "intNotEqual" => vec![(Value::Integer(Integer::from(3_i64)),Value::Integer(Integer::from(3_i64)),false),(Value::Integer(Integer::from(2_i64)),Value::Integer(Integer::from(3_i64)),true),(Value::Integer(Integer::from(4_i64)),Value::Integer(Integer::from(3_i64)),true)],
+            "boolEqual" => vec![
+                (Value::Boolean(false), Value::Boolean(false), true),
+                (Value::Boolean(false), Value::Boolean(true), false),
+                (Value::Boolean(true), Value::Boolean(false), false),
+                (Value::Boolean(true), Value::Boolean(true), true),
+            ],
+            "boolNotEqual" => vec![
+                (Value::Boolean(false), Value::Boolean(false), false),
+                (Value::Boolean(false), Value::Boolean(true), true),
+                (Value::Boolean(true), Value::Boolean(false), true),
+                (Value::Boolean(true), Value::Boolean(true), false),
+            ],
+            "intEqual" => vec![
+                (
+                    Value::Integer(Integer::from(3_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                    true,
+                ),
+                (
+                    Value::Integer(Integer::from(2_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                    false,
+                ),
+                (
+                    Value::Integer(Integer::from(4_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                    false,
+                ),
+            ],
+            "intNotEqual" => vec![
+                (
+                    Value::Integer(Integer::from(3_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                    false,
+                ),
+                (
+                    Value::Integer(Integer::from(2_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                    true,
+                ),
+                (
+                    Value::Integer(Integer::from(4_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                    true,
+                ),
+            ],
             nominal => {
                 let (first, second) = match nominal {
                     "pairEqual" | "pairNotEqual" => ("makePairA", "makePairB"),
@@ -171,16 +267,29 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
                     _ => panic!("unselected nominal row"),
                 };
                 let construct = |name: &str| {
-                    let key = checked_function_key(&package, &declared(&package, name)).expect("original constructor identity");
-                    let selected = handle.lookup_callable(&owner, &key).expect("original constructor selection");
+                    let key = checked_function_key(&package, &declared(&package, name))
+                        .expect("original constructor identity");
+                    let selected = handle
+                        .lookup_callable(&owner, &key)
+                        .expect("original constructor selection");
                     let environment = ApplicationEnvironment::new(ObjectClosure::default());
                     let mut registry = handle.registry();
                     let mut meter = Meter::new(limits(1024));
-                    let evaluation = registry.begin_call(&selected, Vec::new(), &environment, &mut meter).expect("source constructor admission").run().expect("source constructor evaluation");
+                    let evaluation = registry
+                        .begin_call(&selected, Vec::new(), &environment, &mut meter)
+                        .expect("source constructor admission")
+                        .run()
+                        .expect("source constructor evaluation");
                     assert!(evaluation.location.is_none());
                     assert!(evaluation.losses.is_empty());
-                    let FamilyOutcome::Evaluated(Outcome::Completed(value)) = evaluation.outcome else { panic!("source constructor completes: {evaluation:?}"); };
-                    assert!(matches!(value, Value::Composite(_) | Value::Union(_)), "actual nominal input: {value:?}");
+                    let FamilyOutcome::Evaluated(Outcome::Completed(value)) = evaluation.outcome
+                    else {
+                        panic!("source constructor completes: {evaluation:?}");
+                    };
+                    assert!(
+                        matches!(value, Value::Composite(_) | Value::Union(_)),
+                        "actual nominal input: {value:?}"
+                    );
                     value
                 };
                 let left = construct(first);
@@ -206,70 +315,94 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
         zero(&rejected_meter);
         owner_refusals += 1;
         for (left, right, expected) in &samples {
-        for work in [1024, 0, 1] {
-            let arguments = vec![left.clone(), right.clone()];
-            let mut authority_meter = Meter::new(limits(work));
-            let environment = ApplicationEnvironment::new(ObjectClosure::default());
-            let mut registry = handle.registry();
-            let authority = registry
-                .begin_call(
-                    &selection,
-                    arguments.clone(),
-                    &environment,
-                    &mut authority_meter,
+            for work in [1024, 0, 1] {
+                let arguments = vec![left.clone(), right.clone()];
+                let mut authority_meter = Meter::new(limits(work));
+                let environment = ApplicationEnvironment::new(ObjectClosure::default());
+                let mut registry = handle.registry();
+                let authority = registry
+                    .begin_call(
+                        &selection,
+                        arguments.clone(),
+                        &environment,
+                        &mut authority_meter,
+                    )
+                    .expect("real authority Begin")
+                    .run()
+                    .expect("required authority evaluation");
+                let mut generated_meter = Meter::new(limits(work));
+                let actual = generated(
+                    name,
+                    SOURCE.as_bytes(),
+                    &package,
+                    arguments,
+                    &mut generated_meter,
                 )
-                .expect("real authority Begin")
-                .run()
-                .expect("required authority evaluation");
-            let mut generated_meter = Meter::new(limits(work));
-            let actual = generated(
-                name,
-                SOURCE.as_bytes(),
-                &package,
-                arguments,
-                &mut generated_meter,
-            )
-            .expect("original generated source authenticates")
-            .expect("required generated evaluation");
-            same_envelope(&authority, &actual);
-            required(
-                name,
-                source_index,
-                *expected,
-                work,
-                &authority,
-                &authority_meter,
-            );
-            required(
-                name,
-                source_index,
-                *expected,
-                work,
-                &actual,
-                &generated_meter,
-            );
-            assert_eq!(
-                authority_meter.admitted_charges(),
-                generated_meter.admitted_charges()
-            );
-            for kind in LimitKind::ALL {
-                assert_eq!(
-                    authority_meter.consumed(kind),
-                    generated_meter.consumed(kind)
+                .expect("original generated source authenticates")
+                .expect("required generated evaluation");
+                same_envelope(&authority, &actual);
+                required(
+                    name,
+                    source_index,
+                    *expected,
+                    work,
+                    &authority,
+                    &authority_meter,
                 );
+                required(
+                    name,
+                    source_index,
+                    *expected,
+                    work,
+                    &actual,
+                    &generated_meter,
+                );
+                assert_eq!(
+                    authority_meter.admitted_charges(),
+                    generated_meter.admitted_charges()
+                );
+                for kind in LimitKind::ALL {
+                    assert_eq!(
+                        authority_meter.consumed(kind),
+                        generated_meter.consumed(kind)
+                    );
+                }
+                envelopes += 1;
+                eprintln!("SC05 {name} work={work}: authority={authority:?}; generated={actual:?}; charges={:?}; counters={:?}",generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
             }
-            envelopes += 1;
-            eprintln!("SC05 {name} work={work}: authority={authority:?}; generated={actual:?}; charges={:?}; counters={:?}",generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
-        }
         }
         let valid = samples[0].0.clone();
-        let wrong = if boolean { Value::Integer(Integer::one()) } else { Value::Boolean(true) };
+        let wrong = if boolean {
+            Value::Integer(Integer::one())
+        } else {
+            Value::Boolean(true)
+        };
         let mut invalid = vec![
-            (vec![valid.clone()], InputRefusal::Arity { declared: 2, supplied: 1 }),
-            (vec![wrong.clone(), valid.clone()], InputRefusal::WrongValueKind { parameter: 0 }),
-            (vec![wrong], InputRefusal::Arity { declared: 2, supplied: 1 }),
+            (
+                vec![valid.clone()],
+                InputRefusal::Arity {
+                    declared: 2,
+                    supplied: 1,
+                },
+            ),
+            (
+                vec![wrong.clone(), valid.clone()],
+                InputRefusal::WrongValueKind { parameter: 0 },
+            ),
+            (
+                vec![wrong],
+                InputRefusal::Arity {
+                    declared: 2,
+                    supplied: 1,
+                },
+            ),
         ];
-        if (2..4).contains(&source_index) { invalid.push((vec![Value::Integer(Integer::from(10_i64)), valid], InputRefusal::WrongValueKind { parameter: 0 })); }
+        if (2..4).contains(&source_index) {
+            invalid.push((
+                vec![Value::Integer(Integer::from(10_i64)), valid],
+                InputRefusal::WrongValueKind { parameter: 0 },
+            ));
+        }
         for (arguments, required_refusal) in invalid {
             let environment = ApplicationEnvironment::new(ObjectClosure::default());
             let mut authority_meter = Meter::new(limits(1024));
