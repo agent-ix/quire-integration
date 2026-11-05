@@ -4,7 +4,7 @@ use qsl_replay::{
     acquire_checked_closure, ApplicationEnvironment, CompileUnit, DependencyInput, LibraryName,
     ReplayLimits, SourceIdentity, StageLimits,
 };
-use quire_contract_codegen::{checked_function_key, CheckedFunctionSource};
+use quire_contract_codegen::{checked_function_key, CheckedFunctionError, CheckedFunctionSource};
 use quire_contract_model::{
     CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
 };
@@ -121,6 +121,44 @@ fn actual_function_and_fresh_qsl_session_agree() {
             Value::Integer(Integer::from(4_i64)),
             Value::Integer(Integer::from(3_i64)),
         ];
+        if work == 1024 {
+            // This is another valid source with the same authored name and
+            // operands. Its subtraction body cannot stand in for the selected
+            // admitted addition claim. A failed authentication must leave the
+            // healthy original invocation below unaffected.
+            let other_source = SOURCE.replace("left + right", "left - right");
+            assert_ne!(other_source, SOURCE);
+            let mut refused_meter = Meter::new(limits);
+            let refused = quire_exact_function_oracles::__GENERATED_SYMBOL__(
+                CheckedFunctionSource {
+                    source: SourceIdentity::new("agent-ix", "oracle-function"),
+                    path: "oracle-function.native",
+                    bytes: other_source.as_bytes(),
+                    packages: &[],
+                    dependencies: &dependencies,
+                    limits: StageLimits::default(),
+                    replay_limits: ReplayLimits::default(),
+                    body_resources: Default::default(),
+                },
+                &package,
+                &package,
+                arguments.clone(),
+                ObjectClosure::default(),
+                &mut refused_meter,
+            );
+            assert!(
+                matches!(refused, Err(CheckedFunctionError::OwnerIdentityMismatch)),
+                "foreign source must retain the typed owner boundary: {refused:?}"
+            );
+            assert!(refused_meter.admitted_charges().is_empty());
+            for kind in LimitKind::ALL {
+                assert_eq!(
+                    refused_meter.consumed(kind),
+                    0,
+                    "source refusal counter {kind:?}"
+                );
+            }
+        }
         let mut authority_meter = Meter::new(limits);
         let mut registry = handle.registry();
         let environment = ApplicationEnvironment::new(ObjectClosure::default());
