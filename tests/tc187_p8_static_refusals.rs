@@ -57,7 +57,7 @@ fn assemble(declarations: &str, expression: &str, imported: bool) -> (String, Pa
     } else {
         ""
     };
-    let text = format!("language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n{selection}\n{declarations}\nfunction bad using v(): Boolean pure {{ ({expression}) = 1 m }}");
+    let text = format!("language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n{selection}\n{declarations}\nfunction bad using v(): Boolean pure {{ {expression} = 1 m }}");
     let parsed = qsl_cst::parse(
         SourceIdentity::new("agent-ix", "tc187-p8-refusals"),
         "tc187-p8-refusals.native",
@@ -195,7 +195,7 @@ fn native(
     let one = Rational::from_integer(Integer::one());
     let a = Quantity::new(one.clone(), left.id());
     let b = Quantity::new(one, right.id());
-    let exponent = Integer::from(2);
+    let exponent = Integer::from(2_u64);
     for allowance in [u64::MAX, 0] {
         let a = table.resolve(&a).expect("original left unit ID");
         let b = table.resolve(&b).expect("original right unit ID");
