@@ -56,3 +56,20 @@ does not claim those related vector families in full.
 Validation results and any owner boundary that prevents a required subcase are
 reported with the frozen change. No runtime evaluation, resource-accounting,
 generated oracle agreement, or whole SC-04 completion follows from these checks.
+
+## Measured Disposition
+
+U33's two bounded admission/emission subcases pass through original QSL output
+and strict Contract IR admission. The related TC-233 and TC-280 variant families
+remain outside this procedure's claim.
+
+U32 is partial: the same-name record/unit selection and reserved-name refusal
+pass, but duplicate linked units refuse earlier than the public cell requires.
+The real assembly refusal is `DuplicateQuantityName` for `ms`, with both name
+spans retained and primary span at the second unit declaration. In this authored
+source the actual span is 97..99; the required `Quantity<ms>` span is 144..156.
+The blocker characterization asserts this exact typed payload and distinguishes
+these locations. It is not a passing qualification of that public subcase.
+The exact quantity-type location remains Planned under IR-842 pending QSL owner
+routing. Current QSL main's name-indexing path also reports the second declaration;
+this is a source inspection, not a claim that an unlocked build was executed.

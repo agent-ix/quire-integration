@@ -6,7 +6,7 @@ mod source;
 
 use ix_trace_rs::trace;
 use qsl_foundation::Code;
-use qsl_semantics::check::{AssemblyLimits, PackageDeclarations};
+use qsl_semantics::check::{AssemblyCause, AssemblyLimits, PackageDeclarations};
 use qsl_semantics::model::intake::SelectedModels;
 use quire_exact::{Cancel, ValueType};
 use quire_semantic_value::checking::CheckingLimits;
@@ -111,7 +111,7 @@ fn ordinary_ms_type_and_quantity_ms_select_distinct_original_nodes() {
 
 #[trace("TC-107", "QSpec-TC-187", "QSpec-FR-142-AC-13")]
 #[test]
-fn linked_duplicate_ms_units_refuse_at_the_quantity_type() {
+fn linked_duplicate_ms_units_expose_the_quantity_type_location_blocker() {
     u32();
     let first = format!(
         "{}dimension A; unit ms : A = rational(1, 1);",
@@ -137,12 +137,25 @@ fn linked_duplicate_ms_units_refuse_at_the_quantity_type() {
         error.cause.catalog_code().to_string(),
         "ambiguous_declaration/ambiguous-name"
     );
-    let start = second.find("Quantity<ms>").expect("quantity use");
+    let AssemblyCause::DuplicateQuantityName { name, spans } = &error.cause else {
+        panic!("native duplicate-name payload: {error:?}");
+    };
+    assert_eq!(name, "ms");
+    let first_name = first.find("ms :").expect("first unit name");
+    let second_name = second.find("ms :").expect("second unit name");
+    assert_eq!(
+        spans
+            .iter()
+            .map(|span| (span.start, span.end))
+            .collect::<Vec<_>>(),
+        [(first_name, first_name + 2), (second_name, second_name + 2)]
+    );
     assert_eq!(
         (error.span.start, error.span.end),
-        (start, start + "Quantity<ms>".len()),
-        "exact requested quantity-type refusal, {refusal:?}"
+        (second_name, second_name + 2)
     );
+    let required = second.find("Quantity<ms>").expect("quantity use");
+    assert_ne!((error.span.start, error.span.end), (required, required + "Quantity<ms>".len()), "U32 remains incomplete: owner refuses the duplicate declaration before resolving the quantity type");
 }
 
 #[trace("TC-107", "QSpec-TC-187", "QSpec-FR-142-AC-13")]
