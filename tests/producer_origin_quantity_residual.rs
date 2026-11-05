@@ -12,11 +12,14 @@ use qsl_foundation::node_wire::node_key_from_json;
 use quire_contract_ir::{CheckedNodeId, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm};
 use quire_exact::{
     ChargePoint, CheckedInvariantCause, Decimal, DecimalType, IllTyped, IllTypedCause, Integer,
-    IntegerInterval, LimitKind, Meter, NodeKey, Outcome, Quantity, Rational, Refusal, RoundingMode,
-    ScalarLimits, UnitId, Value as ExactValue, ValueType,
+    IntegerInterval, LimitKind, Meter, NodeKey, Outcome, Quantity, Rational, RationalDomain,
+    Refusal, RoundingMode, ScalarLimits, UnitId, Value as ExactValue, ValueType,
 };
 use quire_semantic_value::{
-    declaration::{operand_value, EqualityOperand, EqualityOperator, TypeEnvironment},
+    declaration::{
+        admits_equality_conversion, operand_value, EqualityOperand, EqualityOperator,
+        TypeEnvironment,
+    },
     enumeration::EnumMemberIndex,
     quantity::{
         convert_quantity, evaluate_quantity, ConvertedValue, HandoffRefusal, QuantityOperation,
@@ -909,4 +912,137 @@ fn admitted_equality_operand_failures_keep_distinct_typed_causes() {
             cause: IllTypedCause::IncompatibleDimensions,
         },
     );
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_scalar_equality_conversion_rows_preserve_exact_values() {
+    let units = UnitTable::declared(&graph());
+    let scope = UnitScope::new(&units);
+    let types = TypeEnvironment::default();
+    let interval = |lower, upper| IntegerInterval::spanning(integer(lower), integer(upper));
+    let rational_domain = |upper, denominator_upper| {
+        RationalDomain::new(interval(0, upper), interval(1, denominator_upper))
+            .expect("positive denominator bounds")
+    };
+    let decimal_type = |upper, min_scale, max_scale| {
+        DecimalType::new(
+            integer(0),
+            integer(upper),
+            min_scale,
+            max_scale,
+            RoundingMode::Exact,
+        )
+        .expect("admitted decimal bounds")
+    };
+    let two = ExactValue::Integer(integer(2));
+    let two_rational = ExactValue::Rational(rational(2, 1));
+    let two_decimal = ExactValue::Decimal(Decimal::new(integer(20), 1));
+    let cases = [
+        (
+            ValueType::Boolean,
+            ValueType::Boolean,
+            ExactValue::Boolean(true),
+            ExactValue::Boolean(true),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Integer,
+            two.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Int(interval(0, 5)),
+            two.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Rational(rational_domain(5, 2)),
+            two.clone(),
+            two_rational.clone(),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            two.clone(),
+            two_decimal.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Rational(rational_domain(5, 2)),
+            two_rational.clone(),
+            two_rational.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Integer,
+            two_rational.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            two_rational.clone(),
+            two_decimal.clone(),
+        ),
+        (
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            ValueType::Rational(rational_domain(30, 10)),
+            two_decimal.clone(),
+            two_rational.clone(),
+        ),
+        (
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            ValueType::Decimal(decimal_type(300, 1, 2)),
+            two_decimal.clone(),
+            two_decimal,
+        ),
+        (
+            ValueType::Decimal(decimal_type(3, 0, 0)),
+            ValueType::Integer,
+            ExactValue::Decimal(Decimal::new(integer(2), 0)),
+            two,
+        ),
+    ];
+    for (source, target, input, expected) in cases {
+        assert!(
+            admits_equality_conversion(&source, &target, &scope),
+            "{source:?} -> {target:?}"
+        );
+        let converted = operand_value(
+            &types,
+            &EqualityOperand::converted(source.clone(), target.clone()),
+            &input,
+            &scope,
+            &mut meter(),
+        )
+        .unwrap_or_else(|error| panic!("{source:?} -> {target:?}: {error:?}"));
+        match (converted, expected) {
+            (ExactValue::Boolean(actual), ExactValue::Boolean(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (ExactValue::Integer(actual), ExactValue::Integer(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (ExactValue::Rational(actual), ExactValue::Rational(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (ExactValue::Decimal(actual), ExactValue::Decimal(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (actual, expected) => panic!("{source:?} -> {target:?}: {actual:?} != {expected:?}"),
+        }
+    }
+    assert!(!admits_equality_conversion(
+        &ValueType::Int(interval(0, 3)),
+        &ValueType::Boolean,
+        &scope,
+    ));
+    assert!(!admits_equality_conversion(
+        &ValueType::Decimal(decimal_type(30, 1, 1)),
+        &ValueType::Integer,
+        &scope,
+    ));
 }
