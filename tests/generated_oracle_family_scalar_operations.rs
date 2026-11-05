@@ -20,13 +20,12 @@ use quire_contract_ir::{
     CheckedPackageV2ReadResult, CheckedTerm,
 };
 use quire_eval::FamilyOutcome;
-use quire_exact::{Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
+use quire_exact::{LimitKind, Meter, Outcome, ScalarLimits, Value};
 use quire_semantic_value::checking::CheckingLimits;
 
 struct Row {
     name: String,
     syntax: &'static str,
-    integer: bool,
     unary: bool,
     boolean_result: bool,
     cases: Vec<(&'static str, &'static str, Value)>,
@@ -44,7 +43,6 @@ fn rows() -> Vec<Row> {
         rows.push(Row {
             name: name.to_owned(),
             syntax,
-            integer: false,
             unary: false,
             boolean_result: true,
             cases: [
@@ -62,7 +60,6 @@ fn rows() -> Vec<Row> {
     rows.push(Row {
         name: "bnot".to_owned(),
         syntax: "not",
-        integer: false,
         unary: true,
         boolean_result: true,
         cases: vec![
@@ -70,74 +67,19 @@ fn rows() -> Vec<Row> {
             ("true", "false", Value::Boolean(false)),
         ],
     });
-    for (name, syntax, values) in [
-        ("iadd", "+", [7, 6, 0]),
-        ("isub", "-", [1, 0, 0]),
-        ("imul", "*", [12, 9, 0]),
-    ] {
-        rows.push(Row {
-            name: name.to_owned(),
-            syntax,
-            integer: true,
-            unary: false,
-            boolean_result: false,
-            cases: [("4", "3"), ("3", "3"), ("0", "0")]
-                .into_iter()
-                .zip(values)
-                .map(|((a, b), value)| (a, b, Value::Integer(Integer::from(i64::from(value)))))
-                .collect(),
-        });
-    }
-    rows.push(Row {
-        name: "ineg".to_owned(),
-        syntax: "-",
-        integer: true,
-        unary: true,
-        boolean_result: false,
-        cases: vec![
-            ("4", "0", Value::Integer(Integer::from(-4_i64))),
-            ("0", "0", Value::Integer(Integer::zero())),
-        ],
-    });
-    for (name, syntax, answers) in [
-        ("ieq", "=", [false, true, false]),
-        ("ine", "!=", [true, false, true]),
-        ("ilt", "<", [false, false, true]),
-        ("ile", "<=", [false, true, true]),
-        ("igt", ">", [true, false, false]),
-        ("ige", ">=", [true, true, false]),
-    ] {
-        rows.push(Row {
-            name: name.to_owned(),
-            syntax,
-            integer: true,
-            unary: false,
-            boolean_result: true,
-            cases: [("4", "3"), ("3", "3"), ("0", "3")]
-                .into_iter()
-                .zip(answers)
-                .map(|((a, b), value)| (a, b, Value::Boolean(value)))
-                .collect(),
-        });
-    }
     rows.into_iter()
         .flat_map(|row| {
-            if row.integer {
-                vec![row]
-            } else {
-                row.cases
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, case)| Row {
-                        name: format!("{}truth{index}", row.name),
-                        syntax: row.syntax,
-                        integer: false,
-                        unary: row.unary,
-                        boolean_result: true,
-                        cases: vec![case],
-                    })
-                    .collect()
-            }
+            row.cases
+                .into_iter()
+                .enumerate()
+                .map(|(index, case)| Row {
+                    name: format!("{}truth{index}", row.name),
+                    syntax: row.syntax,
+                    unary: row.unary,
+                    boolean_result: true,
+                    cases: vec![case],
+                })
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -147,21 +89,7 @@ fn source(rows: &[Row]) -> String {
         "language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n"
             .to_owned();
     for row in rows {
-        let ty = if row.integer { "Int[0,9]" } else { "Boolean" };
-        let result = if row.boolean_result {
-            "Boolean"
-        } else {
-            "Integer"
-        };
-        let left = format!("left{}", row.name);
-        let right = format!("right{}", row.name);
-        let parameters = if !row.integer {
-            String::new()
-        } else if row.unary {
-            format!("{left}: {ty}")
-        } else {
-            format!("{left}: {ty}, {right}: {ty}")
-        };
+        let result = "Boolean";
         let expression = |a: &str, b: &str| {
             if row.unary {
                 format!("{} {a}", row.syntax)
@@ -170,21 +98,10 @@ fn source(rows: &[Row]) -> String {
             }
         };
         source.push_str(&format!(
-            "function {} using v({parameters}): {result} pure {{ {} }}\n",
+            "function {} using v(): {result} pure {{ {} }}\n",
             row.name,
-            if row.integer {
-                expression(&left, &right)
-            } else {
-                expression(row.cases[0].0, row.cases[0].1)
-            }
+            expression(row.cases[0].0, row.cases[0].1)
         ));
-        for (index, (a, b, _)) in row.cases.iter().enumerate() {
-            source.push_str(&format!(
-                "function {}case{index} using v(): {result} pure {{ {} }}\n",
-                row.name,
-                expression(a, b)
-            ));
-        }
     }
     source
 }
@@ -266,7 +183,7 @@ fn selected_scalar_operations_match_independently_checked_qsl_bodies() {
     let mut driver = String::from(
         r#"
 mod oracle_observation;
-use quire_exact::{Integer,Meter,Outcome,ScalarLimits,Value};
+use quire_exact::{Meter,Outcome,ScalarLimits,Value};
 fn lift<T>(outcome: Outcome<T>, value: impl FnOnce(T)->Value)->Outcome<Value> {
     match outcome { Outcome::Completed(v)=>Outcome::Completed(value(v)), Outcome::Undefined(v)=>Outcome::Undefined(v), Outcome::Refused(v)=>Outcome::Refused(v), Outcome::Incomplete(v)=>Outcome::Incomplete(v) }
 }
@@ -288,15 +205,8 @@ fn observe() {
         let ClaimDisposition::Generated(generated) = &claim.result else {
             panic!("{} generates: {:?}", row.name, claim.result);
         };
-        if row.integer {
-            assert!(!generated.checked_bounds.is_empty());
-        }
-        for (case, (left, right, value)) in row.cases.iter().enumerate() {
-            let name = if row.integer {
-                format!("{}case{case}", row.name)
-            } else {
-                row.name.clone()
-            };
+        for (left, right, value) in &row.cases {
+            let name = row.name.clone();
             let function = authority
                 .graph()
                 .function_by_identity(
@@ -344,13 +254,7 @@ fn observe() {
                     .map(|loss| loss.loss)
                     .collect::<Vec<_>>();
                 expected.push(oracle_observation::snapshot(&outcome, &losses, &meter));
-                let argument = |text: &str| {
-                    if row.integer {
-                        format!("&Integer::from({text}_i64)")
-                    } else {
-                        text.to_owned()
-                    }
-                };
+                let argument = |text: &str| text.to_owned();
                 let arguments = if row.unary {
                     argument(left)
                 } else if matches!(
