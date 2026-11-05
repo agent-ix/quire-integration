@@ -47,5 +47,9 @@ outcome. No executable checked package, evaluation or generated oracle is
 published. Runtime charging is unreachable at this source admission boundary;
 the separate zero-limit owner operation controls establish their own zero-charge
 refusals, without generated agreement.
-Application version: 0.1.0. Execution evidence remains pending until the focused
-source-admission test runs successfully.
+Application version: 0.1.0. The focused
+`tc187_p9_u14_static::original_u14_operations_refuse_at_their_source_occurrence`
+test passes all five original source admissions and all five zero-limit owner
+operation controls. Every source refusal retains `ill_typed/type-mismatch` and
+the full original operation span; all owner operation charges and counters are
+zero. U14 receives no generated-oracle agreement credit.
