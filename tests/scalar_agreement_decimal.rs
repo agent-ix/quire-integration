@@ -15,7 +15,7 @@ use quire_eval::{CallFailure, FamilyOutcome};
 use quire_exact::{
     evaluate_decimal, order_numbers, planned_equality, ChargePoint, Decimal, DecimalOperation,
     DecimalResult, DecimalType, IllTypedCause, Integer, LimitKind, Meter, OrderedOperands,
-    OrderingOperator, Outcome, Refusal, RoundingMode, ScalarLimits, Undefined, Value,
+    OrderingOperator, Outcome, Rational, Refusal, RoundingMode, ScalarLimits, Undefined, Value,
 };
 use quire_semantic_value::{call::InputRefusal, checking::CheckingLimits, loss::ValueLoss};
 use quire_specification::{vectors_of, TestCase};
@@ -144,7 +144,7 @@ fn qsl_binary(
 fn qsl_convert(
     input_type: &str,
     result_type: &str,
-    input: Decimal,
+    input: Value,
     limits: ScalarLimits,
 ) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
     let source = format!(
@@ -176,7 +176,7 @@ fn qsl_convert(
     let evaluation = package
         .call(
             &QualifiedName::unqualified("f").expect("f is an identifier"),
-            vec![Value::Decimal(input)],
+            vec![input],
             &ObjectEnvironment::default(),
             &mut meter,
         )
@@ -190,6 +190,55 @@ fn qsl_convert(
         .map(|loss| loss.loss)
         .collect();
     (outcome, losses, meter)
+}
+
+fn qsl_decimal_literal(
+    body: &str,
+    result_type: &str,
+    limits: ScalarLimits,
+) -> Result<(Outcome<Value>, Vec<ValueLoss>, Meter), Vec<CheckRefusal>> {
+    let source = format!(
+        "language \"ix:native\" edition \"1-draft\";\n\
+         profile v = \"quire.value.complete/v1\";\n\
+         function f using v(): {result_type} pure {{ {body} }}\n"
+    );
+    let parsed = qsl_cst::parse(
+        qsl_foundation::SourceIdentity::new("agent-ix", "ir669-decimal-literals"),
+        "decimal.native",
+        source.as_bytes(),
+        qsl_cst::Limits::default(),
+    )
+    .expect("S1 parses Decimal literal source");
+    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    let unit = qsl_forms::build_unit(&parsed).expect("S2 builds Decimal literal source");
+    let graph = PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "ir-669".to_owned(),
+        unit,
+        SelectedModels::default(),
+        Vec::new(),
+    )
+    .expect("S3 assembles Decimal literal source")
+    .check(CheckingLimits::default())?;
+    let package = CheckedPackage::link(graph);
+    let mut meter = Meter::new(limits);
+    let evaluation = package
+        .call(
+            &QualifiedName::unqualified("f").expect("f is an identifier"),
+            Vec::new(),
+            &ObjectEnvironment::default(),
+            &mut meter,
+        )
+        .expect("S6a calls Decimal literal function");
+    let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
+        panic!("expected a kernel outcome, got {:?}", evaluation.outcome);
+    };
+    let losses = evaluation
+        .losses
+        .into_iter()
+        .map(|loss| loss.loss)
+        .collect();
+    Ok((outcome, losses, meter))
 }
 
 fn conversion_agreement(input: Decimal, input_type: &str, result_type: &str, target: &DecimalType) {
@@ -229,29 +278,9 @@ fn conversion_agreement_limited(
         work_units: limits.work_units.saturating_add(1),
         ..limits
     };
-    let (qsl, losses, qsl_meter) = qsl_convert(input_type, result_type, input, qsl_limits);
-    match (kernel, qsl) {
-        (Outcome::Completed(expected), Outcome::Completed(Value::Decimal(actual))) => {
-            assert_eq!(actual.representation(), expected.value().representation());
-            match expected.loss() {
-                Some(loss) => assert_eq!(losses, vec![ValueLoss::Decimal(loss.clone())]),
-                None => assert!(losses.is_empty()),
-            }
-        }
-        (Outcome::Refused(expected), Outcome::Refused(actual)) => assert_eq!(actual, expected),
-        (Outcome::Incomplete(expected), Outcome::Incomplete(actual)) => {
-            assert_eq!(actual.limit_kind, expected.limit_kind);
-            assert_eq!(actual.charge_point, expected.charge_point);
-            assert_eq!(actual.next_charge, expected.next_charge);
-            let offset = u64::from(expected.limit_kind == LimitKind::WorkUnits);
-            assert_eq!(actual.limit, expected.limit + offset);
-            assert_eq!(actual.consumed, expected.consumed + offset);
-        }
-        (expected, actual) => {
-            panic!("QSL/RT conversion disagreement: RT {expected:?}, QSL {actual:?}")
-        }
-    }
-    assert_scalar_meter_agreement(&qsl_meter, &kernel_meter);
+    let (qsl, losses, qsl_meter) =
+        qsl_convert(input_type, result_type, Value::Decimal(input), qsl_limits);
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
 }
 
 fn agreement(
@@ -282,13 +311,21 @@ fn agreement(
         right,
         qsl_limits,
     );
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+}
+
+fn assert_decimal_agreement(
+    kernel: Outcome<DecimalResult>,
+    kernel_meter: &Meter,
+    qsl: Outcome<Value>,
+    losses: &[ValueLoss],
+    qsl_meter: &Meter,
+) {
     match (kernel, qsl) {
         (Outcome::Completed(expected), Outcome::Completed(Value::Decimal(actual))) => {
             assert_eq!(actual.representation(), expected.value().representation());
             match expected.loss() {
-                Some(expected_loss) => {
-                    assert_eq!(losses, vec![ValueLoss::Decimal(expected_loss.clone())])
-                }
+                Some(loss) => assert_eq!(losses, [ValueLoss::Decimal(loss.clone())]),
                 None => assert!(losses.is_empty()),
             }
         }
@@ -306,7 +343,7 @@ fn agreement(
             panic!("QSL/RT decimal disagreement: RT {expected:?}, QSL {actual:?}")
         }
     }
-    assert_scalar_meter_agreement(&qsl_meter, &kernel_meter);
+    assert_scalar_meter_agreement(qsl_meter, kernel_meter);
 }
 
 #[trace("TC-185", "FR-140")]
@@ -337,8 +374,8 @@ fn tc185_decimal_vectors() {
             "D11" => d11(),
             // QSL-1393 PENDING: linked S4 cannot check unguarded divide.
             "D12" => d12_rt_only(),
-            // QSL-1619 PENDING QSL source composition: 1.50 is outside the
-            // authored scale-zero result type; D13 executes the RT oracle.
+            // Evaluator-boundary row: 1.50 is outside the result type;
+            // D26 is the source-admitted counterpart.
             "D13" => d13_rt_only(),
             // QSL-1393 PENDING: a source guard changes the work limit.
             "D14" => d14_rt_only(),
@@ -347,20 +384,23 @@ fn tc185_decimal_vectors() {
             "D16" => d16(),
             // QSL-1393 PENDING: linked S4 cannot check unguarded divide.
             "D17" => d17_rt_only(),
-            // QSL-1619 PENDING QSL source composition: 1.234 exceeds the
-            // authored result scale; D18 executes the RT oracle.
+            // Evaluator-boundary row: 1.234 exceeds the result scale;
+            // D27 is the source-admitted counterpart.
             "D18" => d18_rt_only(),
             "D19" => d19(),
             "D20" => d20(),
             "D21" => d21(),
             "D22" => d22(),
             "D23" => d23(),
-            // QSL-1619 PENDING QSL source composition: operands 2 and 3
-            // exceed the authored [0,100;2,2] result domain; RT only.
-            "D24" => d24_rt_only(),
-            // QSL-1394 PENDING decimal(c,s) admission; mixed-profile
-            // refusal and explicit conversion admission execute in d25.
+            "D24" => d24(),
+            // Literal and named Decimal admission/refusal execute at S4.
             "D25" => d25(),
+            // Authored literal source and retained-operand RT oracles agree at S6a.
+            "D26" => d26(),
+            // Authored literal source and RT division/denial agree at S6a.
+            "D27" => d27(),
+            // Two literal sources refuse at S4; the D26 counterpart is admitted.
+            "D28" => d28(),
             other => panic!("unimplemented TC-185 vector {other}"),
         }
     }
@@ -1188,7 +1228,7 @@ fn d23() {
     );
 }
 
-fn d24_rt_only() {
+fn d24() {
     let two = decimal(2, 0);
     let three = decimal(3, 0);
     let rounded = target(0, 100, 2, 2, RoundingMode::NearestEven);
@@ -1204,6 +1244,9 @@ fn d24_rt_only() {
     let loss = result.loss().expect("D24 rounds");
     assert_eq!(loss.exact_numerator(), &Integer::from(2_i64));
     assert_eq!(loss.exact_denominator(), Integer::from(3_i64));
+    assert_eq!(loss.rounded_coefficient(), &Integer::from(67_i64));
+    assert_eq!(loss.rounded_scale(), 2);
+    assert_eq!(loss.mode(), RoundingMode::NearestEven);
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 5);
 
     denied(
@@ -1229,6 +1272,34 @@ fn d24_rt_only() {
         Outcome::Refused(Refusal::InexactDecimal { .. })
     ));
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 3);
+
+    let rational = Rational::new(Integer::from(2_i64), Integer::from(3_i64))
+        .expect("2/3 has a nonzero denominator");
+    for (result_type, target, run_limits) in [
+        ("Decimal[0,100;2,2;nearest-even]", &rounded, base),
+        (
+            "Decimal[0,100;2,2;nearest-even]",
+            &rounded,
+            ScalarLimits {
+                scale_expansion: 1,
+                ..base
+            },
+        ),
+        ("Decimal[0,100;2,2;exact]", &exact, base),
+    ] {
+        let (kernel, kernel_meter) = rt(DecimalOperation::Divide(&two, &three), target, run_limits);
+        let qsl_limits = ScalarLimits {
+            work_units: run_limits.work_units + 1,
+            ..run_limits
+        };
+        let (qsl, losses, qsl_meter) = qsl_convert(
+            "Rational[0,2;1,3]",
+            result_type,
+            Value::Rational(rational.clone()),
+            qsl_limits,
+        );
+        assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+    }
 }
 
 fn d25_source(body: &str, result: &str) -> Result<(), Vec<CheckRefusal>> {
@@ -1274,24 +1345,199 @@ fn d25() {
         refusal.cause,
         CheckCause::IllTyped(IllTypedCause::TypeMismatch)
     );
-    // QSL-1394 PENDING: S2 does not represent decimal(c,s) expressions.
-}
-
-#[test]
-#[ignore = "QSL-1394: S2 does not represent decimal(c,s) exact-number expressions"]
-fn d25_decimal_literal_admission_pending() {
-    for (body, result, admitted) in [
-        ("let v = decimal(15,1) + decimal(225,2) in v", "P", false),
-        ("decimal(15,1) = decimal(150,2)", "Boolean", false),
-        ("p + decimal(15,1)", "P", true),
-        ("decimal(15,1) + decimal(225,2)", "P", true),
+    for (body, result_type) in [
+        ("let v = decimal(15,1) + decimal(225,2) in v", "P"),
+        ("decimal(15,1) = decimal(150,2)", "Boolean"),
     ] {
+        let refusals = d25_source(body, result_type)
+            .expect_err("S4 refuses literals with no unique Decimal type");
+        let [refusal] = refusals.as_slice() else {
+            panic!("D25 {body} must have one ambiguous-literal refusal: {refusals:?}");
+        };
         assert_eq!(
-            d25_source(body, result).is_ok(),
-            admitted,
-            "D25 body {body}"
+            refusal.cause,
+            CheckCause::IllTyped(IllTypedCause::AmbiguousLiteral)
         );
     }
+    d25_source("p + decimal(15,1)", "P").expect("S4 types literal from P operand");
+    d25_source("decimal(15,1) + decimal(225,2)", "P")
+        .expect("S4 types literals from declared result");
+}
+
+fn d26() {
+    let left = decimal(100, 2);
+    let right = decimal(3, 0);
+    let base = limits(9, 4, 0, 2, 4, 1);
+    for (result_type, mode) in [
+        ("Decimal[-9,9;0,0;toward-zero]", RoundingMode::TowardZero),
+        ("Decimal[-9,9;0,0;exact]", RoundingMode::Exact),
+    ] {
+        let ty = target(-9, 9, 0, 0, mode);
+        let (outcome, meter) = rt(DecimalOperation::Multiply(&left, &right), &ty, base);
+        decimal_result(outcome, 3, 0, false);
+        assert_eq!(meter.consumed(LimitKind::WorkUnits), 4);
+        assert!(meter
+            .admitted_charges()
+            .iter()
+            .all(|charge| charge.point != ChargePoint::DecimalRounding));
+        denied(
+            rt(
+                DecimalOperation::Multiply(&left, &right),
+                &ty,
+                ScalarLimits {
+                    work_units: 3,
+                    ..base
+                },
+            )
+            .0,
+            LimitKind::WorkUnits,
+            ChargePoint::DecimalResultRetain,
+            3,
+            1,
+        );
+        denied(
+            rt(
+                DecimalOperation::Multiply(&left, &right),
+                &ty,
+                ScalarLimits {
+                    integer_bits: 8,
+                    ..base
+                },
+            )
+            .0,
+            LimitKind::IntegerBits,
+            ChargePoint::DecimalArithmetic,
+            7,
+            9,
+        );
+        let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+            "decimal(100,2) * decimal(3,0)",
+            result_type,
+            ScalarLimits {
+                work_units: base.work_units + 1,
+                ..base
+            },
+        )
+        .expect("S4 admits D26 Decimal literals");
+        let (kernel, kernel_meter) = rt(DecimalOperation::Multiply(&left, &right), &ty, base);
+        assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+        for limited in [
+            ScalarLimits {
+                work_units: 3,
+                ..base
+            },
+            ScalarLimits {
+                integer_bits: 8,
+                ..base
+            },
+        ] {
+            let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+                "decimal(100,2) * decimal(3,0)",
+                result_type,
+                ScalarLimits {
+                    work_units: limited.work_units + 1,
+                    ..limited
+                },
+            )
+            .expect("S4 admits D26 Decimal literals with a limited meter");
+            let (kernel, kernel_meter) =
+                rt(DecimalOperation::Multiply(&left, &right), &ty, limited);
+            assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+        }
+    }
+}
+
+fn d27() {
+    let left = decimal(1200, 3);
+    let right = decimal(7, 0);
+    let ty = target(-1000, 1000, 0, 1, RoundingMode::NearestEven);
+    let base = limits(11, 4, 2, 2, 5, 1);
+    let (outcome, meter) = rt(DecimalOperation::Divide(&left, &right), &ty, base);
+    let Outcome::Completed(result) = outcome else {
+        panic!("D27 should complete: {outcome:?}");
+    };
+    assert_eq!(
+        result.value().representation(),
+        decimal(2, 1).representation()
+    );
+    let loss = result.loss().expect("D27 rounds");
+    assert_eq!(loss.exact_numerator(), &Integer::from(6_i64));
+    assert_eq!(loss.exact_denominator(), Integer::from(35_i64));
+    assert_eq!(loss.rounded_coefficient(), &Integer::from(2_i64));
+    assert_eq!(loss.rounded_scale(), 1);
+    assert_eq!(loss.mode(), RoundingMode::NearestEven);
+    assert_eq!(meter.consumed(LimitKind::WorkUnits), 5);
+    denied(
+        rt(
+            DecimalOperation::Divide(&left, &right),
+            &ty,
+            ScalarLimits {
+                scale_expansion: 1,
+                ..base
+            },
+        )
+        .0,
+        LimitKind::ScaleExpansion,
+        ChargePoint::DecimalScaleExpansion,
+        0,
+        2,
+    );
+    let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+        "decimal(1200,3) / decimal(7,0)",
+        "Decimal[-1000,1000;0,1;nearest-even]",
+        ScalarLimits {
+            work_units: base.work_units + 1,
+            ..base
+        },
+    )
+    .expect("S4 admits D27 Decimal literals");
+    let (kernel, kernel_meter) = rt(DecimalOperation::Divide(&left, &right), &ty, base);
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+    let limited = ScalarLimits {
+        scale_expansion: 1,
+        ..base
+    };
+    let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+        "decimal(1200,3) / decimal(7,0)",
+        "Decimal[-1000,1000;0,1;nearest-even]",
+        ScalarLimits {
+            work_units: limited.work_units + 1,
+            ..limited
+        },
+    )
+    .expect("S4 admits D27 Decimal literals with a limited meter");
+    let (kernel, kernel_meter) = rt(DecimalOperation::Divide(&left, &right), &ty, limited);
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+}
+
+fn d28() {
+    for (body, result_type) in [
+        (
+            "decimal(150,2) * decimal(2,0)",
+            "Decimal[-9,9;0,0;toward-zero]",
+        ),
+        (
+            "decimal(1234,3) / decimal(2,0)",
+            "Decimal[-1000,1000;0,1;nearest-even]",
+        ),
+    ] {
+        let refusals = qsl_decimal_literal(body, result_type, UNLIMITED)
+            .expect_err("S4 refuses a literal outside the declared Decimal type");
+        let [refusal] = refusals.as_slice() else {
+            panic!("D28 {body} must have one type-mismatch refusal: {refusals:?}");
+        };
+        assert_eq!(
+            refusal.cause,
+            CheckCause::IllTyped(IllTypedCause::TypeMismatch)
+        );
+    }
+    let (outcome, _, _) = qsl_decimal_literal(
+        "decimal(100,2) * decimal(3,0)",
+        "Decimal[-9,9;0,0;toward-zero]",
+        UNLIMITED,
+    )
+    .expect("S4 admits the D26 source form");
+    assert!(matches!(outcome, Outcome::Completed(Value::Decimal(_))));
 }
 
 fn d03_exact_qsl_agreement() {
