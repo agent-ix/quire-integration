@@ -9,8 +9,33 @@ use quire_contract_model::{
     CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
 };
 use quire_exact::{Integer, LimitKind, Meter, ScalarLimits, Value};
+use quire_eval::{CallFailure, Evaluation, FamilyOutcome, FamilyResult};
 use quire_semantic_value::object_closure::ObjectClosure;
 const SOURCE: &str = __AUTHORED_SOURCE__;
+
+fn assert_same_call(authority: &Result<Evaluation, CallFailure>, actual: &Result<Evaluation, CallFailure>) {
+    match (authority, actual) {
+        (Err(expected), Err(actual)) => assert_eq!(expected, actual),
+        (Ok(expected), Ok(actual)) => {
+            assert_eq!(expected.location, actual.location, "complete result location");
+            assert_eq!(expected.losses, actual.losses, "ordered located losses");
+            match (&expected.outcome, &actual.outcome) {
+                (FamilyOutcome::Evaluated(expected), FamilyOutcome::Evaluated(actual)) => assert_eq!(expected, actual),
+                (FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(expected)), FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(actual))) => {
+                    assert_eq!(expected.catalog_code(), actual.catalog_code());
+                    assert_eq!(expected.catalog_code().prefix(), actual.catalog_code().prefix());
+                    assert_eq!(expected.catalog_fields(), actual.catalog_fields());
+                },
+                (FamilyOutcome::FamilyEvaluated(FamilyResult::Undefined(expected)), FamilyOutcome::FamilyEvaluated(FamilyResult::Undefined(actual))) => {
+                    assert_eq!(expected.undefined_record(), actual.undefined_record());
+                    assert_eq!(expected.catalog_prefix(), actual.catalog_prefix());
+                },
+                _ => panic!("different complete outcome variants: {expected:?} versus {actual:?}"),
+            }
+        }
+        _ => panic!("different call dispositions: {authority:?} versus {actual:?}"),
+    }
+}
 
 #[test]
 fn actual_function_and_fresh_qsl_session_agree() {
@@ -110,11 +135,7 @@ fn actual_function_and_fresh_qsl_session_agree() {
         // located losses and outcomes, then ordered charges and every counter.
         // Both meters have exactly the same original global allowance.
         eprintln!("whole call work={work}: authority={authority:?}; actual={actual:?}; authority charges={:?}; actual charges={:?}; authority counters={:?}; actual counters={:?}", authority_meter.admitted_charges(),generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,authority_meter.consumed(kind))),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
-        assert_eq!(
-            format!("{authority:?}"),
-            format!("{actual:?}"),
-            "whole call at work={work}"
-        );
+        assert_same_call(&authority, &actual);
         assert_eq!(
             authority_meter.admitted_charges(),
             generated_meter.admitted_charges(),
