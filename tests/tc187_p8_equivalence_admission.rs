@@ -54,8 +54,12 @@ fn document(identity: &str, area: bool) -> Vec<u8> {
         units.push(json!({"identity": format!("ix://{identity}/unit/{name}"), "name": name, "dimension": dim(dimension), "scale": "1", "offset": "0", "origin": origin}));
     }
     if !area {
-        // Compose 2 + 3 through a target chain, rather than inspect lexical 5.
-        for (name, target, offset) in [("shift", "s", "2"), ("local", "shift", "3")] {
+        // The authored local and an independent two-edge composed-offset control.
+        for (name, target, offset) in [
+            ("local", "s", "5"),
+            ("shift", "s", "2"),
+            ("composed", "shift", "3"),
+        ] {
             units.push(json!({"identity": format!("ix://{identity}/unit/{name}"), "name": name, "dimension": dim("Time"), "target": format!("ix://{identity}/unit/{target}"), "scale": "1", "offset": offset, "origin": origin}));
         }
     }
@@ -355,7 +359,6 @@ fn basic_pairs_names_and_self_pair_keep_native_identity_and_locus() {
             "F::second",
         ),
     ] {
-        // Exact NameForm occurs twice for the missing alias; the dimension is first.
         let (source, result) = assemble(text);
         let refusal = result.expect_err("missing name");
         let [error] = refusal.errors.as_slice() else {
@@ -466,23 +469,25 @@ fn wrong_units_values_affine_offset_and_area_keep_full_typed_payloads() {
             "invalid_package/invalid-value",
         );
     }
-    let affine = "dimension R::Time ~ F::Time by 1 R::s = 1 F::local;";
-    refused(
-        affine,
-        affine,
-        |_| {
-            fault(
-                EquivalenceFault::InvalidValue,
-                vec![
-                    EquivalenceRetained::Unit {
-                        name: "F::local".to_owned(),
-                    },
-                    EquivalenceRetained::Value(exact(5)),
-                ],
-            )
-        },
-        "invalid_package/invalid-value",
-    );
+    for unit in ["F::local", "F::composed"] {
+        let affine = format!("dimension R::Time ~ F::Time by 1 R::s = 1 {unit};");
+        refused(
+            &affine,
+            &affine,
+            |_| {
+                fault(
+                    EquivalenceFault::InvalidValue,
+                    vec![
+                        EquivalenceRetained::Unit {
+                            name: unit.to_owned(),
+                        },
+                        EquivalenceRetained::Value(exact(5)),
+                    ],
+                )
+            },
+            "invalid_package/invalid-value",
+        );
+    }
     let area = "dimension R::Time ~ R::Area by 1 R::s = 1 R::m2;";
     refused(
         area,
