@@ -1251,6 +1251,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "qsl-analyze"
+version = "0.1.0"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
+dependencies = [
+ "ix-trace-rs",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "qsl-eval",
+ "qsl-foundation",
+ "qsl-package",
+ "qsl-replay",
+ "qsl-route",
+ "qsl-semantics",
+ "quire-canonical",
+ "quire-checked",
+ "quire-exact",
+ "quire-semantic-value",
+ "thiserror",
+]
+
+[[package]]
 name = "qsl-cst"
 version = "0.1.0"
 source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
@@ -1549,6 +1571,7 @@ name = "quire-integration"
 version = "0.1.0"
 dependencies = [
  "ix-trace-rs",
+ "qsl-analyze",
  "qsl-cst",
  "qsl-eval",
  "qsl-forms",

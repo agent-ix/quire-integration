@@ -21,6 +21,7 @@ qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch 
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
 
 [dev-dependencies]
+qsl-analyze = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-specification = { package = "quire-specification-qualification", git = "https://github.com/agent-ix/quire-specification", branch = "main" }
 # QSL-334: the composed QSL -> IR -> codegen tests live here, because nothing depends on
 # this crate. Every first-party crate is `branch = "main"`, so each resolves to one copy.
