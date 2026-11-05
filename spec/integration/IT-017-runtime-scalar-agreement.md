@@ -90,6 +90,13 @@ the full API.
    arguments requiring QSL call, assert its function.call envelope
    separately before comparing scalar charges; report raw meter results.
    Prefer evaluate_closed for closed expressions.
+   For TC-185 D05, D09, D14, and D17, use Decimal literal operands
+   under the unchanged shared result type. A nonzero divisor literal supplies
+   the checker proof without a guard or conversion. Preserve each operand's
+   coefficient and scale; compare exact-mode refusal, rounded value and typed
+   loss, ordered charges and counters, and each authored denial. D09's injected
+   result-retain denial executes independently on both meters. These source
+   observations do not resolve parameter-based or zero-divisor admission.
    IT-017-SC-02: every runnable evaluation case has a real two-sided
    observation and the same specified value or noncompleted result. A case
    that cannot execute remains PENDING under SC-01 and is not agreement.

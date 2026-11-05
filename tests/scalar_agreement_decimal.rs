@@ -197,6 +197,15 @@ fn qsl_decimal_literal(
     result_type: &str,
     limits: ScalarLimits,
 ) -> Result<(Outcome<Value>, Vec<ValueLoss>, Meter), Vec<CheckRefusal>> {
+    qsl_decimal_literal_with_denial(body, result_type, limits, None)
+}
+
+fn qsl_decimal_literal_with_denial(
+    body: &str,
+    result_type: &str,
+    limits: ScalarLimits,
+    denial: Option<quire_exact::InjectedDenial>,
+) -> Result<(Outcome<Value>, Vec<ValueLoss>, Meter), Vec<CheckRefusal>> {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n\
@@ -221,7 +230,10 @@ fn qsl_decimal_literal(
     .expect("S3 assembles Decimal literal source")
     .check(CheckingLimits::default())?;
     let package = CheckedPackage::link(graph);
-    let mut meter = Meter::new(limits);
+    let mut meter = match denial {
+        Some(denial) => Meter::new(limits).with_injected_denial(denial),
+        None => Meter::new(limits),
+    };
     let evaluation = package
         .call(
             &QualifiedName::unqualified("f").expect("f is an identifier"),
@@ -239,6 +251,30 @@ fn qsl_decimal_literal(
         .map(|loss| loss.loss)
         .collect();
     Ok((outcome, losses, meter))
+}
+
+fn literal_division_agreement(
+    body: &str,
+    result_type: &str,
+    left: &Decimal,
+    right: &Decimal,
+    target: &DecimalType,
+    limits: ScalarLimits,
+) {
+    let (kernel, kernel_meter) = rt(DecimalOperation::Divide(left, right), target, limits);
+    let (qsl, losses, qsl_meter) = qsl_decimal_literal(
+        body,
+        result_type,
+        ScalarLimits {
+            work_units: limits.work_units.saturating_add(1),
+            ..limits
+        },
+    )
+    .expect("S4 admits same-type nonzero Decimal literal division");
+    if !matches!(qsl, Outcome::Completed(_)) {
+        assert!(losses.is_empty(), "noncompleted division retains no loss");
+    }
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
 }
 
 fn conversion_agreement(input: Decimal, input_type: &str, result_type: &str, target: &DecimalType) {
@@ -346,7 +382,7 @@ fn assert_decimal_agreement(
     assert_scalar_meter_agreement(qsl_meter, kernel_meter);
 }
 
-#[trace("TC-185", "FR-140")]
+#[trace("TC-185", "FR-140", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
 fn tc185_decimal_vectors() {
     let mut seen = std::collections::BTreeSet::new();
@@ -363,13 +399,14 @@ fn tc185_decimal_vectors() {
             // QSL-1393 PENDING: linked S4 requires a nonzero divisor proof;
             // a source guard adds charges before the authored operation.
             "D04" => d04_rt_only(),
-            "D05" => d05_rt_only(),
+            // Shared-type literals admit exact and rounded thirds.
+            "D05" => d05(),
             // QSL-1393 PENDING: zero divisor requires kernel-mode source.
             "D06" => d06(),
             "D07" => d07(),
             "D08" => d08(),
-            // QSL-1393 PENDING: a source guard changes the denial prefix.
-            "D09" => d09_rt_only(),
+            // Nonzero literals preserve the authored scalar charge prefix.
+            "D09" => d09(),
             "D10" => d10(),
             "D11" => d11(),
             // QSL-1393 PENDING: linked S4 cannot check unguarded divide.
@@ -377,13 +414,13 @@ fn tc185_decimal_vectors() {
             // Evaluator-boundary row: 1.50 is outside the result type;
             // D26 is the source-admitted counterpart.
             "D13" => d13_rt_only(),
-            // QSL-1393 PENDING: a source guard changes the work limit.
-            "D14" => d14_rt_only(),
+            // Exact-mode literal division preserves refusal and denial accounting.
+            "D14" => d14(),
             // QSL-1393 PENDING: zero divisor requires kernel-mode source.
             "D15" => d15(),
             "D16" => d16(),
-            // QSL-1393 PENDING: linked S4 cannot check unguarded divide.
-            "D17" => d17_rt_only(),
+            // Literal division retains the authored operand representation.
+            "D17" => d17(),
             // Evaluator-boundary row: 1.234 exceeds the result scale;
             // D27 is the source-admitted counterpart.
             "D18" => d18_rt_only(),
@@ -543,7 +580,7 @@ fn d04_rt_only() {
     );
 }
 
-fn d05_rt_only() {
+fn d05() {
     let left = decimal(1, 0);
     let right = decimal(3, 0);
     let exact = target(-1000, 1000, 0, 2, RoundingMode::Exact);
@@ -566,6 +603,19 @@ fn d05_rt_only() {
     assert_eq!(loss.rounded_coefficient(), &Integer::from(33_i64));
     assert_eq!(loss.rounded_scale(), 2);
     assert_eq!(loss.mode(), RoundingMode::NearestEven);
+    for (result_type, ty) in [
+        ("Decimal[-1000,1000;0,2;exact]", &exact),
+        ("Decimal[-1000,1000;0,2;nearest-even]", &rounded),
+    ] {
+        literal_division_agreement(
+            "decimal(1,0) / decimal(3,0)",
+            result_type,
+            &left,
+            &right,
+            ty,
+            UNLIMITED,
+        );
+    }
 }
 
 fn d06() {
@@ -612,7 +662,7 @@ fn d08() {
     d08_qsl_agreement();
 }
 
-fn d09_rt_only() {
+fn d09() {
     let left = decimal(1, 0);
     let right = decimal(3, 0);
     let ty = target(-1000, 1000, 0, 2, RoundingMode::NearestEven);
@@ -637,6 +687,39 @@ fn d09_rt_only() {
         1,
     );
     assert_eq!(meter.consumed(LimitKind::WorkUnits), 4);
+    literal_division_agreement(
+        "decimal(1,0) / decimal(3,0)",
+        "Decimal[-1000,1000;0,2;nearest-even]",
+        &left,
+        &right,
+        &ty,
+        exact_limits,
+    );
+    let injection = quire_exact::InjectedDenial {
+        point: ChargePoint::DecimalResultRetain,
+        occurrence: std::num::NonZeroU64::new(1).unwrap(),
+    };
+    let mut kernel_meter = Meter::new(exact_limits).with_injected_denial(injection);
+    let kernel = evaluate_decimal(
+        DecimalOperation::Divide(&left, &right),
+        &ty,
+        &mut kernel_meter,
+    );
+    let (qsl, losses, qsl_meter) = qsl_decimal_literal_with_denial(
+        "decimal(1,0) / decimal(3,0)",
+        "Decimal[-1000,1000;0,2;nearest-even]",
+        ScalarLimits {
+            work_units: exact_limits.work_units + 1,
+            ..exact_limits
+        },
+        Some(injection),
+    )
+    .expect("S4 admits D09 literal division with result-retain denial");
+    assert!(
+        losses.is_empty(),
+        "denied D09 retains no rounded result loss"
+    );
+    assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
 }
 
 fn d10() {
@@ -871,7 +954,7 @@ fn d13_rt_only() {
     }
 }
 
-fn d14_rt_only() {
+fn d14() {
     let left = decimal(1, 0);
     let right = decimal(3, 0);
     let ty = target(-1000, 1000, 0, 2, RoundingMode::Exact);
@@ -898,6 +981,22 @@ fn d14_rt_only() {
         2,
         1,
     );
+    for limited in [
+        base,
+        ScalarLimits {
+            work_units: 2,
+            ..base
+        },
+    ] {
+        literal_division_agreement(
+            "decimal(1,0) / decimal(3,0)",
+            "Decimal[-1000,1000;0,2;exact]",
+            &left,
+            &right,
+            &ty,
+            limited,
+        );
+    }
 }
 
 fn d15() {
@@ -954,7 +1053,7 @@ fn d16() {
     d16_qsl_agreement();
 }
 
-fn d17_rt_only() {
+fn d17() {
     let left = decimal(100, 2);
     let right = decimal(1, 0);
     let ty = target(-1000, 1000, 0, 2, RoundingMode::Exact);
@@ -964,6 +1063,14 @@ fn d17_rt_only() {
         100,
         2,
         false,
+    );
+    literal_division_agreement(
+        "decimal(100,2) / decimal(1,0)",
+        "Decimal[-1000,1000;0,2;exact]",
+        &left,
+        &right,
+        &ty,
+        base,
     );
 }
 
