@@ -84,7 +84,7 @@ fn rows() -> Vec<Row> {
             cases: [("4", "3"), ("3", "3"), ("0", "0")]
                 .into_iter()
                 .zip(values)
-                .map(|((a, b), value)| (a, b, Value::Integer(Integer::from(value))))
+                .map(|((a, b), value)| (a, b, Value::Integer(Integer::from(i64::from(value)))))
                 .collect(),
         });
     }
@@ -95,7 +95,7 @@ fn rows() -> Vec<Row> {
         unary: true,
         boolean_result: false,
         cases: vec![
-            ("4", "0", Value::Integer(Integer::from(-4))),
+            ("4", "0", Value::Integer(Integer::from(-4_i64))),
             ("0", "0", Value::Integer(Integer::zero())),
         ],
     });
@@ -319,11 +319,15 @@ fn observe() {
                     panic!("selected scalar value family");
                 };
                 if work == 1024 {
-                    assert_eq!(
-                        outcome,
-                        Outcome::Completed(value.clone()),
-                        "{name} independent value"
-                    );
+                    match (&outcome, value) {
+                        (Outcome::Completed(Value::Boolean(actual)), Value::Boolean(expected)) => {
+                            assert_eq!(actual, expected, "{name}")
+                        }
+                        (Outcome::Completed(Value::Integer(actual)), Value::Integer(expected)) => {
+                            assert_eq!(actual, expected, "{name}")
+                        }
+                        _ => panic!("{name} required typed completion: {outcome:?}"),
+                    }
                     assert!(evaluation.location.is_none());
                 }
                 if work == 0 {
