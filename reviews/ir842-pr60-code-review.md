@@ -23,3 +23,9 @@ CONDITIONAL. The five new admission controls are real and value asserting, but t
 ## Coverage
 
 Examined QSpec TC-187 U11b/c/d/f/l and FR-142-AC-15; verified test-source selection and assertion strength. U11g3 remains uncredited under QSL-1738. U01 remains uncredited under QSL-1737 and IR-1345. Scope is this PR diff only. `quire validate` on IT-019 and `git diff --check` passed. Coder's focused Cargo targets passed 1/1 each; no Cargo target was rerun in this review.
+
+## Dispositions
+
+| FND | Outcome | Reason |
+| --- | --- | --- |
+| FND-001 | fixed | fixed: U01 now names QSL-1737 and IR-1345 with the precise producer and lowerer gap; U11g3 names QSL-1738 and its empty-map defect. |

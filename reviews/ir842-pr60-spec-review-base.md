@@ -23,3 +23,9 @@ CONDITIONAL. Add IR-1345 to the U01 Planned dependency and state its exact carri
 ## Coverage
 
 Examined IT-019-SC-04 and the changed evidence rows. Cross-checked IR main's `quantity_chain` at lower.rs:1007-1014: it categorizes `CarriedQuantity` with Unit and CompoundUnit for RequiresBound, while QSpec FR-322 publishes bounded Quantity<u,C> as carried_quantity with a bounded numeric carrier. IT-019 Quire validation passed. No requirement statement, verification method, object definition, or dependency edge was changed, so no spec sub-analysis applied.
+
+## Dispositions
+
+| FND | Outcome | Reason |
+| --- | --- | --- |
+| FND-001 | fixed | fixed: the U01 Planned status now names both QSL-1737 public emission and IR-1345 carried_quantity lowering policy as separate missing paths. |
