@@ -203,7 +203,7 @@ fn actual_function_and_fresh_qsl_session_agree() {
                 .as_ref()
                 .expect("the stopped result has its checked body location");
             assert!(
-                matches!(location.origin(), Origin::Body { function, index: 0 } if function == "combine")
+                matches!(&location.origin, Origin::Body { function, index: 0 } if function == "combine")
             );
             assert_eq!(location.depth(), 0);
             assert_eq!(location.last_index(), None);
