@@ -7,7 +7,7 @@ use std::fs;
 
 use ix_trace_rs::trace;
 use qsl_semantics::{
-    check::{AssemblyCause, AssemblyRefusal, PackageDeclarations},
+    check::{AssemblyCause, AssemblyRefusal, PackageDeclarations, TopologyFault, TopologyRetained},
     model::{
         accounting::ModelNormalizationLimits,
         intake::{admit_unit, package_input},
@@ -68,19 +68,27 @@ fn p_document(with_area: bool) -> Vec<u8> {
     model_document(P, json!(dimensions), json!([]))
 }
 
-fn q_document() -> Vec<u8> {
+fn q_document(with_root: bool) -> Vec<u8> {
     model_document(
         Q,
         json!([{"identity": Q_T, "name": "T", "base": true, "terms": []}]),
-        json!([{
-            "identity": "ix://acme/clock/unit/s", "name": "s", "dimension": Q_T,
-            "scale": "1", "offset": "0",
-        }]),
+        if with_root {
+            json!([{
+                "identity": "ix://acme/clock/unit/s", "name": "s", "dimension": Q_T,
+                "scale": "1", "offset": "0",
+            }])
+        } else {
+            json!([])
+        },
     )
 }
 
-fn refusal(declarations: &str, p_area: bool, select_q: bool) -> (String, AssemblyRefusal) {
-    let q_selection = if select_q {
+fn assemble_refusal(
+    declarations: &str,
+    p_area: bool,
+    q_root: Option<bool>,
+) -> (String, AssemblyRefusal) {
+    let q_selection = if q_root.is_some() {
         "model Q = \"acme/clock\";\n"
     } else {
         ""
@@ -100,7 +108,7 @@ fn refusal(declarations: &str, p_area: bool, select_q: bool) -> (String, Assembl
     assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
     let unit = qsl_forms::build_unit(&parsed).expect("U11 source forms");
     let p = p_document(p_area);
-    let q = select_q.then(q_document);
+    let q = q_root.map(q_document);
     let documents = std::iter::once(p.as_slice()).chain(q.iter().map(Vec::as_slice));
     let models = admit_unit(
         &unit.selections().models,
@@ -154,10 +162,10 @@ fn public_u11y_imported_l_turn_precedes_local_area() {
         "Imported `dimension L;` with no unit in P; local `dimension Area = L ^ 2;` and `unit m2 : Area = 1;`",
         "`missing_declaration`/`missing-name` retaining `L` and `m2`, at `L`'s turn placed before `Area`'s declaration (FR-142-AC-16)",
     );
-    let (source, refusal) = refusal(
+    let (source, refusal) = assemble_refusal(
         "dimension Area = P::L ^ 2; unit m2 : Area = rational(1, 1);",
         false,
-        false,
+        None,
     );
     first("U11y", &source, &refusal, "m2");
 }
@@ -171,8 +179,46 @@ fn public_u11z1_imported_area_turn_precedes_imported_l() {
         "Imported package P declares `dimension L;` and `dimension Area = L ^ 2;` with no unit; local `unit m2 : P.Area = 1;`",
         "`P.Area` takes its turn (reached by the unit's type) and passes; `P.L` takes its turn next (reached through `Area`'s terms): `missing_declaration`/`missing-name` retaining `P.L` and `m2` (FR-142-AC-16)",
     );
-    let (source, refusal) = refusal("unit m2 : P::Area = rational(1, 1);", true, false);
+    let (source, refusal) = assemble_refusal("unit m2 : P::Area = rational(1, 1);", true, None);
     first("U11z1", &source, &refusal, "m2");
+
+    let (source, refusal) = assemble_refusal(
+        "unit m2 : P::Area = rational(1, 1); \
+         unit m2_alt : P::Area = rational(1, 1);",
+        true,
+        None,
+    );
+    let [error] = refusal.errors.as_slice() else {
+        panic!("U11z1 adverse P.Area must be first: {refusal:?}");
+    };
+    let AssemblyCause::UnitGraphTopology {
+        fault: TopologyFault::TwoRoots,
+        retained,
+    } = &error.cause
+    else {
+        panic!("U11z1 adverse P.Area must precede unanchored P.L: {error:?}");
+    };
+    let [TopologyRetained::Dimension {
+        name: dimension,
+        key: Some(_),
+    }, TopologyRetained::Unit {
+        name: first_root,
+        key: None,
+    }, TopologyRetained::Unit {
+        name: second_root,
+        key: None,
+    }] = retained.as_slice()
+    else {
+        panic!("U11z1 P.Area roots must be retained: {retained:?}");
+    };
+    assert_eq!(dimension, P_AREA);
+    assert_eq!(first_root, "m2");
+    assert_eq!(second_root, "m2_alt");
+    assert_eq!(
+        error.cause.catalog_code().to_string(),
+        "invalid_package/conflicting-definition"
+    );
+    assert_eq!(&source[error.span.start..error.span.end], P_SELECTION);
 }
 
 /// Trace: QSpec-TC-187, QSpec-FR-142-AC-18.
@@ -184,11 +230,18 @@ fn public_u11z2_imported_l_precedes_q_t_and_later_zero_scale() {
         "`dimension X = P.L * Q.T;` `unit x : X = 1;` and, declared later, `unit t : Q.T = 0 * Q.s;`, with `P.L` unitless in P, `Q.T` a dimension of Q with unit `Q.s`",
         "the walk reaches `P.L` then `Q.T` at `X`'s declaration, before the later unit: `P.L`'s turn comes first, `missing_declaration`/`missing-name` retaining `P.L` and `x`; the zero scale of `t` is not reported (FR-142-AC-18)",
     );
-    let (source, refusal) = refusal(
+    let (source, refusal) = assemble_refusal(
         "dimension X = P::L * Q::T; unit x : X = rational(1, 1); \
          unit t : Q::T = rational(0, 1) * Q::s;",
         false,
-        true,
+        Some(true),
     );
     first("U11z2", &source, &refusal, "x");
+
+    let (source, refusal) = assemble_refusal(
+        "dimension X = P::L * Q::T; unit x : X = rational(1, 1);",
+        false,
+        Some(false),
+    );
+    first("U11z2 competing unitless bases", &source, &refusal, "x");
 }
