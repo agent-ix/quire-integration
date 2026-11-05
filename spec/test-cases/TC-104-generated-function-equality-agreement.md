@@ -62,6 +62,23 @@ no FR-018 raw equality-oracle credit.
    charge 2 and zero consumed work). Keep nominal shapes and conversions Planned
    until their own actual complete public observations exist.
 
+7. Add original tuple Pair(Boolean, Boolean), record Flag { value: Boolean; }
+   and union Choice { First, Second } declarations with Equal/NotEqual functions
+   and separate exercise calls. Obtain authentic argument Values by running
+   independently selected closed source constructor functions through public
+   FR-485 sessions. These completed Values are external inputs to fresh whole
+   equality calls; constructor meters are never reused or subtracted. Require
+   explicit equal/different Boolean answers and the same full whole-call
+   observations. Actual nominal parameter descriptors come from the emitted
+   parameter nodes. No fabricated owner key, TypeEnvironment or copied renderer
+   assembly is permitted.
+8. Measure equality descriptor result mismatch, requested unsupported
+   capability, duplicate requests and wrong actual call occurrence through
+   public generation. Each retains a typed refusal and a healthy generated
+   sibling. Measure Scalar Negate using an actual source unary body and its
+   actual call occurrence; retain the observed unsupported disposition without
+   granting execution credit.
+
 ## Expected Results
 
 The four primitive operation rows require 42 complete whole-call envelope
