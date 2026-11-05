@@ -23,6 +23,11 @@ enum RowDispatch {
     Topology(&'static str),
     Admitted(&'static str),
     Checked(&'static str),
+    QslValue {
+        expected: &'static str,
+        generated_owner: &'static str,
+        missing: &'static str,
+    },
     Planned {
         tickets: &'static [&'static str],
         missing: &'static str,
@@ -63,6 +68,11 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11q" | "U11z3" => Some(RowDispatch::Topology("invalid-value")),
         "U11x" => Some(RowDispatch::Topology("missing-name")),
         "U30" | "U31" => Some(RowDispatch::Checked("type-mismatch")),
+        "U13" | "U21" => Some(RowDispatch::QslValue {
+            expected: if id == "U13" { "incomplete" } else { "dimensionless" },
+            generated_owner: "IR-842",
+            missing: "QSL-to-IR-to-CG generated quantity power and native comparison",
+        }),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
             missing: "public checked-package BoundedQuantity emission and source-to-CG agreement for admitted carried_quantity operations",
@@ -74,7 +84,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
             pending("QSL/IR/CG/native per-operation dispatch and comparison")
         }
-        "U12" | "U13" | "U14" | "U15" | "U16" | "U17" | "U18" | "U19" | "U20" | "U21" | "U22"
+        "U12" | "U14" | "U15" | "U16" | "U17" | "U18" | "U19" | "U20" | "U22"
         | "U23" | "U24" | "U25" | "U26" | "U27" | "U28" | "U29" => {
             pending("QSL/IR/CG/native quantity operation and limit dispatch")
         }
@@ -246,6 +256,26 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 );
                 observed.insert(vector.id);
             }
+            RowDispatch::QslValue {
+                expected,
+                generated_owner,
+                missing,
+            } => {
+                // tc187_u13_u21_power binds the complete public cells and
+                // checks real QSL values; generated agreement stays Planned.
+                assert!(
+                    vector.expected.contains(expected),
+                    "{} value expectation",
+                    vector.id
+                );
+                assert_eq!(generated_owner, "IR-842", "{} generated owner", vector.id);
+                assert!(
+                    missing.contains("CG"),
+                    "{} missing generated path",
+                    vector.id
+                );
+                observed.insert(vector.id);
+            }
             RowDispatch::Planned { tickets, missing } => {
                 let expected_tickets: &[&str] = match vector.id {
                     "U01" => &["QSL-1737", "IR-1345"],
@@ -271,7 +301,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             "U06", "U11a", "U11b", "U11c", "U11d", "U11e", "U11f", "U11g1", "U11g2", "U11g4",
             "U11h", "U11i", "U11j", "U11k", "U11l", "U11m", "U11n", "U11o", "U11p", "U11q", "U11r",
             "U11s", "U11t", "U11u", "U11w", "U11x", "U11y", "U11z1", "U11z2", "U11z3", "U30",
-            "U31",
+            "U31", "U13", "U21",
         ])
     );
     assert!(planned > 0, "SC-04 is not yet complete");
