@@ -46,10 +46,14 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11e" => Some(RowDispatch::Topology("invalid-value")),
         "U11f" => Some(RowDispatch::Topology("definition-cycle")),
         "U11g1" | "U11g2" | "U11g4" => Some(RowDispatch::Topology("missing-name")),
+        "U11h" => Some(RowDispatch::Topology("invalid-value")),
+        "U11i" => Some(RowDispatch::Topology("missing-name")),
+        "U11j" => Some(RowDispatch::Topology("conflicting-definition")),
+        "U11k" | "U11m" => Some(RowDispatch::Topology("definition-cycle")),
         "U11l" => Some(RowDispatch::Topology("definition-cycle")),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
-            missing: "public checked-package BoundedQuantity emission and carried_quantity lowerer bounds-policy correction",
+            missing: "public checked-package BoundedQuantity emission and source-to-CG agreement for admitted carried_quantity operations",
         }),
         "U11g3" => Some(RowDispatch::Planned {
             tickets: &["QSL-1738"],
@@ -58,8 +62,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
             pending("QSL/IR/CG/native per-operation dispatch and comparison")
         }
-        "U11h" | "U11i" | "U11j" | "U11k" | "U11m" | "U11n" | "U11o" | "U11p" | "U11q"
-        | "U11r" | "U11s" | "U11t" | "U11u"
+        "U11n" | "U11o" | "U11p" | "U11q" | "U11r" | "U11s" | "U11t" | "U11u"
         | "U11w" | "U11x" | "U11y" | "U11z1" | "U11z2" | "U11z3" => {
             pending("QSL admission and mixed-operation disposition")
         }
@@ -198,7 +201,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             }
             RowDispatch::Topology(expected) => {
                 // Each of these IDs has a value-asserting public QSL control in
-                // tc187_u11_topology or tc187_u11_local_values. The dispatcher
+                // tc187_u11_topology, tc187_u11_local_values or tc187_u11_order. The dispatcher
                 // guards their public row identity and expectation; the
                 // separate tests execute them.
                 assert!(
@@ -218,7 +221,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 assert!(!missing.is_empty(), "{} missing route", vector.id);
                 if vector.id == "U01" {
                     assert!(missing.contains("BoundedQuantity"));
-                    assert!(missing.contains("carried_quantity"));
+                    assert!(missing.contains("source-to-CG agreement"));
                 }
                 if vector.id == "U11g3" {
                     assert!(missing.contains("empty map"));
@@ -231,7 +234,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
         observed,
         BTreeSet::from([
             "U06", "U11a", "U11b", "U11c", "U11d", "U11e", "U11f", "U11g1", "U11g2", "U11g4",
-            "U11l",
+            "U11h", "U11i", "U11j", "U11k", "U11l", "U11m",
         ])
     );
     assert!(planned > 0, "SC-04 is not yet complete");
