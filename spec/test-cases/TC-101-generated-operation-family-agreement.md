@@ -55,7 +55,11 @@ FR-014 operation-oracle or FR-018 equality-oracle agreement credit.
    wrong results from establishing agreement.
 5. Exercise argument arity and kind on the real public application boundary,
    including an argument list with both a wrong count and wrong kind so the
-   native precedence is distinguishable. Compare original native CallFailure
+   native precedence is distinguishable. Include Integer 10 as a genuine value
+   outside the authored Int[0,9] parameter domain, to distinguish the source's
+   bounded admission from the generator's scalar Integer classification.
+   A widened generated input path fails; it is not normalized or credited.
+   Compare original native CallFailure
    payloads against the independent session and require zero admitted charges
    and counters. Separately substitute another valid checked source with the
    same authored names but changed arithmetic into the generated owner's source
