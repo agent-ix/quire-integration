@@ -162,6 +162,7 @@ fn wrong_occurrence_refuses_without_changing_the_healthy_native_call() {
             result_selection: ContractDriverResultSelection::NotApplicable,
         })
         .collect::<Vec<_>>();
+    let accounted_call_a = contract.wire().feature_accounting[1].node_id().clone();
     let declaration = ExactFunctionDeclaration {
         node_id: function_body,
         name: "combine".to_owned(),
@@ -249,26 +250,55 @@ fn wrong_occurrence_refuses_without_changing_the_healthy_native_call() {
         node_id: call_b.clone(),
         result_selection: ContractDriverResultSelection::NotApplicable,
     };
-    assert!(matches!(
-        generate_exact_function_oracles(
-            &package,
-            &contract,
-            &wrong_positions,
-            &[0],
-            &[declaration],
-            &[2],
-            &[ExactFunctionItem {
-                call_node_id: call_b.clone(),
-                function: "combine".to_owned(),
-                argument_node_ids: args_a,
-            }],
+    let wrong_request = generate_exact_function_oracles(
+        &package,
+        &contract,
+        &wrong_positions,
+        &[0],
+        &[declaration.clone()],
+        &[1],
+        &[ExactFunctionItem {
+            call_node_id: call_b.clone(),
+            function: "combine".to_owned(),
+            argument_node_ids: args_a.clone(),
+        }],
+    );
+    assert!(
+        matches!(
+            &wrong_request,
+            Err(OracleGenerationError::PackageRequest(PackageRequestError::AccountingIdentity {
+                accounting_index: 1,
+                requested,
+                accounted,
+            })) if requested == &call_b && accounted == &accounted_call_a
         ),
-        Err(OracleGenerationError::PackageRequest(PackageRequestError::Identity {
-            request_index: 1,
-            requested,
-            accounted,
-        })) if requested == call_b && accounted == call_a
-    ));
+        "wrong accounting identity: {wrong_request:?}"
+    );
+
+    let wrong_item = generate_exact_function_oracles(
+        &package,
+        &contract,
+        &positions,
+        &[0],
+        &[declaration],
+        &[1],
+        &[ExactFunctionItem {
+            call_node_id: call_b.clone(),
+            function: "combine".to_owned(),
+            argument_node_ids: args_a,
+        }],
+    );
+    assert!(
+        matches!(
+            &wrong_item,
+            Err(OracleGenerationError::PackageRequest(PackageRequestError::Identity {
+                request_index: 1,
+                requested,
+                accounted,
+        })) if requested == &call_b && accounted == &call_a
+        ),
+        "wrong item identity: {wrong_item:?}"
+    );
 
     let driver = include_str!("support/function_observation.rs")
         .replace("__AUTHORED_SOURCE__", &format!("{SOURCE:?}"))
