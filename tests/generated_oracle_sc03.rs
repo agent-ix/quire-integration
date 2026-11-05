@@ -4,6 +4,11 @@
 #[path = "support/generated_oracle.rs"]
 mod generated_oracle;
 
+#[path = "support/family_function_selection.rs"]
+mod family_function_selection;
+
+use self::family_function_selection::{body, declared};
+
 use ix_trace_rs::trace;
 use qsl_replay::{
     acquire_checked_closure, CompileUnit, DependencyInput, ReplayLimits, SourceIdentity,
@@ -29,44 +34,6 @@ const SOURCE: &str = concat!(
     "function exercise_a using v(left: Int[0,9], right: Int[0,9]): Integer pure { combine(left,right) }\n",
     "function exercise_b using v(x: Int[0,9], y: Int[0,9]): Integer pure { combine(x,y) }\n",
 );
-
-fn declared(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
-    let selected = package
-        .graph()
-        .nodes
-        .iter()
-        .filter(|node| {
-            node.declaration.as_ref().is_some_and(|declaration| {
-                declaration
-                    .qualified_name
-                    .iter()
-                    .map(AsRef::as_ref)
-                    .eq([name])
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(selected.len(), 1, "one exact authored declaration {name}");
-    selected[0].node_id.clone()
-}
-
-fn body(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
-    let id = declared(package, name);
-    let Some(CheckedTerm::Aggregate { members }) = package.term(&id) else {
-        panic!("the selected declaration has a typed function header");
-    };
-    let targets = members
-        .iter()
-        .filter_map(|member| match member {
-            CheckedTerm::Binding { name, value } if name.as_ref() == "body" => match &**value {
-                CheckedTerm::Reference { target } => Some(target.clone()),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(targets.len(), 1);
-    targets[0].clone()
-}
 
 fn call_arguments(package: &CheckedPackageV2, call: &CheckedNodeId) -> Vec<CheckedNodeId> {
     let Some(CheckedTerm::Application { arguments, .. }) = package.term(call) else {
@@ -303,6 +270,10 @@ fn wrong_occurrence_refuses_without_changing_the_healthy_native_call() {
     let driver = include_str!("support/function_observation.rs")
         .replace("__AUTHORED_SOURCE__", &format!("{SOURCE:?}"))
         .replace("__GENERATED_SYMBOL__", &mixed_generated.oracle_symbol);
+    let driver = driver.replace(
+        "include!(\"family_function_selection.rs\");",
+        include_str!("support/family_function_selection.rs"),
+    );
     let observations = generated_oracle::execute(&mixed.artifacts, &driver);
     assert_eq!(
         observations,

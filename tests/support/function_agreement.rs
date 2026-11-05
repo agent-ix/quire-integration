@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Genuine whole-function composition; no replacement function factory.
 
+#[path = "family_function_selection.rs"]
+mod family_function_selection;
+
+use self::family_function_selection::{body, declared};
+
 use ix_trace_rs::trace;
 use qsl_replay::{
     acquire_checked_closure, CompileUnit, DependencyInput, ReplayLimits, SourceIdentity,
@@ -17,44 +22,6 @@ use quire_contract_ir::{
     CheckedPackageV2ReadResult, CheckedTerm, ContractDependencies, ContractPackageReadResult,
     ContractPackageWireV1,
 };
-
-fn declared(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
-    let selected = package
-        .graph()
-        .nodes
-        .iter()
-        .filter(|node| {
-            node.declaration.as_ref().is_some_and(|declaration| {
-                declaration
-                    .qualified_name
-                    .iter()
-                    .map(AsRef::as_ref)
-                    .eq([name])
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(selected.len(), 1, "one exact authored declaration {name}");
-    selected[0].node_id.clone()
-}
-
-fn body(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
-    let id = declared(package, name);
-    let Some(CheckedTerm::Aggregate { members }) = package.term(&id) else {
-        panic!("the selected declaration has a typed function header");
-    };
-    let targets = members
-        .iter()
-        .filter_map(|member| match member {
-            CheckedTerm::Binding { name, value } if name.as_ref() == "body" => match &**value {
-                CheckedTerm::Reference { target } => Some(target.clone()),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(targets.len(), 1);
-    targets[0].clone()
-}
 
 #[trace("TC-099", "IT-019-SC-01", "IT-019-SC-02")]
 #[test]
@@ -176,6 +143,10 @@ fn actual_generated_function_preserves_the_whole_qsl_call_envelope() {
     let driver = include_str!("function_observation.rs")
         .replace("__AUTHORED_SOURCE__", &format!("{SOURCE:?}"))
         .replace("__GENERATED_SYMBOL__", &generated.oracle_symbol);
+    let driver = driver.replace(
+        "include!(\"family_function_selection.rs\");",
+        include_str!("family_function_selection.rs"),
+    );
     let observations = super::generated_oracle::execute(&output.artifacts, &driver);
     assert_eq!(
         observations,
