@@ -23,3 +23,9 @@ CONDITIONAL. The QSL admission assertions are strong, but their connection to th
 ## Coverage
 
 Examined TC-187 U11s/t/u, FR-142-AC-18, IT-019-SC-04 and its changed Passed/Planned rows. U11s checks both local cycle edges and the model-selection source span; U11t checks distinct imported dimension/root keys and the local root; U11u checks exact zero scale and local name. All assert catalog codes. The dispatcher recognizes only enumerated IDs and keeps remaining rows Planned. `git diff --check` and `quire validate` passed. The PR reports four focused tests and scoped Clippy passing; no aggregate build was run in this review.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Round 1 at 2d1be13e: each U11s/t/u test compares its public row's full authored input and expected first refusal exactly; U11r's imported-model source is also checked before the t/u references. `tests/tc187_u11_imported_topology.rs:23-46,113-208`. |
