@@ -27,7 +27,6 @@ struct Row {
     name: String,
     syntax: &'static str,
     unary: bool,
-    boolean_result: bool,
     cases: Vec<(&'static str, &'static str, Value)>,
 }
 
@@ -44,7 +43,6 @@ fn rows() -> Vec<Row> {
             name: name.to_owned(),
             syntax,
             unary: false,
-            boolean_result: true,
             cases: [
                 ("false", "false"),
                 ("false", "true"),
@@ -61,7 +59,6 @@ fn rows() -> Vec<Row> {
         name: "bnot".to_owned(),
         syntax: "not",
         unary: true,
-        boolean_result: true,
         cases: vec![
             ("false", "false", Value::Boolean(true)),
             ("true", "false", Value::Boolean(false)),
@@ -76,7 +73,6 @@ fn rows() -> Vec<Row> {
                     name: format!("{}truth{index}", row.name),
                     syntax: row.syntax,
                     unary: row.unary,
-                    boolean_result: true,
                     cases: vec![case],
                 })
                 .collect::<Vec<_>>()
@@ -253,9 +249,6 @@ fn observe() {
                         (Outcome::Completed(Value::Boolean(actual)), Value::Boolean(expected)) => {
                             assert_eq!(actual, expected, "{name}")
                         }
-                        (Outcome::Completed(Value::Integer(actual)), Value::Integer(expected)) => {
-                            assert_eq!(actual, expected, "{name}")
-                        }
                         _ => panic!("{name} required typed completion: {outcome:?}"),
                     }
                     assert!(evaluation.location.is_none());
@@ -286,32 +279,18 @@ fn observe() {
                     .map(|loss| loss.loss)
                     .collect::<Vec<_>>();
                 expected.push(oracle_observation::snapshot(&outcome, &losses, &meter));
-                let argument = |text: &str| text.to_owned();
                 let arguments = if row.unary {
-                    argument(left)
-                } else if matches!(
-                    items[index].operation,
-                    ExactScalarOperation::Boolean {
-                        right_may_stop: true,
-                        ..
-                    }
-                ) {
-                    format!("{}, || Outcome::Completed({right})", argument(left))
+                    (*left).to_owned()
                 } else {
-                    format!("{}, {}", argument(left), argument(right))
-                };
-                let constructor = if row.boolean_result {
-                    "Boolean"
-                } else {
-                    "Integer"
+                    format!("{left}, {right}")
                 };
                 driver.push_str(&format!(r#"
 {{ let mut meter=Meter::new({:?});
 let actual=quire_exact_scalar_oracles::{}({}, &mut meter).expect("original scalar operand admission");
-let actual=lift(actual,Value::{});
+let actual=lift(actual,Value::Boolean);
 let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new();
 println!("IT019_OBSERVATION {{}}",oracle_observation::snapshot(&actual,&losses,&meter)); }}
-"#,limits(work),generated.symbol,arguments,constructor));
+"#,limits(work),generated.symbol,arguments));
             }
         }
     }
