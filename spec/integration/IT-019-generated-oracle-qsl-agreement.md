@@ -54,11 +54,20 @@ not an agreement result.
 
 ## Inputs
 
-The first executable function is authentic QSL source
-`combine(left:Int[0,9],right:Int[0,9]) {left+right}` called with admitted
-operands whose sum is 7, under global work limits 0, 1 and 1024. Select the
-real `combine` declaration, body and call occurrence from QSL's checked
-package; do not fabricate node keys or substitute an interpreted body.
+The first executable source is the exact unit supplied by
+`actual_generated_function_preserves_the_whole_qsl_call_envelope`:
+
+```qsl
+language "ix:native" edition "1-draft";
+profile v = "quire.value.complete/v1";
+function combine using v(left: Int[0,9], right: Int[0,9]): Integer pure { left + right }
+function exercise using v(left: Int[0,9], right: Int[0,9]): Integer pure { combine(left,right) }
+```
+
+Call `combine` with Integer arguments 4 and 3 under global work limits 0, 1
+and 1024. Select the real `combine` declaration, body and `exercise` call
+occurrence from QSL's checked package; do not fabricate node keys or substitute
+an interpreted body.
 Include a healthy sibling and a separately refused item for binding controls.
 Subsequent cases select applicable TC-187 rows from the public vector API and
 applicable CG FR-014 scalar, FR-018 composite equality, and FR-021 function
@@ -115,16 +124,42 @@ where the owner row contains both.
    IDs, silent skips, copied fixtures and ticketless Planned entries fail.
    Only executed two-sided rows with matching owner expectations count as
    generated-oracle/QSL agreement.
-5. Exercise the applicable FR-014 scalar, FR-018 composite equality and
-   FR-021 function application families, including completed, denied,
-   refused and unsupported selections. Use the same authentic pipeline and
-   independent QSL authority for runnable cases. For a CG unsupported or
-   typed-refused selection, assert its exact nonexecuted disposition and
-   sibling isolation; do not turn it into a Boolean verdict or QSL outcome.
-   IT-019-SC-05: each named family and operation has an executable two-sided
-   result or an explicit ticket-backed Planned entry. Runnable results agree
-   in the full exposed envelope. A passing scalar sample cannot mark the
-   composite or function family complete.
+5. Select the required operation set from the public owner types resolved by
+   this integration's Cargo.lock, rather than a copied catalog or fixed count:
+   - FR-014 selects every variant of CG `ExactScalarOperation`, expanded by
+     every operator and operand-kind variant in its fields. Include all
+     owner-defined division profiles, IEEE widths, comparisons and rounding
+     choices, text profiles, and both values of Boolean `right_may_stop` where
+     meaningful for the connective. Domain values and boundary cases follow
+     FR-014 and the selected TC-187 expectations, rather than an enumeration
+     of arbitrary numeric endpoints. Preserve owner-defined invalid
+     combinations as typed refusals, not silently omitted operations.
+   - FR-018 selects both `EqualityOperatorKind` variants for every operand
+     declaration and collection shape consumed by the public composite
+     equality generator, including recursively reached shapes and leaf kinds
+     defined by the owner `CompositeShape` and `ValueType` contracts. Expand
+     `EqualityOperandDescriptor` source-only and conversion-target forms on
+     each operand wherever the owner permits them; unsupported combinations
+     retain their own typed dispositions.
+   - FR-021 selects every `ExactFunctionBody` variant, expanded by its integer
+     operator or equality operator and owner-permitted operand shapes, and
+     the nested-call form with a genuine selected callee. Include the
+     argument, result, owner, occurrence and capability boundaries required
+     by FR-021 for each form.
+   For every selected operation/shape/choice, record a distinct row naming its
+   public owner variant, genuine QSL source-to-IR-to-CG route and executable
+   test symbol. Each row must contain an executed two-sided result, an
+   observed typed nonexecuted generation disposition with sibling isolation,
+   or `Planned` with the exact missing admission/generation/authority path
+   and an open owner ticket. Unimplemented integration dispatch is owned by
+   IR-842; it is not attributed to an unavailable upstream semantic feature.
+   A new owner variant adds a required row; a missing or unknown variant
+   fails inventory closure, rather than inheriting another row's result.
+   IT-019-SC-05: every operation selected by this owner-derived rule has an
+   explicit disposition. Runnable cases compare the full exposed envelope
+   against independent QSL authority. A typed-refused or unsupported selection
+   is never converted to a Boolean QSL outcome, and a passing scalar sample
+   cannot mark the composite or function family complete.
 6. Publish the per-vector and per-family evidence table with status
    `Passed`, `Failed` or `Planned`, test symbol, observed boundary, and owner
    ticket for each Planned entry. Mark a criterion passed only when all of its

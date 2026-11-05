@@ -59,6 +59,81 @@ fn assert_same_call(
     }
 }
 
+fn assert_required_terminal(
+    name: &str,
+    result: &Result<Evaluation, CallFailure>,
+    meter: &Meter,
+    work: u64,
+) {
+    let evaluated = result
+        .as_ref()
+        .expect("each required call returns an evaluation");
+    assert!(
+        evaluated.losses.is_empty(),
+        "{name}: combine has no located losses"
+    );
+    match work {
+        0 | 1 => {
+            let location = evaluated
+                .location
+                .as_ref()
+                .expect("the stopped result has its checked body location");
+            assert!(
+                matches!(&location.origin, Origin::Body { function, index: 0 } if function == "combine"),
+                "{name}: checked body origin"
+            );
+            assert_eq!(location.depth(), 0, "{name}: body depth");
+            assert_eq!(location.last_index(), None, "{name}: body last index");
+            let point = if work == 0 {
+                quire_exact::ChargePoint::FunctionCall
+            } else {
+                quire_exact::ChargePoint::IntegerArithmeticOperands
+            };
+            assert!(
+                matches!(&evaluated.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == work && record.consumed == work && record.next_charge == Integer::from(1_u64) && record.charge_point == point),
+                "{name}: exact required denial at work={work}: {evaluated:?}"
+            );
+            let expected_points = if work == 0 {
+                vec![]
+            } else {
+                vec![quire_exact::ChargePoint::FunctionCall]
+            };
+            assert_eq!(
+                meter
+                    .admitted_charges()
+                    .iter()
+                    .map(|charge| charge.point)
+                    .collect::<Vec<_>>(),
+                expected_points,
+                "{name}: exact admitted prefix"
+            );
+            for kind in LimitKind::ALL {
+                let expected = if kind == LimitKind::WorkUnits {
+                    work
+                } else {
+                    0
+                };
+                assert_eq!(
+                    meter.consumed(kind),
+                    expected,
+                    "{name}: denied counter {kind:?}"
+                );
+            }
+        }
+        1024 => {
+            assert!(
+                matches!(&evaluated.outcome, FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(value))) if value == &Integer::from(7_i64)),
+                "{name}: required complete Integer 7: {evaluated:?}"
+            );
+            assert!(
+                evaluated.location.is_none(),
+                "{name}: completed result has no location"
+            );
+        }
+        _ => panic!("unselected combine work limit {work}"),
+    }
+}
+
 #[test]
 fn actual_function_and_fresh_qsl_session_agree() {
     let dependencies = DependencyInput::default();
@@ -196,20 +271,11 @@ fn actual_function_and_fresh_qsl_session_agree() {
         // Both meters have exactly the same original global allowance.
         eprintln!("whole call work={work}: authority={authority:?}; actual={actual:?}; authority charges={:?}; actual charges={:?}; authority counters={:?}; actual counters={:?}", authority_meter.admitted_charges(),generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,authority_meter.consumed(kind))),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
         assert_same_call(&authority, &actual);
-        if work == 1 {
-            let evaluated = actual.as_ref().expect("body stop is an evaluation");
-            let location = evaluated
-                .location
-                .as_ref()
-                .expect("the stopped result has its checked body location");
-            assert!(
-                matches!(&location.origin, Origin::Body { function, index: 0 } if function == "combine")
-            );
-            assert_eq!(location.depth(), 0);
-            assert_eq!(location.last_index(), None);
-            assert!(
-                matches!(&evaluated.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == 1 && record.consumed == 1 && record.next_charge == Integer::from(1_u64) && record.charge_point == quire_exact::ChargePoint::IntegerArithmeticOperands)
-            );
+        for (name, result, meter) in [
+            ("authority", &authority, &authority_meter),
+            ("generated", &actual, &generated_meter),
+        ] {
+            assert_required_terminal(name, result, meter, work);
         }
         assert_eq!(
             authority_meter.admitted_charges(),
