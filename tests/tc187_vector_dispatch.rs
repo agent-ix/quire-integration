@@ -21,6 +21,7 @@ enum AdmissionCase {
 enum RowDispatch {
     Admission(AdmissionCase),
     Topology(&'static str),
+    Admitted(&'static str),
     Planned {
         tickets: &'static [&'static str],
         missing: &'static str,
@@ -54,6 +55,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11s" => Some(RowDispatch::Topology("definition-cycle")),
         "U11t" => Some(RowDispatch::Topology("conflicting-definition")),
         "U11u" => Some(RowDispatch::Topology("invalid-value")),
+        "U11r" => Some(RowDispatch::Admitted("admitted")),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
             missing: "public checked-package BoundedQuantity emission and source-to-CG agreement for admitted carried_quantity operations",
@@ -65,8 +67,8 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
             pending("QSL/IR/CG/native per-operation dispatch and comparison")
         }
-        "U11n" | "U11o" | "U11p" | "U11q" | "U11r" | "U11w" | "U11x" | "U11y"
-        | "U11z1" | "U11z2" | "U11z3" => {
+        "U11n" | "U11o" | "U11p" | "U11q" | "U11w" | "U11x" | "U11y" | "U11z1"
+        | "U11z2" | "U11z3" => {
             pending("QSL admission and mixed-operation disposition")
         }
         "U12" | "U13" | "U14" | "U15" | "U16" | "U17" | "U18" | "U19" | "U20" | "U21" | "U22"
@@ -214,6 +216,21 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 );
                 observed.insert(vector.id);
             }
+            RowDispatch::Admitted(expected) => {
+                // The positive U11r source passes the real selected-model
+                // QSL check and emission in tc187_u11_imported_positive.
+                assert!(
+                    vector.inputs.contains("unit cm"),
+                    "{} imported unit input",
+                    vector.id
+                );
+                assert!(
+                    vector.expected.contains(expected),
+                    "{} positive expectation",
+                    vector.id
+                );
+                observed.insert(vector.id);
+            }
             RowDispatch::Planned { tickets, missing } => {
                 let expected_tickets: &[&str] = match vector.id {
                     "U01" => &["QSL-1737", "IR-1345"],
@@ -237,7 +254,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
         observed,
         BTreeSet::from([
             "U06", "U11a", "U11b", "U11c", "U11d", "U11e", "U11f", "U11g1", "U11g2", "U11g4",
-            "U11h", "U11i", "U11j", "U11k", "U11l", "U11m", "U11s", "U11t", "U11u",
+            "U11h", "U11i", "U11j", "U11k", "U11l", "U11m", "U11r", "U11s", "U11t", "U11u",
         ])
     );
     assert!(planned > 0, "SC-04 is not yet complete");
