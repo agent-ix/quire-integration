@@ -342,7 +342,14 @@ fn unitless_imported_length_retains_original_first_refusal() {
     };
     assert_eq!(native_refusal, refused);
     let region = region.expect("original model-selection source region");
-    assert_eq!(&source[region.start()..region.end()], M);
+    assert_eq!(
+        region.start(),
+        u64::try_from(error.span.start).expect("source offset")
+    );
+    assert_eq!(
+        region.end(),
+        u64::try_from(error.span.end).expect("source offset")
+    );
 }
 
 #[trace("TC-110", "QSpec-TC-187", "QSpec-FR-142-AC-20")]
