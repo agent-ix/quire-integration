@@ -23,3 +23,9 @@ CONDITIONAL. The real QSL refusal assertions are strong, but the link from their
 ## Coverage
 
 Examined QSpec TC-187 U11h/i/j/k/m and FR-142-AC-15/16; IT-019-SC-04 and its Passed/Planned rows; the new Rust tests and public dispatcher. U11h asserts zero scale before unknown target, U11i an earlier unknown target before a later zero scale, U11j two roots before self-cycle, U11k the earlier dimension's cycle before the later zero scale, and U11m both dimension orders. The U01 Planned record reflects IR-1345's merged lowerer with remaining QSL-1737 emission and IR-1345 AC4 agreement; U11g3 names QSL-1738. `cargo fmt --all -- --check`, `quire validate` on IT-019 and `git diff --check` passed. Coder reported focused Cargo tests 6/6 plus dispatcher 1/1 and scoped Clippy passing on the refreshed QSL lock; no Cargo build was repeated during review.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Round 1 at bdf82dda: U11h/i/j/k now bind their distinguishing competing source fragments and precedence text; U11m binds both dimension orders, both cycle edges, and both expected first refusals. `tests/tc187_u11_order.rs:97-232`. |
