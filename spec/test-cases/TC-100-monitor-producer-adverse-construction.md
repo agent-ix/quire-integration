@@ -118,16 +118,23 @@ hand-built `ProgramParts`, unavailable-seam skip or test-only evaluator supplies
 missing meaning.
 
 Status: Planned for the complete construction and adverse intake handoff under
-IR-721. The two `monitor_program_adverse` tests contain the genuine producer
-rekeying, merged-driver diagnostic and missing-entry IR controls described
-above. The refreshed focused target compiles, but both tests currently stop in
-public QSL `emit_plan_root` with
-`Write(MissingEqualityIdentityContext)` for a generated `quire.op.boolean.ne`
-application. [QSL-1722](https://linear.app/agent-ix/issue/QSL-1722) owns this
-observed producer failure. It precedes final emission, strict IR admission and all
-new driver/IR assertions. These new boundaries are source-reviewed and
-unexecuted, not passed adverse checks. An earlier producer-only preflight on
-its earlier cohort supplies no new diagnostic or reader qualification.
+IR-721. The two `monitor_program_adverse` tests pass on the refreshed QSL main
+dependency after [QSL-1722](https://linear.app/agent-ix/issue/QSL-1722) was fixed.
+Executed evidence covers the genuine final PlanRoot production and unchanged
+entry-source reproduction; separately produced, selected-initializer-reachable
+modulo with genuine changed root/initializer keys and unchanged clause;
+original uncertainty diagnostic at value path `[14, 0]` with original structural
+key and Generated occurrence; no-selected and foreign occurrence controls;
+complete original modulo operation diagnostic at its root application locus
+and invalid-path control; and strict IR MalformedWire refusal at the actual
+initializer node pointer after removing its body, followed by healthy original
+readmission. These are producer, diagnostic-constructor and malformed-ingress
+checks only. The missing-body check does not qualify the complete missing-entry
+preparation control in the outstanding table.
+
+The earlier source-only review and failed-runtime receipts remain historical
+evidence of the resolved producer blocker; they supply no additional acceptance
+credit. No unavailable-boundary skip or replacement producer was used.
 
 The implementation invokes no preparation entry, independent target-comparison
 policy, runtime-support classifier or RT build. All construction rows remain
