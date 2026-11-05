@@ -145,7 +145,7 @@ fn fact(row: &EqualityFactWitnessRow) -> SelectedEqualityFactRow {
     }
 }
 
-#[trace("FR-357-AC-9")]
+#[trace("TC-098", "FR-357-AC-9")]
 #[test]
 fn real_plan_root_rows_join_selected_model_and_equality_facts() {
     // The producer's own domain document is read from Cargo's resolved QSL
@@ -220,10 +220,17 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         fields.iter().cloned(),
     )
     .expect("IR joins exact original producer identities");
-    let selected_field = fields
+    let mut matching_fields = fields
         .iter()
-        .find(|row| row.field_original_identity.ends_with("/versionNumber"))
+        .filter(|row| row.field_original_identity.ends_with("/versionNumber"));
+    let selected_field = matching_fields
+        .next()
         .expect("select the model's original numeric field");
+    assert!(matching_fields.next().is_none(), "the original field is unique");
+    let selected_declaration = declarations
+        .iter()
+        .find(|row| row.structural_node == selected_field.record_node)
+        .expect("the selected field retains its producer declaration");
     let selected_declarations = [selected_field.record_node.clone()];
     let selected_fields = [SelectedFactFieldId {
         record: selected_field.record_node.clone(),
@@ -264,7 +271,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             1_000_000,
         )
         .expect("representable explicit model facts join");
-    assert_eq!(selected.declarations.len(), 1);
+    assert_eq!(selected.declarations, [selected_declaration.clone()]);
     assert_eq!(selected.fields.len(), 1);
     assert_eq!(selected.fields[0].row, *selected_field);
     assert_eq!(selected.fields[0].name.as_ref(), "versionNumber");
