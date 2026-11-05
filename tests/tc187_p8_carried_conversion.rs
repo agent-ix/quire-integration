@@ -181,14 +181,21 @@ fn compare(
             if let Some(loss) = result.loss() {
                 losses.push(ValueLoss::Decimal(loss.clone()));
             }
-            Outcome::Completed(Value::Quantity(Quantity::new(
+            Outcome::Completed(Quantity::new(
                 result.value().normalized().to_rational(),
                 m.clone(),
-            )))
+            ))
         }
         Outcome::Refused(cause) => Outcome::Refused(cause.clone()),
         Outcome::Undefined(cause) => Outcome::Undefined(cause.clone()),
         Outcome::Incomplete(cause) => Outcome::Incomplete(cause.clone()),
+    };
+    let source = match source {
+        Outcome::Completed(Value::Quantity(quantity)) => Outcome::Completed(quantity),
+        Outcome::Completed(other) => panic!("original conversion returns Quantity: {other:?}"),
+        Outcome::Refused(cause) => Outcome::Refused(cause),
+        Outcome::Undefined(cause) => Outcome::Undefined(cause),
+        Outcome::Incomplete(cause) => Outcome::Incomplete(cause),
     };
     assert_eq!(
         source, lifted,
@@ -248,7 +255,7 @@ fn stop(outcome: &Outcome<Conversion>, point: ChargePoint, kind: LimitKind, cons
     assert_eq!(record.charge_point, point);
     assert_eq!(record.limit_kind, kind);
     assert_eq!(record.consumed, consumed);
-    assert_eq!(record.next_charge, Integer::from(1));
+    assert_eq!(record.next_charge, Integer::from(1_i64));
 }
 
 #[trace("TC-112", "QSpec-TC-187")]
