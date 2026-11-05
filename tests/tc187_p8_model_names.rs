@@ -147,7 +147,7 @@ fn emitted(body: &str, documents: &[Vec<u8>]) -> Value {
         evidence
             .insert_domain_package_document(
                 value["package"]["identity"].as_str().expect("identity"),
-                document,
+                document.as_slice(),
             )
             .expect("original document evidence");
     }
