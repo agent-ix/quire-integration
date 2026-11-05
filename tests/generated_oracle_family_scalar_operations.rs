@@ -275,7 +275,7 @@ fn observe() {
                     );
                     assert!(meter.admitted_charges().is_empty());
                     for kind in LimitKind::ALL {
-                        assert_eq!(meter.consumed(kind), &Integer::zero(), "{name}: {kind:?}");
+                        assert_eq!(meter.consumed(kind), 0, "{name}: {kind:?}");
                     }
                     assert!(evaluation.location.is_some());
                 }
