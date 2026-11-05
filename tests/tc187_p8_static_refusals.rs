@@ -262,7 +262,21 @@ fn all_ten_affine_arithmetic_cases_refuse_before_value_charges() {
             };
             let (text, package) = assemble(&format!("{LT}{TEMPERATURE}"), &expression, false);
             let point = declared(&package, &text, name);
-            assert_ne!(point.offset(), &Rational::from_integer(Integer::zero()));
+            let (scale_n, scale_d, offset_n, offset_d) = if name == "degC" {
+                (1_u64, 1_u64, 5463_u64, 20_u64)
+            } else {
+                (5, 9, 45967, 180)
+            };
+            assert_eq!(
+                point.scale(),
+                &Rational::new(Integer::from(scale_n), Integer::from(scale_d))
+                    .expect("nonzero scale denominator")
+            );
+            assert_eq!(
+                point.offset(),
+                &Rational::new(Integer::from(offset_n), Integer::from(offset_d))
+                    .expect("nonzero offset denominator")
+            );
             native(
                 &package,
                 point,
