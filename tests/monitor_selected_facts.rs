@@ -77,7 +77,7 @@ profile timed = "quire.temporal.timed/v1";
 profile complete = "quire.temporal.complete/v1";
 model Selected = "{identity}";
 model Facts = "agent-ix/selected-facts-model";
-function selected_count using v(value: Facts::Snapshot): Integer pure {{ value.count }}
+function selected_count using v(snapshot: Facts::Snapshot): Integer pure {{ snapshot.count }}
 dimension Time;
 unit second : Time = rational(1, 1);
 unit ms : Time = rational(1, 1000) * second;
