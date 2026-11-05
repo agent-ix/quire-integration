@@ -625,6 +625,26 @@ fn admitted_model_roots_set_the_reference_universe_and_distinct_owner_result() {
     ));
 }
 
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-025", "TC-026", "FR-008-AC-5")]
+fn admitted_membership_foreign_reference_names_retained_member_first() {
+    let (widget_root, widget_type) = admitted_model_type("Widget");
+    let (rock_root, _) = admitted_model_type("Rock");
+    let retained_universe = UniverseId::new(widget_root);
+    let candidate_universe = UniverseId::new(rock_root);
+    let retained = reference(retained_universe.clone(), widget_type.clone());
+    let candidate = reference(candidate_universe.clone(), widget_type);
+    let mut charged = Meter::new(LIMITS);
+    assert_eq!(
+        quire_exact::member_equal(&candidate, &retained, &mut charged),
+        Outcome::Refused(Refusal::ForeignReference {
+            required: retained_universe,
+            supplied: candidate_universe,
+        })
+    );
+    assert_eq!(admitted_points(&charged), [ChargePoint::EqualityPlanForm]);
+}
+
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-5.
 #[test]
 #[trace("IT-016-SC-05", "IT-016-SC-03", "TC-096", "TC-203", "FR-277-AC-5")]
