@@ -8,28 +8,45 @@ use quire_contract_codegen::{checked_function_key, CheckedFunctionSource};
 use quire_contract_model::{
     CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
 };
-use quire_exact::{Integer, LimitKind, Meter, ScalarLimits, Value};
 use quire_eval::{CallFailure, Evaluation, FamilyOutcome, FamilyResult};
+use quire_exact::{Integer, LimitKind, Meter, ScalarLimits, Value};
 use quire_semantic_value::object_closure::ObjectClosure;
 const SOURCE: &str = __AUTHORED_SOURCE__;
 
-fn assert_same_call(authority: &Result<Evaluation, CallFailure>, actual: &Result<Evaluation, CallFailure>) {
+fn assert_same_call(
+    authority: &Result<Evaluation, CallFailure>,
+    actual: &Result<Evaluation, CallFailure>,
+) {
     match (authority, actual) {
         (Err(expected), Err(actual)) => assert_eq!(expected, actual),
         (Ok(expected), Ok(actual)) => {
-            assert_eq!(expected.location, actual.location, "complete result location");
+            assert_eq!(
+                expected.location, actual.location,
+                "complete result location"
+            );
             assert_eq!(expected.losses, actual.losses, "ordered located losses");
             match (&expected.outcome, &actual.outcome) {
-                (FamilyOutcome::Evaluated(expected), FamilyOutcome::Evaluated(actual)) => assert_eq!(expected, actual),
-                (FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(expected)), FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(actual))) => {
+                (FamilyOutcome::Evaluated(expected), FamilyOutcome::Evaluated(actual)) => {
+                    assert_eq!(expected, actual)
+                }
+                (
+                    FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(expected)),
+                    FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(actual)),
+                ) => {
                     assert_eq!(expected.catalog_code(), actual.catalog_code());
-                    assert_eq!(expected.catalog_code().prefix(), actual.catalog_code().prefix());
+                    assert_eq!(
+                        expected.catalog_code().prefix(),
+                        actual.catalog_code().prefix()
+                    );
                     assert_eq!(expected.catalog_fields(), actual.catalog_fields());
-                },
-                (FamilyOutcome::FamilyEvaluated(FamilyResult::Undefined(expected)), FamilyOutcome::FamilyEvaluated(FamilyResult::Undefined(actual))) => {
+                }
+                (
+                    FamilyOutcome::FamilyEvaluated(FamilyResult::Undefined(expected)),
+                    FamilyOutcome::FamilyEvaluated(FamilyResult::Undefined(actual)),
+                ) => {
                     assert_eq!(expected.undefined_record(), actual.undefined_record());
                     assert_eq!(expected.catalog_prefix(), actual.catalog_prefix());
-                },
+                }
                 _ => panic!("different complete outcome variants: {expected:?} versus {actual:?}"),
             }
         }
