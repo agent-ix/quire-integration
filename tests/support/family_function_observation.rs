@@ -196,6 +196,9 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
     ) else {
         panic!("independent original bytes admit");
     };
+    let mut envelopes = 0;
+    let mut input_refusals = 0;
+    let mut owner_refusals = 0;
     let handle = acquisition.handle();
     let owner = LibraryName::new(package.name().to_owned()).unwrap();
     for (source_index, (name, expected)) in [("difference", 1_i64), ("product", 12), ("relay", 1)]
@@ -222,6 +225,7 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
             "valid changed source retains the original owner refusal: {refusal:?}"
         );
         zero(&rejected_meter);
+        owner_refusals += 1;
         for work in [1024, 0, 1] {
             let arguments = vec![
                 Value::Integer(Integer::from(4_i64)),
@@ -277,9 +281,17 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
                     generated_meter.consumed(kind)
                 );
             }
+            envelopes += 1;
             eprintln!("SC05 {name} work={work}: authority={authority:?}; generated={actual:?}; charges={:?}; counters={:?}",generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
         }
         for (arguments, required_refusal) in [
+            (
+                vec![
+                    Value::Integer(Integer::from(10_i64)),
+                    Value::Integer(Integer::from(3_i64)),
+                ],
+                InputRefusal::WrongValueKind { parameter: 0 },
+            ),
             (
                 vec![Value::Integer(Integer::one())],
                 InputRefusal::Arity {
@@ -324,6 +336,7 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
             assert_eq!(actual, expected);
             zero(&authority_meter);
             zero(&meter);
+            input_refusals += 1;
         }
     }
     println!(

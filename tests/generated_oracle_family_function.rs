@@ -218,6 +218,6 @@ fn subtraction_multiplication_and_nested_call_match_fresh_qsl_sessions() {
     }
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
-        ["SC05 function rows: 9 envelopes, 9 input refusals, 3 owner refusals"]
+        ["SC05 function rows: 9 envelopes, 12 input refusals, 3 owner refusals"]
     );
 }
