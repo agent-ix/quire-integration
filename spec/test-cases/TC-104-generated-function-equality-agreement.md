@@ -131,8 +131,8 @@ Planned under IR-842 pending a genuine supported original-source operand route.
 | FR-018 NotEqual / closed Boolean literals | Passed | Four truth pairs and three operation allowances |
 | FR-018 Equal / closed Integer literals | Passed (nonexecuted) | Three genuine emitted inline-literal cells retain OperandTypeMismatch; healthy Boolean siblings |
 | FR-018 NotEqual / closed Integer literals | Passed (nonexecuted) | Three genuine emitted inline-literal cells retain OperandTypeMismatch; healthy Boolean siblings |
-| FR-018 parameterized Integer operations | Planned | IR-842: original-source local bindings are unavailable to public evaluate_closed; QSL-1736 tracks the bound operation observation need |
-| FR-018 constructed nominal/collection operations | Planned | IR-842: genuine constructors add child charges; need fresh bound-expression evaluation or per-operation full outcome/loss/charge/counter observation, without subtraction |
+| FR-018 parameterized Integer operations | Planned | IR-842: original function-body local bindings are unavailable to public evaluate_closed; QSL-1736 tracks that function-stage need. Original protocol-slot frames have a separate public entry, exercised by TC-105 |
+| FR-018 constructed nominal/collection operations | Planned | IR-842: direct closed function-body constructors add child charges; remaining rows need their own matching original protocol-stage or other public operation cohort. TC-105 establishes one genuine tuple protocol-slot route without subtraction |
 | FR-018 options, recursive leaves, conversion-target combinations and remaining refusal boundaries | Planned | IR-842: each original-source admission, generator descriptor and complete public operation observation remains to be authored; no blanket constructor claim applies to contextual absent literals |
 | FR-021 deeper nominal shapes, union payloads and remaining per-form boundaries | Planned | IR-842: author additional actual source declarations/constructors, derive admitted nominal inputs and execute their public whole-call cohorts; no missing QSL operation ledger blocks these sessions |
 

@@ -1,6 +1,6 @@
 ---
 id: TC-105
-title: "Probe original protocol-slot equality as public operation authority"
+title: "Execute original protocol-slot equality as public operation authority"
 type: TC
 relationships:
   - target: ix://agent-ix/quire-integration/IT-019
@@ -8,7 +8,7 @@ relationships:
   - target: ix://agent-ix/quire-contract-codegen/FR-018
     type: references
 ---
-# TC-105: Probe original protocol-slot equality as public operation authority
+# TC-105: Execute original protocol-slot equality as public operation authority
 
 ## Description
 
@@ -20,14 +20,23 @@ checked slot body and its binder frame on a fresh operation meter.
 
 1. Author an ordinary complete-profile Boolean tuple and a finite-global protocol
    whose finish binder has that tuple type and whose original body compares that
-   binder with itself. Check and emit the original source without reconstructed
+   binder with itself, separately with Equal and NotEqual. Supply an ordinary
+   model-backed role from a lock-selected owner model document without copying
+   that document into integration. Check and emit the original source without reconstructed
    CheckedBody, expression, owner key or TypeEnvironment.
 2. Select the original finish slot and actual emitted equality occurrence. Derive
    operand descriptors from genuine referenced nodes. Strictly admit original IR,
    lower the actual occurrence and authenticate its contract, then invoke public
    composite equality generation.
-3. If admission and generation succeed, obtain actual nominal Values from source
-   constructors outside the compared meters. Invoke the original checked slot
+3. Independently check the same original source for authority. Obtain actual
+   host nominal Values from its original source constructor outside compared
+   meters. In the native caller use public checked-closure nominal declaration
+   metadata, the genuine constructor signature and original wire-graph key lookup
+   with the public tuple constructor. Do not assemble a TypeEnvironment or
+   invent a declaration key. Derive the frame's outcome index and declared type
+   from original CheckedSlots binders and slot_names. Confirm the unbound model
+   input has no readers. Require the emitted protocol-location correspondence
+   to retain the original checked slot's root location and actual application. Invoke the original checked slot
    with its actual binder frame and the returned native oracle with identical
    fresh limits. Compare full typed outcome, losses, ordered charges and every
    counter at work 0, 1 and generous allowance; require independent Boolean and
@@ -40,6 +49,19 @@ checked slot body and its binder frame on a fresh operation meter.
 
 ## Expected Results
 
-Pending measurement. Successful execution qualifies only the exact original
-protocol-slot/source/descriptor cohort. A refusal supplies a concrete missing
-route under IR-842 and no native agreement credit. Full SC-05 remains Planned.
+`generated_oracle_family_protocol_equality::original_protocol_finish_equality_retains_its_source_occurrence`
+passes six actual FR-018 native operation comparisons: Equal and NotEqual of
+one original Boolean Pair finish binder with itself, at work 0, 1 and 1024.
+Independent required answers are true and false. At work 0 and 1 the exact
+WorkUnits stop consumes zero and requires EqualityPlanForm charge 6; every
+counter and admitted charge is zero and the authority retains its original
+finish-body location. Successful outcomes have no location or loss. Full typed
+outcomes, losses, ordered charges and all counters match the generated oracle.
+
+This establishes a public original protocol-stage frame route for this nominal
+operation without a FunctionCall envelope or charge subtraction. It does not
+establish general original function-body binding support. Record, union,
+distinct tuple values, recursive leaves, conversions and other original stage
+cohorts remain Planned under IR-842 pending their authored complete observations;
+there is no blanket owner API blocker inferred from these unimplemented rows.
+Full SC-05 remains Planned.
