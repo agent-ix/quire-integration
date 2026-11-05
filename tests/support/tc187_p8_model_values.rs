@@ -56,7 +56,10 @@ pub fn source(body: &str, clock: bool) -> String {
     } else {
         ""
     };
-    format!("{HEADER} {g}\n{body}")
+    let (selections, declarations) = HEADER
+        .split_once(" dimension Time;")
+        .expect("original selection boundary");
+    format!("{selections} {g} dimension Time;{declarations}\n{body}")
 }
 
 pub fn assemble(
