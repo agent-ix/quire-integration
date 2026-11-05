@@ -194,7 +194,7 @@ fn wrong_occurrence_refuses_without_changing_the_healthy_native_call() {
         &contract,
         &positions,
         &[0],
-        &[declaration.clone()],
+        std::slice::from_ref(&declaration),
         &[1, 2],
         &[wrong_occurrence, healthy.clone()],
     )
@@ -226,7 +226,7 @@ fn wrong_occurrence_refuses_without_changing_the_healthy_native_call() {
         &contract,
         &positions,
         &[0],
-        &[declaration.clone()],
+        std::slice::from_ref(&declaration),
         &[2],
         &[healthy],
     )
@@ -255,7 +255,7 @@ fn wrong_occurrence_refuses_without_changing_the_healthy_native_call() {
         &contract,
         &wrong_positions,
         &[0],
-        &[declaration.clone()],
+        std::slice::from_ref(&declaration),
         &[1],
         &[ExactFunctionItem {
             call_node_id: call_b.clone(),
