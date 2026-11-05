@@ -983,6 +983,12 @@ fn admitted_scalar_equality_conversion_rows_preserve_exact_values() {
         ),
         (
             ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Int(interval(0, 5)),
+            two_rational.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
             ValueType::Decimal(decimal_type(30, 1, 1)),
             two_rational.clone(),
             two_decimal.clone(),
@@ -1002,6 +1008,12 @@ fn admitted_scalar_equality_conversion_rows_preserve_exact_values() {
         (
             ValueType::Decimal(decimal_type(3, 0, 0)),
             ValueType::Integer,
+            ExactValue::Decimal(Decimal::new(integer(2), 0)),
+            two.clone(),
+        ),
+        (
+            ValueType::Decimal(decimal_type(3, 0, 0)),
+            ValueType::Int(interval(0, 5)),
             ExactValue::Decimal(Decimal::new(integer(2), 0)),
             two,
         ),
