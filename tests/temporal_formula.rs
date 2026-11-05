@@ -642,7 +642,10 @@ fn bounded_profiles_refuse_missing_intervals_before_any_checked_package_exists()
         let [refusal] = refusals.as_slice() else {
             panic!("exactly one native missing-interval refusal: {refusals:?}")
         };
-        let CheckCause::Temporal(TemporalCause::MissingInterval { span }) = &refusal.cause else {
+        let CheckCause::Temporal(cause) = &refusal.cause else {
+            panic!("original typed native temporal refusal: {refusal:?}")
+        };
+        let TemporalCause::MissingInterval { span } = cause.as_ref() else {
             panic!("original typed native MissingInterval refusal: {refusal:?}")
         };
         assert_eq!(span.end - span.start, "eventually".len());
