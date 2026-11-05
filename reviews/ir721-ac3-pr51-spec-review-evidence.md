@@ -127,3 +127,15 @@ scope:
   excerpt: Existing unchanged Cargo metadata helper locates QSL model document by
     locked dependency context.
 ```
+
+## Resumed evidence review
+
+Resumed evidence review at frozen 83660638e33050e74a6069ceebf5729020f1c7a4: PASS for the qualified producer/diagnostic/malformed-ingress slice; no open source findings and no new findings. User-relayed QSL-1722/QSL-2367 merged notice authorized the ordinary main refresh. Cargo.lock now resolves the QSL cohort coherently at 14427bd3; both test source files are unchanged from the source-reviewed tree. The actual qsl1722-resumed-test.log records 2 passed, 0 failed/ignored/filtered in 11.59 seconds after compilation. No unavailable-boundary skip or replacement producer occurred.
+
+Executed assertions cover genuine final PlanRoot and exact unmodified entry-source reproduction; reachable changed initializer modulo with fresh original root/init keys and unchanged clause; exact original uncertainty [14,0], structural key, Generated0/None/nonmember occurrence behavior; complete original modulo UnsupportedOperation diagnostic at root path [], source kind/key/occurrence and invalid path; exact missing-body MalformedWire/no-cause/no-admitted-locus/actual-node-pointer refusal followed by healthy original readmission. The previously source-grounded decode oracle is now observed through actual strict IR admission. The earlier blocked history remains unchanged above and supplies no extra credit.
+
+## Latest verdict
+
+PASS for the qualified slice; no open or new review findings.
+
+TC100 now reports precisely those observations and explicitly preserves the complete missing-entry preparation control and every outstanding construction row as Planned. No real prepare_monitor, independent target comparison, support-policy decision, runtime Program/build or full FR276 criterion has executed. This is qualified-slice review PASS, not full construction acceptance or permission to merge before the lead completes the final scoped gate. Reviewer performed no Cargo/tests/gates/global census rerun or branch edit.
