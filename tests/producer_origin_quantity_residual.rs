@@ -11,14 +11,21 @@ use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
 use quire_contract_ir::{CheckedNodeId, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm};
 use quire_exact::{
-    ChargePoint, IllTyped, IllTypedCause, Integer, IntegerInterval, LimitKind, Meter, NodeKey,
-    Outcome, Quantity, Rational, RoundingMode, ScalarLimits, UnitId,
+    ChargePoint, CheckedInvariantCause, Decimal, DecimalType, IllTyped, IllTypedCause, Integer,
+    IntegerInterval, LimitKind, Meter, NodeKey, Outcome, Quantity, Rational, RationalDomain,
+    Refusal, RoundingMode, ScalarLimits, UnitId, Value as ExactValue, ValueType,
 };
 use quire_semantic_value::{
+    declaration::{
+        admits_equality_conversion, operand_value, EqualityOperand, EqualityOperator,
+        TypeEnvironment,
+    },
+    enumeration::EnumMemberIndex,
     quantity::{
         convert_quantity, evaluate_quantity, ConvertedValue, HandoffRefusal, QuantityOperation,
         QuantityRefusal, QuantityTarget, QuantityUnit, UnitScope, UnitTable,
     },
+    stop::Stop,
     unit::{DimensionNode, NominalDeclaration, UnitGraph, UnitNode},
 };
 use serde_json::Value;
@@ -749,4 +756,305 @@ fn admitted_conversion_denials_preserve_charge_point_prefix_and_amounts() {
         assert_eq!(record.next_charge, integer(next));
         assert_eq!(record.charge_point, point);
     }
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_quantity_equality_converts_left_operand_before_comparison() {
+    let units = UnitTable::declared(&graph());
+    let metre = UnitId::declared(named_key("m"));
+    let centimetre = UnitId::declared(named_key("cm"));
+    let types = TypeEnvironment::default().with_units(units);
+    let checked = types
+        .check_equality(
+            EqualityOperator::Equal,
+            EqualityOperand::converted(
+                ValueType::Quantity(metre.clone()),
+                ValueType::Quantity(centimetre.clone()),
+            ),
+            EqualityOperand::typed(ValueType::Quantity(centimetre.clone())),
+            &EnumMemberIndex::default(),
+        )
+        .expect("admitted metre converts to centimetre for equality");
+    let left = ExactValue::Quantity(Quantity::new(rational(1, 1), metre));
+    let equal = ExactValue::Quantity(Quantity::new(rational(100, 1), centimetre.clone()));
+    let unequal = ExactValue::Quantity(Quantity::new(rational(99, 1), centimetre));
+    for (right, expected) in [(&equal, true), (&unequal, false)] {
+        let mut charged = meter();
+        assert_eq!(
+            checked.evaluate(&types, &left, right, &mut charged),
+            Outcome::Completed(expected)
+        );
+        let points: Vec<_> = charged
+            .admitted_charges()
+            .iter()
+            .map(|charge| charge.point)
+            .collect();
+        assert_eq!(points.first(), Some(&ChargePoint::UnitIdentityRead));
+        assert_eq!(points.last(), Some(&ChargePoint::UnitResultRetain));
+        assert_eq!(
+            points
+                .iter()
+                .filter(|point| **point == ChargePoint::UnitResultRetain)
+                .count(),
+            2
+        );
+        let conversion_end = points
+            .iter()
+            .position(|point| *point == ChargePoint::UnitResultRetain)
+            .expect("left operand conversion retains its result");
+        let comparison_start = points
+            .iter()
+            .enumerate()
+            .find_map(|(index, point)| {
+                (index > 0 && *point == ChargePoint::UnitIdentityRead).then_some(index)
+            })
+            .expect("converted quantities are compared");
+        assert!(conversion_end < comparison_start, "{points:?}");
+    }
+    assert_eq!(
+        types
+            .check_equality(
+                EqualityOperator::Equal,
+                EqualityOperand::typed(ValueType::Quantity(UnitId::declared(named_key("m")))),
+                EqualityOperand::typed(ValueType::Quantity(UnitId::declared(named_key("cm")))),
+                &EnumMemberIndex::default(),
+            )
+            .unwrap_err()
+            .cause,
+        IllTypedCause::DistinctUnits
+    );
+    assert_eq!(
+        types
+            .check_equality(
+                EqualityOperator::Equal,
+                EqualityOperand::typed(ValueType::Quantity(UnitId::declared(named_key("m")))),
+                EqualityOperand::typed(ValueType::Quantity(UnitId::declared(named_key("s")))),
+                &EnumMemberIndex::default(),
+            )
+            .unwrap_err()
+            .cause,
+        IllTypedCause::IncompatibleDimensions
+    );
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_equality_operand_failures_keep_distinct_typed_causes() {
+    let units = UnitTable::declared(&graph());
+    let scope = UnitScope::new(&units);
+    let types = TypeEnvironment::default().with_units(units.clone());
+    let failure = |operand: EqualityOperand, value: ExactValue, units: &UnitScope<'_>| {
+        let mut charged = meter();
+        let result = operand_value(&types, &operand, &value, units, &mut charged);
+        assert_eq!(charged.admission_count(), 0);
+        result
+    };
+    let refusal = |result, cause| {
+        assert!(matches!(
+            result,
+            Err(Stop::Refused(Refusal::CheckedInvariant { cause: actual })) if actual == cause
+        ));
+    };
+    refusal(
+        failure(
+            EqualityOperand::converted(ValueType::Boolean, ValueType::Integer),
+            ExactValue::Boolean(true),
+            &scope,
+        ),
+        CheckedInvariantCause::EqualityConversionShapeMismatch,
+    );
+    refusal(
+        failure(
+            EqualityOperand::converted(
+                ValueType::Integer,
+                ValueType::Int(IntegerInterval::spanning(integer(0), integer(0))),
+            ),
+            ExactValue::Integer(integer(1)),
+            &scope,
+        ),
+        CheckedInvariantCause::EqualityOperandTargetNotAdmitted,
+    );
+    let decimal_type = ValueType::Decimal(
+        DecimalType::new(integer(0), integer(10), 1, 1, RoundingMode::Exact)
+            .expect("admitted decimal bounds"),
+    );
+    refusal(
+        failure(
+            EqualityOperand::converted(decimal_type, ValueType::Integer),
+            ExactValue::Decimal(Decimal::new(integer(5), 1)),
+            &scope,
+        ),
+        CheckedInvariantCause::EqualityOperandNonIntegralDecimal,
+    );
+    let metre = UnitId::declared(named_key("m"));
+    let second = UnitId::declared(named_key("s"));
+    let one_metre = ExactValue::Quantity(Quantity::new(rational(1, 1), metre.clone()));
+    let missing = UnitTable::default();
+    refusal(
+        failure(
+            EqualityOperand::converted(
+                ValueType::Quantity(metre.clone()),
+                ValueType::Quantity(second.clone()),
+            ),
+            one_metre.clone(),
+            &UnitScope::new(&missing),
+        ),
+        CheckedInvariantCause::EqualityUnitUnresolved,
+    );
+    refusal(
+        failure(
+            EqualityOperand::converted(ValueType::Quantity(metre), ValueType::Quantity(second)),
+            one_metre,
+            &scope,
+        ),
+        CheckedInvariantCause::EqualityQuantityConversionRejected {
+            cause: IllTypedCause::IncompatibleDimensions,
+        },
+    );
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_scalar_equality_conversion_rows_preserve_exact_values() {
+    let units = UnitTable::declared(&graph());
+    let scope = UnitScope::new(&units);
+    let types = TypeEnvironment::default();
+    let interval = |lower, upper| IntegerInterval::spanning(integer(lower), integer(upper));
+    let rational_domain = |upper, denominator_upper| {
+        RationalDomain::new(interval(0, upper), interval(1, denominator_upper))
+            .expect("positive denominator bounds")
+    };
+    let decimal_type = |upper, min_scale, max_scale| {
+        DecimalType::new(
+            integer(0),
+            integer(upper),
+            min_scale,
+            max_scale,
+            RoundingMode::Exact,
+        )
+        .expect("admitted decimal bounds")
+    };
+    let two = ExactValue::Integer(integer(2));
+    let two_rational = ExactValue::Rational(rational(2, 1));
+    let two_decimal = ExactValue::Decimal(Decimal::new(integer(20), 1));
+    let cases = [
+        (
+            ValueType::Boolean,
+            ValueType::Boolean,
+            ExactValue::Boolean(true),
+            ExactValue::Boolean(true),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Integer,
+            two.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Int(interval(0, 5)),
+            two.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Rational(rational_domain(5, 2)),
+            two.clone(),
+            two_rational.clone(),
+        ),
+        (
+            ValueType::Int(interval(0, 3)),
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            two.clone(),
+            two_decimal.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Rational(rational_domain(5, 2)),
+            two_rational.clone(),
+            two_rational.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Integer,
+            two_rational.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Int(interval(0, 5)),
+            two_rational.clone(),
+            two.clone(),
+        ),
+        (
+            ValueType::Rational(rational_domain(3, 1)),
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            two_rational.clone(),
+            two_decimal.clone(),
+        ),
+        (
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            ValueType::Rational(rational_domain(30, 10)),
+            two_decimal.clone(),
+            two_rational.clone(),
+        ),
+        (
+            ValueType::Decimal(decimal_type(30, 1, 1)),
+            ValueType::Decimal(decimal_type(300, 1, 2)),
+            two_decimal.clone(),
+            ExactValue::Decimal(Decimal::new(integer(200), 2)),
+        ),
+        (
+            ValueType::Decimal(decimal_type(3, 0, 0)),
+            ValueType::Integer,
+            ExactValue::Decimal(Decimal::new(integer(2), 0)),
+            two.clone(),
+        ),
+        (
+            ValueType::Decimal(decimal_type(3, 0, 0)),
+            ValueType::Int(interval(0, 5)),
+            ExactValue::Decimal(Decimal::new(integer(2), 0)),
+            two,
+        ),
+    ];
+    for (source, target, input, expected) in cases {
+        assert!(
+            admits_equality_conversion(&source, &target, &scope),
+            "{source:?} -> {target:?}"
+        );
+        let converted = operand_value(
+            &types,
+            &EqualityOperand::converted(source.clone(), target.clone()),
+            &input,
+            &scope,
+            &mut meter(),
+        )
+        .unwrap_or_else(|error| panic!("{source:?} -> {target:?}: {error:?}"));
+        match (converted, expected) {
+            (ExactValue::Boolean(actual), ExactValue::Boolean(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (ExactValue::Integer(actual), ExactValue::Integer(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (ExactValue::Rational(actual), ExactValue::Rational(expected)) => {
+                assert_eq!(actual, expected)
+            }
+            (ExactValue::Decimal(actual), ExactValue::Decimal(expected)) => {
+                assert_eq!(actual.representation(), expected.representation())
+            }
+            (actual, expected) => panic!("{source:?} -> {target:?}: {actual:?} != {expected:?}"),
+        }
+    }
+    assert!(!admits_equality_conversion(
+        &ValueType::Int(interval(0, 3)),
+        &ValueType::Boolean,
+        &scope,
+    ));
+    assert!(!admits_equality_conversion(
+        &ValueType::Decimal(decimal_type(30, 1, 1)),
+        &ValueType::Integer,
+        &scope,
+    ));
 }

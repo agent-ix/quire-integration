@@ -86,6 +86,14 @@ the admitted package as the common identity source.
    distinct-owner result and refusal observations, while composites with
    different declarations compare unequal and enums compare by variant.
    RT's separate FR-277-AC-8 source inspection remains in RT.
+
+   The oversized `Identity` refusal and equal-byte declared/compound `UnitId`
+   identity routes remain Planned under IR-1339 / QSL-1720. The selected QSL
+   producer has no admitted source route for either case. An integration test
+   may exercise a case only after QSL merges an admitted source route for it.
+   If QSL rules a case non-admissible, the integration and RT rows remain
+   Planned and cite that source-level disposition. Synthetic identities do
+   not satisfy this scenario.
 4. Apply admitted functions and expressions through the seven moved TC-194
    identity-dependent cases in `exact_function_application.rs`.
    IT-016-SC-04: FR-273-AC-2/3/5/8 retain arity and argument-validation
