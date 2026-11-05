@@ -35,8 +35,12 @@ closure and `TlFormulaLimits`. Its successful value retains the original classif
 actual owner formula and canonical bytes, and ordered original checked predicate
 handles associated with their TL proposition occurrences. Static Boolean admission
 is not runtime totality. Unsupported classifications retain every owner dimension.
-Unbounded intervals require an explicit typed premise stop; they never masquerade as
-an Unsupported owner classification. Bounded endpoints outside the owner's u32 range
+For event-position and fixed-sample false-extension source, QSL requires a closed
+interval: `eventually holds(true)` returns native `TemporalCause::MissingInterval`
+before any checked package, subject, classification or component exists. Infinite-trace
+unbounded source can reach a checked subject but retains its genuine owner Unsupported
+classification without a formula. No Supported-unbounded premise API is promised by
+this component. Bounded endpoints outside the owner's u32 range
 return a typed representability refusal.
 
 ## Test Procedure

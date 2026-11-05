@@ -54,8 +54,6 @@ pub enum TlFormulaCode {
     Binding,
     /// The owner classification is unsupported.
     Unsupported,
-    /// An unbounded interval requires a later projection premise.
-    UnboundedInterval,
     /// A checked graph member has no bounded owner representation.
     Representation,
     /// Static predicate admission refused.
@@ -76,7 +74,6 @@ impl TlFormulaCode {
         match self {
             Self::Binding => "tl-formula-binding",
             Self::Unsupported => "tl-formula-unsupported",
-            Self::UnboundedInterval => "tl-formula-unbounded-interval",
             Self::Representation => "tl-formula-representation",
             Self::Predicate => "tl-formula-predicate",
             Self::LimitReached => "tl-formula-limit-reached",
@@ -90,7 +87,6 @@ impl TlFormulaCode {
         &[
             Self::Binding,
             Self::Unsupported,
-            Self::UnboundedInterval,
             Self::Representation,
             Self::Predicate,
             Self::LimitReached,
@@ -117,14 +113,6 @@ pub enum TlFormulaError {
     /// Exact original unsupported classification.
     #[error("the owner classification has unsupported dimensions")]
     Unsupported(Box<Classification>),
-    /// Original checked interval requiring end/history premises.
-    #[error("an unbounded interval requires projection premises")]
-    UnboundedInterval {
-        /// Original formula occurrence handle.
-        node: CheckedNodeId,
-        /// Original owner interval.
-        interval: Box<Option<CheckedOperationInterval>>,
-    },
     /// Original checked node cannot be represented by the TL owner.
     #[error("checked node cannot be represented by the bounded TL owner")]
     Representation(CheckedNodeId),
@@ -158,7 +146,6 @@ impl TlFormulaError {
         match self {
             Self::Binding(_) => TlFormulaCode::Binding,
             Self::Unsupported(_) => TlFormulaCode::Unsupported,
-            Self::UnboundedInterval { .. } => TlFormulaCode::UnboundedInterval,
             Self::Representation(_) => TlFormulaCode::Representation,
             Self::Predicate(_) => TlFormulaCode::Predicate,
             Self::LimitReached { .. } => TlFormulaCode::LimitReached,
@@ -383,12 +370,7 @@ fn node_kind(used: &FormulaNodeUse<'_>, operands: &[NodeId]) -> Result<NodeKind,
             let upper = u32::try_from(upper).map_err(|_| invalid())?;
             Interval::new(lower, upper).map_err(|_| invalid())
         }
-        None | Some(CheckedOperationInterval::Integer { upper: None, .. }) => {
-            Err(TlFormulaError::UnboundedInterval {
-                node: used.node.clone(),
-                interval: Box::new(used.interval.clone()),
-            })
-        }
+        None | Some(CheckedOperationInterval::Integer { upper: None, .. }) => Err(invalid()),
         Some(CheckedOperationInterval::Timed { .. }) => Err(invalid()),
     };
     Ok(match used.kind().ok_or_else(invalid)? {

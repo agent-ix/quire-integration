@@ -6,7 +6,7 @@ mod support;
 use ix_trace_rs::trace;
 use qsl_package::checked_views::{mapping_support, temporal_subject, Closure, Support, Unmatched};
 use qsl_semantics::{
-    check::PackageDeclarations,
+    check::{CheckCause, CheckRefusal, CheckedGraph, PackageDeclarations, TemporalCause},
     model::{
         accounting::ModelNormalizationLimits,
         intake::{admit_unit, package_input},
@@ -27,11 +27,12 @@ use tl_syntax::{
     SemanticProfile, SyntaxArtifactLimits,
 };
 
-/// Emit once and admit twice: the packages have equal contents and distinct owners.
-fn packages(formula: &str, profile: &str) -> (CheckedPackageV2, CheckedPackageV2, CheckedNodeId) {
-    let document =
-        std::fs::read(support::qsl_root().join("tests/fixtures/spine-model.semantic-ir.json"))
-            .expect("the selected QSL owner fixture exists");
+/// Parse and check original source without bypassing native temporal admission.
+fn checked_formula(
+    formula: &str,
+    profile: &str,
+    document: &[u8],
+) -> Result<CheckedGraph, Vec<CheckRefusal>> {
     let source = format!(
         r#"language "ix:native" edition "1-draft";
 profile v = "quire.model.complete/v1";
@@ -54,11 +55,11 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
     let unit = qsl_forms::build_unit(&parsed).expect("the temporal unit forms");
     let models = admit_unit(
         &unit.selections().models,
-        &package_input([document.as_slice()]).expect("the domain document reads"),
+        &package_input([document]).expect("the domain document reads"),
         ModelNormalizationLimits::default(),
     )
     .expect("the selected model admits");
-    let graph = PackageDeclarations::assemble(
+    PackageDeclarations::assemble(
         raw,
         "agent-ix/temporal-binding".to_owned(),
         unit,
@@ -67,7 +68,14 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
     )
     .expect("the package assembles")
     .check(CheckingLimits::default())
-    .expect("the temporal package checks");
+}
+
+/// Emit once and admit twice: the packages have equal contents and distinct owners.
+fn packages(formula: &str, profile: &str) -> (CheckedPackageV2, CheckedPackageV2, CheckedNodeId) {
+    let document =
+        std::fs::read(support::qsl_root().join("tests/fixtures/spine-model.semantic-ir.json"))
+            .expect("the selected QSL owner fixture exists");
+    let graph = checked_formula(formula, profile, &document).expect("the temporal package checks");
     let selections: Vec<_> = graph
         .temporal_clauses()
         .iter()
@@ -620,4 +628,23 @@ fn bounded_endpoint_conversion_is_exact_and_out_of_owner_range_refuses() {
         panic!("typed representation refusal")
     };
     assert_eq!(&node, subject.formula_graph()[0].node);
+}
+
+#[trace("IT-020-SC-02", "IT-020-SC-04")]
+#[test]
+fn bounded_profiles_refuse_missing_intervals_before_any_checked_package_exists() {
+    let document =
+        std::fs::read(support::qsl_root().join("tests/fixtures/spine-model.semantic-ir.json"))
+            .expect("selected owner model fixture");
+    for profile in [EVENT, SAMPLE] {
+        let refusals = checked_formula("eventually holds(true)", profile, &document)
+            .expect_err("bounded profiles require an explicit closed interval");
+        let [refusal] = refusals.as_slice() else {
+            panic!("exactly one native missing-interval refusal: {refusals:?}")
+        };
+        let CheckCause::Temporal(TemporalCause::MissingInterval { span }) = &refusal.cause else {
+            panic!("original typed native MissingInterval refusal: {refusal:?}")
+        };
+        assert_eq!(span.end - span.start, "eventually".len());
+    }
 }

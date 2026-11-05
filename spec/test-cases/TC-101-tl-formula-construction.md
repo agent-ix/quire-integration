@@ -18,7 +18,8 @@ owner admission. No copied producer output or replacement wire schema is used.
 Run the temporal formula integration target. Check exact nodes and operand order,
 repeated checked leaf occurrences, both future closures, all bounded past rows under
 both false-extension profiles, unchanged unsupported dimensions, binding failures,
-retained premises, and exact/one-over node, component-work and encoded-byte settings.
+retained premises, native MissingInterval refusals for unbounded source under both
+false-extension profiles, genuine infinite-trace Unsupported, and exact/one-over node, component-work and encoded-byte settings.
 
 ## Expected Results
 
