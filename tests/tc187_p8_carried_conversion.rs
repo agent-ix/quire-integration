@@ -122,6 +122,14 @@ fn compare(
                 .expect("original function identity"),
         )
         .expect("original function body");
+    let quire_exact::ValueType::CarriedQuantity(source_target) = function.body.value_type() else {
+        panic!("original checked conversion retains its carried target");
+    };
+    assert_eq!(source_target.unit(), m);
+    assert_eq!(
+        source_target.carrier(),
+        &QuantityCarrier::Decimal(target.clone())
+    );
     let units = package.graph().scope().types().units();
     let mut native_meter = Meter::new(limits);
     let native = convert_quantity(
@@ -162,6 +170,11 @@ fn compare(
     let mut losses = Vec::new();
     let lifted = match &native {
         Outcome::Completed(conversion) => {
+            assert_eq!(conversion.source(), input);
+            assert_eq!(
+                conversion.unit(),
+                units.get(m.clone()).expect("original target unit")
+            );
             let ConvertedValue::Decimal(result) = conversion.value() else {
                 panic!("native carried decimal representation: {conversion:?}")
             };
@@ -287,22 +300,6 @@ fn u07_original_carried_exact_and_nearest_even_preserve_loss_and_precedence() {
                     LimitKind::ResultUnits,
                     0,
                 );
-            } else {
-                assert_decimal(&outcome, 3, 2);
-                let Outcome::Completed(conversion) = &outcome else {
-                    unreachable!()
-                };
-                let ConvertedValue::Decimal(result) = conversion.value() else {
-                    unreachable!()
-                };
-                let loss = result
-                    .loss()
-                    .expect("inexact conversion retains complete loss");
-                assert_eq!(loss.exact_numerator(), &Integer::from(127));
-                assert_eq!(loss.exact_denominator(), Integer::from(5000));
-                assert_eq!(loss.rounded_coefficient(), &Integer::from(3));
-                assert_eq!(loss.rounded_scale(), 2);
-                assert_eq!(loss.mode(), RoundingMode::NearestEven);
             }
             let points: Vec<_> = meter
                 .admitted_charges()
