@@ -9,9 +9,9 @@ use quire_exact::{UnitId, ValueType};
 use quire_semantic_value::checking::CheckingLimits;
 use quire_specification::{vectors_of, TestCase};
 
-const TIME_UNITS: &str = "dimension Time;\n\
-    unit s : Time = rational(1, 1);\n\
-    unit ms : Time = rational(1, 1000) * s;\n";
+const TIME_UNITS: &str = "dimension T;\n\
+    unit s : T = rational(1, 1);\n\
+    unit ms : T = rational(1, 1000) * s;\n";
 
 fn public_cell(id: &str, inputs: &str, expected: &str) {
     let matches: Vec<_> = vectors_of(TestCase::Tc187)
@@ -150,7 +150,7 @@ fn public_u30_quantity_parameter_uses_ms_and_refuses_other_units_or_names() {
         "3 s",
     );
     assert_assembly_missing(
-        "record T { x: Boolean; }\nfunction f using v(d: Quantity<T>): Boolean pure { true }",
+        "function f using v(d: Quantity<T>): Boolean pure { true }",
         "T",
     );
     assert_assembly_missing(
