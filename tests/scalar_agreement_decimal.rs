@@ -382,7 +382,7 @@ fn assert_decimal_agreement(
     assert_scalar_meter_agreement(qsl_meter, kernel_meter);
 }
 
-#[trace("TC-185", "FR-140", "IT-017-SC-02", "IT-017-SC-03")]
+#[trace("TC-185", "FR-140", "IT-017-SC-02", "IT-017-SC-03", "IT-017-SC-04")]
 #[test]
 fn tc185_decimal_vectors() {
     let mut seen = std::collections::BTreeSet::new();
