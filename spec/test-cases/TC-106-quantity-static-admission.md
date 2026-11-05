@@ -1,6 +1,6 @@
 ---
 id: TC-106
-title: "Refuse original quantity operations before runtime admission"
+title: "Qualify original quantity arithmetic and static admission"
 type: TC
 relationships:
   - target: ix://agent-ix/quire-integration/IT-019
@@ -8,11 +8,11 @@ relationships:
   - target: ix://agent-ix/quire-specification/TC-187
     type: references
 ---
-# TC-106: Refuse original quantity operations before runtime admission
+# TC-106: Qualify original quantity arithmetic and static admission
 
 ## Description
 
-Exercise the five U14 operations from the public TC-187 vector through original
+Exercise U12 arithmetic, U19/U24 same-unit addition and the five U14 operations from the public TC-187 vector through original
 QSL source admission. Borrow the public input and expected cells; author original
 source and unit declarations. This is admission evidence, with no generated
 execution or cross-stage value agreement claim.
@@ -39,6 +39,22 @@ execution or cross-stage value agreement claim.
    consumption in all ten counters. These owner operation controls are separate
    from source admission and do not establish generated agreement.
 
+6. Borrow the U12, U19 and U24 public vector cells without copying their prose.
+   Independently require four U12 magnitudes (6, 3, 4, 1), genuine compound unit
+   terms and dimensions, including the empty dimensionless map. Require U19's
+   magnitude 5 and U24's magnitude 3 in their original metre/centimetre units.
+   Use public owner compound-unit construction on admitted root identities.
+7. Check original direct closed quantity function bodies, emit them unchanged,
+   strictly read their checked package and attempt actual scalar operation
+   derivation/generation. Evaluate the original checked body with fresh limits;
+   retain complete typed outcomes, losses, ordered charges and all ten counters.
+   U19 work 4 must stop at UnitResultRetain after consuming 4 with next charge 1;
+   work 5 and U24 work 5 must complete with the five prescribed charge events
+   and zero edges. If generation admits, execute the actual native oracle and
+   compare the entire observation. If a boundary refuses, retain that exact
+   measured stage/cause and leave generated agreement Planned. Do not subtract
+   child/call charges, reconstruct IR or substitute owner-operation controls.
+
 ## Expected Results
 
 All five original operations refuse statically at their own original source
@@ -53,3 +69,7 @@ test passes all five original source admissions and all five zero-limit owner
 operation controls. Every source refusal retains `ill_typed/type-mismatch` and
 the full original operation span; all owner operation charges and counters are
 zero. U14 receives no generated-oracle agreement credit.
+
+U12/U19/U24 execution and native classification remain pending until their
+focused observations run. Their admission does not upgrade the U14 controls to
+generated agreement, nor establish whole TC-187 or whole SC-04 completion.
