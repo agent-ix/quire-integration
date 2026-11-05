@@ -34,3 +34,12 @@ CONDITIONAL. The D26/D27 two-sided value, loss, ordered-charge, counter, and den
 ## Assurance Context
 
 No applicable AssuranceProfile is declared under this repository's `spec/` tree.
+
+## Dispositions
+
+| FND | outcome | reason |
+|---|---|---|
+| FND-001 | fixed | Commit `45dd7cb` requires exactly one S4 refusal for each D25 and D28 adverse body and checks its typed cause. |
+| FND-002 | fixed | Commit `45dd7cb` replaces the stale S2 PENDING comments with the actual S4 admission and S6a agreement routes. |
+
+The disposition pass reviewed `ea96e270..45dd7cb` at final head `45dd7cb7423796dd2012327730f7f57aa254d2de`. No new finding was found. `git diff --check` passed; the lead owns the final aggregate gate.
