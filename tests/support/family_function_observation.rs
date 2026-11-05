@@ -11,6 +11,8 @@ mod family_scalar_limits {
 
 use family_function_selection::declared;
 use family_scalar_limits::limits;
+mod family_function_envelope { include!("family_function_envelope.rs"); }
+use family_function_envelope::same_envelope;
 
 use qsl_replay::{
     acquire_checked_closure, ApplicationBeginRefusal, ApplicationEnvironment, CompileUnit,
@@ -72,25 +74,6 @@ fn generated(
             meter,
         ),
         _ => panic!("unselected function row"),
-    }
-}
-
-fn same_envelope(expected: &Evaluation, actual: &Evaluation) {
-    assert_eq!(expected.location, actual.location, "entire result location");
-    assert_eq!(expected.losses, actual.losses, "ordered located losses");
-    match (&expected.outcome, &actual.outcome) {
-        (
-            FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(expected))),
-            FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(actual))),
-        ) => assert_eq!(expected, actual),
-        (
-            FamilyOutcome::Evaluated(Outcome::Incomplete(expected)),
-            FamilyOutcome::Evaluated(Outcome::Incomplete(actual)),
-        ) => assert_eq!(expected, actual),
-        _ => panic!(
-            "required Integer completion or exact incomplete shape: {:?} versus {:?}",
-            expected.outcome, actual.outcome
-        ),
     }
 }
 
