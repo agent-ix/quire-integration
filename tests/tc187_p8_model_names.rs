@@ -324,7 +324,9 @@ fn three_time_owners_compose_and_missing_names_remain_missing() {
         assert_eq!(serde_json::to_value(structural_id(&tenth.dimension_node())).expect("dimension ID"), json!({"package": "acme/rpc", "path": ["scalar_type", "dimension", "ix://acme/rpc/dimension/Time"], "ordinal": 0}));
         assert_eq!(tenth.canonical().scale(), &quire_exact::Rational::new(1_i64.into(), 10_i64.into()).expect("tenth"));
         let speed = assembled.units.dimension(nominal(assembled, source, "Speed")).expect("native composed Speed");
-        assert_eq!(speed.terms().count(), 2);
+        let powers: Vec<_> = speed.exponents().map(|(key, power)| (serde_json::to_value(structural_id(&key)).expect("base dimension ID"), power.to_string())).collect();
+        assert_eq!(powers.len(), 2);
+        for (package, power) in [("acme/rpc", "-1"), ("acme/flow", "1")] { assert!(powers.contains(&(json!({"package": package, "path": ["scalar_type", "dimension", format!("ix://{package}/dimension/Time")], "ordinal": 0}), power.to_owned())), "exact native Speed map: {powers:?}"); }
     });
     let dimensions = [
         declared(&wire, "Time"),
@@ -420,7 +422,8 @@ fn duplicate_model_dimension_identity_characterizes_current_malformed_intake() {
     let UnitIntakeCause::Refused(refusals) = &refused.cause else {
         panic!("native model refusal: {refused:?}")
     };
-    let [first] = refusals.as_slice() else {
+    let refusal_rows: Vec<_> = refusals.iter().collect();
+    let [first] = refusal_rows.as_slice() else {
         panic!("one duplicate identity refusal: {refusals:?}")
     };
     assert_eq!(
