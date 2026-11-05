@@ -10,10 +10,12 @@ use qsl_package::{EqualityFactWitness as ProducerFact, EqualityFactWitnessRow};
 use qsl_replay::{spine::SpineLimits, MonitorTarget, TimingObligationSettings};
 use qsl_semantics::{library::LibraryName, model::intake::package_input};
 use quire_contract_ir::{
-    read_checked_package, CheckedPackageDispatchResult, CheckedPackageReadLimits,
+    read_checked_package, AdmittedEqualityReadErrorCode, CheckedPackageDispatchResult,
+    CheckedPackageReadLimits,
     EqualityDimensionRole, EqualityFactWitness, EqualityOperandTypeRole, EqualityUnitRole,
     SelectedEqualityApplicationRow, SelectedEqualityFactRow, SelectedExactIdentities,
     SelectedFactEqualityId, SelectedFactFieldId, SelectedFactIds, SelectedFactRows,
+    SelectedFactsErrorCode,
 };
 use quire_exact::{Cancel, Integer, IntegerInterval, Presence, Rational, ValueType};
 
@@ -293,8 +295,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             &facts,
             emission.selected_source_unit_rows(),
             1_000_000,
-        )
-        .expect("the selected retained equality decision joins");
+        );
     let equality_ids = [SelectedFactEqualityId {
         application: equality.application.clone(),
         occurrence: equality.occurrence.clone(),
@@ -308,9 +309,33 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             },
             rows(),
             1_000_000,
-        )
-        .expect("the same equality joins the bounded selected read");
-    assert_eq!(joined.equalities.len(), 1);
-    assert_eq!(joined.equalities[0].id, equality_ids[0]);
-    assert_eq!(joined.equalities[0].decision, decision);
+        );
+    match decision {
+        Ok(decision) => {
+            let joined = joined.expect("the native equality also joins the selected read");
+            assert_eq!(joined.declarations, selected.declarations);
+            assert_eq!(joined.fields, selected.fields);
+            assert_eq!(joined.equalities.len(), 1);
+            assert_eq!(joined.equalities[0].id, equality_ids[0]);
+            assert_eq!(joined.equalities[0].decision, decision);
+        }
+        Err(native) => {
+            assert_eq!(native.code, AdmittedEqualityReadErrorCode::UnavailableEqualityWitness);
+            assert_eq!(*native.application, equality.application);
+            assert!(native.witness.is_some(), "the missing witness has a native kind");
+            assert_eq!(native.attempted_work, 0);
+            let refused = joined.expect_err("a missing native witness yields no partial view");
+            assert_eq!(refused.code, SelectedFactsErrorCode::Equality);
+            assert_eq!(refused.at, native.at);
+            assert_eq!(refused.occurrence.as_ref(), Some(&equality.occurrence));
+            assert!(refused.exact.is_none() && refused.exact_code.is_none());
+            let cause = refused.equality.expect("retain the native equality cause");
+            assert_eq!(cause.code, native.code);
+            assert_eq!(cause.application, native.application);
+            assert_eq!(cause.at, native.at);
+            assert_eq!(cause.witness, native.witness);
+            assert_eq!(cause.materialization, native.materialization);
+            assert_eq!(cause.attempted_work, native.attempted_work);
+        }
+    }
 }
