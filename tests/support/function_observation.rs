@@ -9,7 +9,7 @@ use quire_contract_model::{
     CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
 };
 use quire_eval::{CallFailure, Evaluation, FamilyOutcome, FamilyResult};
-use quire_exact::{Integer, LimitKind, Meter, ScalarLimits, Value};
+use quire_exact::{Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
 use quire_semantic_value::object_closure::ObjectClosure;
 const SOURCE: &str = __AUTHORED_SOURCE__;
 
@@ -26,9 +26,13 @@ fn assert_same_call(
             );
             assert_eq!(expected.losses, actual.losses, "ordered located losses");
             match (&expected.outcome, &actual.outcome) {
-                (FamilyOutcome::Evaluated(expected), FamilyOutcome::Evaluated(actual)) => {
-                    assert_eq!(expected, actual)
-                }
+                (FamilyOutcome::Evaluated(expected), FamilyOutcome::Evaluated(actual)) => match (expected, actual) {
+                    (Outcome::Completed(Value::Integer(expected)), Outcome::Completed(Value::Integer(actual))) => assert_eq!(expected, actual),
+                    (Outcome::Undefined(expected), Outcome::Undefined(actual)) => assert_eq!(expected, actual),
+                    (Outcome::Refused(expected), Outcome::Refused(actual)) => assert_eq!(expected, actual),
+                    (Outcome::Incomplete(expected), Outcome::Incomplete(actual)) => assert_eq!(expected, actual),
+                    _ => panic!("combine must return the same Integer or exact stop: {expected:?} versus {actual:?}"),
+                },
                 (
                     FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(expected)),
                     FamilyOutcome::FamilyEvaluated(FamilyResult::Refused(actual)),
