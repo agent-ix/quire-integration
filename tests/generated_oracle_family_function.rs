@@ -182,10 +182,15 @@ fn subtraction_multiplication_and_nested_call_match_fresh_qsl_sessions() {
         assert_eq!(generated.function_node_id, declarations[index]);
         driver = driver.replace(&format!("__SYMBOL_{index}__"), &generated.oracle_symbol);
     }
-    let driver = driver.replace(
-        "include!(\"family_function_selection.rs\");",
-        include_str!("support/family_function_selection.rs"),
-    );
+    let driver = driver
+        .replace(
+            "include!(\"family_function_selection.rs\");",
+            include_str!("support/family_function_selection.rs"),
+        )
+        .replace(
+            "include!(\"family_scalar_limits.rs\");",
+            include_str!("support/family_scalar_limits.rs"),
+        );
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
         ["SC05 function rows: 9 envelopes, 12 input refusals, 3 owner refusals"]

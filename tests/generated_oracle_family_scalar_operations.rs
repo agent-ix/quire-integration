@@ -3,10 +3,14 @@
 
 #[path = "support/family_function_selection.rs"]
 mod family_function_selection;
+#[path = "support/family_scalar_limits.rs"]
+mod family_scalar_limits;
 #[path = "support/generated_oracle.rs"]
 mod generated_oracle;
 #[path = "support/oracle_observation.rs"]
 mod oracle_observation;
+
+use family_scalar_limits::limits;
 
 use ix_trace_rs::trace;
 use qsl_package::{emit_checked, CheckedPackage};
@@ -20,7 +24,7 @@ use quire_contract_ir::{
     CheckedPackageV2ReadResult, CheckedTerm,
 };
 use quire_eval::FamilyOutcome;
-use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
+use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, Value};
 use quire_semantic_value::checking::CheckingLimits;
 
 struct Row {
@@ -124,21 +128,6 @@ fn checked(source: &str) -> CheckedPackage {
         .check(CheckingLimits::default())
         .expect("original source checks"),
     )
-}
-
-fn limits(work: u64) -> ScalarLimits {
-    ScalarLimits {
-        integer_bits: 1024,
-        decimal_digits: 1024,
-        scale_expansion: 1024,
-        text_input_bytes: 1024,
-        text_scalars: 1024,
-        normalized_scalars: 1024,
-        unit_edges: 1024,
-        value_occurrences: 1024,
-        work_units: work,
-        result_units: 1024,
-    }
 }
 
 #[trace("TC-102", "IT-019-SC-05")]
