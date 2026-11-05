@@ -5,6 +5,8 @@ type: TC
 relationships:
   - target: ix://agent-ix/quire-driver/FR-015
     type: verifies
+  - target: ix://agent-ix/quire-driver/FR-016
+    type: references
   - target: ix://agent-ix/quire-contract-runtime/FR-276
     type: verifies
 ---
@@ -16,7 +18,8 @@ Qualify the IR-721 AC3 construction handoff from genuine QSL production through
 strict IR admission and the driver to RT. The first executable contribution prepares the changed-target and
 unsupported-instruction controls. Full IR-721 AC3 still requires the healthy
 FR-276-AC-6 construction and all FR-276-AC-7 adverse cases listed below. A
-producer preflight alone supplies no construction or admission-refusal credit.
+producer/diagnostic preflight alone supplies no construction or target-policy
+refusal credit.
 Event/watermark execution is a separate qualification.
 
 ## Test Procedure
@@ -37,6 +40,18 @@ Event/watermark execution is a separate qualification.
    one modulo application reachable from the selected initializer. Do not
    patch emitted IDs, copy a transition implementation, or substitute modulo
    inside an atom that the producer captures as an ordinary Boolean input.
+   On the original healthy root, check its zero uncertainty independently of
+   the diagnostic constructor, then call merged driver FR-016
+   `target_mismatch_at`. Require the original selector/content key, actual
+   `[14, 0]` value path and unchanged original Generated occurrence. None stays
+   unselected, and a foreign Expression occurrence gives OccurrenceMismatch.
+   This locates a premise; it proves no independent target-comparison refusal.
+   On the separately produced reachable modulo node, call `unsupported_at`
+   with its actual containing-node kind, empty root-application path and original
+   source occurrence. Compare the complete original operation record and
+   keys, and require InvalidBodyPath for an unavailable actual child index.
+   Strict IR admits Application only at a node body root; no inline application
+   is fabricated. Constructing this diagnostic proves no runtime-support decision.
 3. Prepare the healthy admitted root using the driver's public owning entry
    and independent authentic selection, exact target and operating allowances.
    Require success before interpreting any negative control as qualifying.
@@ -63,6 +78,16 @@ Event/watermark execution is a separate qualification.
    Keep independent original selection fixed for selection-corruption cases;
    use a fresh authentic selection only for separately emitted valid programs
    whose lowering or runtime construction is under test.
+
+7. Starting from the exact final healthy producer emission, remove only the
+   actual selected initializer node's `body` member in adverse input bytes.
+   Retain every original node identity, reference and other member. The strict
+   IR closed decoder must return MalformedWire with no cause and its first
+   pointer at that actual `/semantic_graph/nodes/<index>`. No admitted node
+   identity or partial package is issued at this decode boundary. Re-read the
+   unchanged original producer bytes successfully. This is a malformed-entry
+   ingress control before driver diagnostics or RT; it is not a target-policy
+   refusal or a healthy construction result. Do not rekey the adverse input.
 
 ## Outstanding Construction Controls
 
@@ -93,8 +118,18 @@ hand-built `ProgramParts`, unavailable-seam skip or test-only evaluator supplies
 missing meaning.
 
 Status: Planned for the complete construction and adverse intake handoff under
-IR-721. The isolated `producer_rekeys_a_genuinely_reachable_unsupported_initializer`
-preflight asserts producer emission and reachable mutation only. It does not
-call driver preparation or RT build, and has no FR-276 criterion trace credit.
-Qualification awaits the actual FR-015 production entry and its typed errors;
-no speculative driver API is invoked by this preflight.
+IR-721. The two `monitor_program_adverse` tests contain the genuine producer
+rekeying, merged-driver diagnostic and missing-entry IR controls described
+above. The refreshed focused target compiles, but both tests currently stop in
+public QSL `emit_plan_root` with
+`Write(MissingEqualityIdentityContext)` for a generated `quire.op.boolean.ne`
+application. The failure precedes final emission, strict IR admission and all
+new driver/IR assertions. These new boundaries are source-reviewed and
+unexecuted, not passed adverse checks. An earlier producer-only preflight on
+its earlier cohort supplies no new diagnostic or reader qualification.
+
+The implementation invokes no preparation entry, independent target-comparison
+policy, runtime-support classifier or RT build. All construction rows remain
+Planned until the actual FR-015 entry and its required source/witness handoff
+are available and executed. No FR-276 criterion receives trace credit from the
+diagnostic or producer preflight.
