@@ -54,6 +54,9 @@ return a typed representability refusal.
 2. IT-020-SC-02: Reject a foreign instance or altered classification before formula
    construction. Retain Unsupported dimensions unchanged and original outstanding
    premises on successful formula components; return no successful full projection.
+   Under each false-extension profile, unbounded source retains the native
+   MissingInterval refusal before emission; infinite-trace unbounded source retains
+   its owner Unsupported classification and emits no component.
 3. IT-020-SC-03: Charge each component graph-entry scheduling visit and each emission
    visit before its action, and charge each occurrence node before scheduling. Defaults
    are max_nodes 65,536, max_work 4,294,967,296, max_bytes 16,777,216. Node limits count
