@@ -11,13 +11,13 @@ use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
 use quire_contract_ir::{CheckedNodeId, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm};
 use quire_exact::{
-    ChargePoint, IllTyped, IllTypedCause, Integer, LimitKind, Meter, NodeKey, Outcome, Quantity,
-    Rational, ScalarLimits, UnitId,
+    ChargePoint, IllTyped, IllTypedCause, Integer, IntegerInterval, LimitKind, Meter, NodeKey,
+    Outcome, Quantity, Rational, RoundingMode, ScalarLimits, UnitId,
 };
 use quire_semantic_value::{
     quantity::{
-        convert_quantity, evaluate_quantity, ConvertedValue, QuantityOperation, QuantityRefusal,
-        QuantityTarget, QuantityUnit, UnitTable,
+        convert_quantity, evaluate_quantity, ConvertedValue, HandoffRefusal, QuantityOperation,
+        QuantityRefusal, QuantityTarget, QuantityUnit, UnitScope, UnitTable,
     },
     unit::{DimensionNode, NominalDeclaration, UnitGraph, UnitNode},
 };
@@ -36,6 +36,12 @@ const SOURCE: &str = "language \"ix:native\" edition \"1-draft\";\n\
     unit cm2 : Area = rational(1, 10000) * m2;\n\
     dimension Time;\n\
     unit s : Time = rational(1, 1);\n\
+    dimension Mass;\n\
+    unit kg : Mass = rational(1, 1);\n\
+    dimension Torque = Mass * Length ^ 2 / Time ^ 2;\n\
+    dimension Energy = Mass * Length ^ 2 / Time ^ 2;\n\
+    unit N_m : Torque = rational(1, 1);\n\
+    unit J : Energy = rational(1, 1);\n\
     dimension Temperature;\n\
     unit K : Temperature = rational(1, 1);\n\
     unit C : Temperature = rational(1, 1) * K + rational(5463, 20);\n\
@@ -50,7 +56,7 @@ const SOURCE: &str = "language \"ix:native\" edition \"1-draft\";\n\
     unit target_mid : Chain = rational(4, 1) * root + rational(-2, 1);\n\
     unit target_leaf : Chain = rational(3, 1) * target_mid + rational(7, 1);\n";
 
-const UNIT_NAMES: [&str; 18] = [
+const UNIT_NAMES: [&str; 21] = [
     "m",
     "cm",
     "km",
@@ -58,6 +64,9 @@ const UNIT_NAMES: [&str; 18] = [
     "m2",
     "cm2",
     "s",
+    "kg",
+    "N_m",
+    "J",
     "K",
     "C",
     "F",
@@ -175,31 +184,40 @@ fn body_rational(body: &Value, field: &str) -> Rational {
 }
 
 fn graph() -> UnitGraph {
-    let dimensions = ["Length", "Area", "Time", "Temperature", "Chain"]
-        .into_iter()
-        .map(|name| {
-            let record = body(name);
-            assert_eq!(record["term"], "dimension");
-            let terms = record["terms"]
-                .as_array()
-                .expect("admitted dimension has ordered terms")
-                .iter()
-                .map(|term| {
-                    let exponent = term["exponent"]
-                        .as_str()
-                        .expect("canonical exponent")
-                        .parse::<Integer>()
-                        .expect("admitted integer exponent");
-                    (body_key(term, "dimension_node_id"), exponent)
-                })
-                .collect();
-            (
-                named_key(name),
-                DimensionNode::checked(terms, NominalDeclaration::default())
-                    .expect("admitted dimension terms"),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
+    let dimensions = [
+        "Length",
+        "Area",
+        "Time",
+        "Mass",
+        "Torque",
+        "Energy",
+        "Temperature",
+        "Chain",
+    ]
+    .into_iter()
+    .map(|name| {
+        let record = body(name);
+        assert_eq!(record["term"], "dimension");
+        let terms = record["terms"]
+            .as_array()
+            .expect("admitted dimension has ordered terms")
+            .iter()
+            .map(|term| {
+                let exponent = term["exponent"]
+                    .as_str()
+                    .expect("canonical exponent")
+                    .parse::<Integer>()
+                    .expect("admitted integer exponent");
+                (body_key(term, "dimension_node_id"), exponent)
+            })
+            .collect();
+        (
+            named_key(name),
+            DimensionNode::checked(terms, NominalDeclaration::default())
+                .expect("admitted dimension terms"),
+        )
+    })
+    .collect::<BTreeMap<_, _>>();
     let units = UNIT_NAMES
         .into_iter()
         .map(|name| {
@@ -230,6 +248,116 @@ fn quantity(unit: &str, numerator: i64, denominator: i64) -> Quantity {
         rational(numerator, denominator),
         UnitId::declared(named_key(unit)),
     )
+}
+
+#[test]
+#[trace("IT-016-SC-02", "TC-096", "TC-201", "FR-275-AC-23")]
+fn admitted_energy_converts_through_first_compound_target_and_back_to_joule() {
+    let graph = graph();
+    let table = UnitTable::declared(&graph);
+    let source = quantity("N_m", 1, 1);
+    let mut terms = [
+        (named_key("kg"), integer(1)),
+        (named_key("m"), integer(2)),
+        (named_key("s"), integer(-2)),
+    ];
+    terms.sort_by(|left, right| left.0.cmp(&right.0));
+    let compound = QuantityUnit::Compound(graph.compound_unit(&terms).expect("admitted roots"));
+    let limits = ScalarLimits {
+        integer_bits: 1,
+        decimal_digits: 0,
+        scale_expansion: 0,
+        text_input_bytes: 0,
+        text_scalars: 0,
+        normalized_scalars: 0,
+        unit_edges: 0,
+        value_occurrences: 1,
+        work_units: 3,
+        result_units: 1,
+    };
+    let mut first = Meter::new(limits);
+    let Outcome::Completed(converted) = convert_quantity(
+        table.resolve(&source).expect("admitted N_m"),
+        &compound,
+        &QuantityTarget::Exact,
+        &mut first,
+    )
+    .expect("equal admitted base dimensions") else {
+        panic!("first compound target conversion completes");
+    };
+    assert_eq!(converted.value(), &ConvertedValue::Exact(rational(1, 1)));
+    assert_eq!(converted.source(), &source);
+    assert_eq!(converted.unit(), &compound);
+    let before_handoff = first.admission_count();
+    let (carried, identified) = converted.identified_quantity().expect("compound identity");
+    assert_eq!(first.admission_count(), before_handoff);
+    assert_eq!(carried.magnitude(), &rational(1, 1));
+    assert_eq!(carried.unit(), &identified.id());
+    assert_ne!(carried.unit(), &UnitId::declared(named_key("J")));
+    let mut scope = UnitScope::new(&table);
+    assert_eq!(scope.form(identified), carried.unit().clone());
+    let mut second = Meter::new(limits);
+    let Outcome::Completed(back) = convert_quantity(
+        scope
+            .resolve(&carried)
+            .expect("formed compound is readable"),
+        table
+            .get(UnitId::declared(named_key("J")))
+            .expect("admitted J"),
+        &QuantityTarget::Exact,
+        &mut second,
+    )
+    .expect("equal admitted base dimensions") else {
+        panic!("second declared target conversion completes");
+    };
+    let (joules, _) = back.identified_quantity().expect("declared identity");
+    assert_eq!(joules.magnitude(), &rational(1, 1));
+    assert_eq!(joules.unit(), &UnitId::declared(named_key("J")));
+    for meter in [&first, &second] {
+        assert_eq!(
+            meter
+                .admitted_charges()
+                .iter()
+                .map(|charge| charge.point)
+                .collect::<Vec<_>>(),
+            [
+                ChargePoint::UnitIdentityRead,
+                ChargePoint::UnitTargetDomain,
+                ChargePoint::UnitResultRetain
+            ]
+        );
+        assert_eq!(meter.consumed(LimitKind::UnitEdges), 0);
+        assert_eq!(meter.consumed(LimitKind::WorkUnits), 3);
+    }
+}
+
+#[test]
+#[trace("IT-016-SC-02", "TC-096", "TC-201", "FR-275-AC-23")]
+fn admitted_integer_conversion_refuses_exact_quantity_handoff_without_charge() {
+    let graph = graph();
+    let table = UnitTable::declared(&graph);
+    let source = quantity("N_m", 1, 1);
+    let mut charged = meter();
+    let Outcome::Completed(converted) = convert_quantity(
+        table.resolve(&source).expect("admitted N_m"),
+        table
+            .get(UnitId::declared(named_key("N_m")))
+            .expect("admitted N_m"),
+        &QuantityTarget::Integer {
+            domain: IntegerInterval::spanning(integer(0), integer(10)),
+            rounding: RoundingMode::Exact,
+        },
+        &mut charged,
+    )
+    .expect("same admitted dimension") else {
+        panic!("integer target conversion completes");
+    };
+    let before_handoff = charged.admission_count();
+    assert_eq!(
+        converted.identified_quantity(),
+        Err(HandoffRefusal::NotExact)
+    );
+    assert_eq!(charged.admission_count(), before_handoff);
 }
 
 #[test]

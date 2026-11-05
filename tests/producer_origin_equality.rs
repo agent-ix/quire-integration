@@ -11,10 +11,10 @@ use ix_trace_rs::trace;
 use qsl_foundation::node_wire::node_key_from_json;
 use quire_contract_ir::{CheckedNodeOwner, CheckedPackageV2, CheckedSemanticNodeV2, CheckedTerm};
 use quire_exact::{
-    ChargePoint, CollectionKind, CollectionType, EffectiveId, EnumMember, FieldValue,
-    IllTypedCause, InjectedDenial, Integer, LimitKind, Meter, NodeKey, ObjectId, ObjectReference,
-    OriginalDeclarationKey, Outcome, Presence, Refusal, ScalarLimits, UniverseId, Value, ValueType,
-    VariantId,
+    ChargePoint, CheckedInvariantCause, CollectionKind, CollectionType, EffectiveId, EnumMember,
+    FieldValue, FloatType, IeeeWidth, IllTypedCause, InjectedDenial, Integer, LimitKind, Meter,
+    NodeKey, ObjectId, ObjectReference, OriginalDeclarationKey, Outcome, Presence, Refusal,
+    ScalarLimits, UniverseId, Value, ValueType, VariantId,
 };
 use quire_semantic_value::declaration::{
     CheckedEquality, CompositeDeclaration, CompositeShape, EqualityOperand, EqualityOperator,
@@ -283,6 +283,128 @@ fn full_schedule() -> Vec<ChargePoint> {
     points.extend([ChargePoint::EqualityPair; 17]);
     points.push(ChargePoint::EqualityResultRetain);
     points
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_equality_pair_plan_and_mismatches_are_uncharged_and_typed() {
+    let (types, _, key) = checked_equality();
+    let value = operand(&types, key, 0);
+    let plan = quire_exact::plan_equality(&value, &value).expect("well formed pair plan");
+    assert_eq!(plan.pair_events(), &Integer::from(17_u64));
+    let (_, widget_type) = admitted_model_type("Widget");
+    let (widget_root, _) = admitted_model_type("Widget");
+    let widget = reference(UniverseId::new(widget_root), widget_type.clone());
+    let collection = |kind| {
+        let ty = CollectionType::new(kind, ValueType::Reference(widget_type.clone()), None);
+        quire_exact::form_collection(&ty, vec![], &mut Meter::new(LIMITS))
+            .expect("empty typed collection")
+            .completed()
+            .expect("collection construction completes")
+    };
+    assert_eq!(
+        quire_exact::plan_equality(
+            &collection(CollectionKind::Sequence),
+            &collection(CollectionKind::Set)
+        ),
+        Err(Refusal::CheckedInvariant {
+            cause: CheckedInvariantCause::CollectionKindMismatch
+        })
+    );
+    assert_eq!(
+        quire_exact::plan_equality(&widget, &Value::Integer(Integer::one())),
+        Err(Refusal::CheckedInvariant {
+            cause: CheckedInvariantCause::ValueKindMismatch
+        })
+    );
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-025", "TC-026", "FR-008-AC-6")]
+fn admitted_reference_identity_uses_exact_supplied_triple() {
+    let (widget_root, widget_type) = admitted_model_type("Widget");
+    let (rock_root, _) = admitted_model_type("Rock");
+    let (_, gadget_type) = admitted_model_type("Gadget");
+    let universe = UniverseId::new(widget_root);
+    let object = ObjectId::new("shared-object").expect("authored object ID");
+    let first = ObjectReference::new(universe.clone(), widget_type.clone(), object.clone());
+    assert_eq!(first.universe(), &universe);
+    assert_eq!(first.object_type(), &widget_type);
+    assert_eq!(first.object(), &object);
+    assert_eq!(
+        first,
+        ObjectReference::new(universe.clone(), widget_type.clone(), object.clone())
+    );
+    assert_ne!(
+        first,
+        ObjectReference::new(universe.clone(), gadget_type, object.clone())
+    );
+    assert_ne!(
+        first,
+        ObjectReference::new(
+            universe.clone(),
+            widget_type.clone(),
+            ObjectId::new("other-object").expect("object ID")
+        )
+    );
+    assert_ne!(
+        first,
+        ObjectReference::new(UniverseId::new(rock_root), widget_type, object)
+    );
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_static_check_rejects_nested_ieee_before_equality_charge() {
+    let key = admitted_declaration_key("Six");
+    let types = TypeEnvironment::new([CompositeDeclaration::new(key, "Six", record_shape())], [])
+        .expect("admitted record shape");
+    let nested_ieee = ValueType::collection(CollectionType::new(
+        CollectionKind::Sequence,
+        ValueType::Float(FloatType::exact(IeeeWidth::Binary64)),
+        None,
+    ));
+    let refusal = types
+        .check_equality(
+            EqualityOperator::Equal,
+            EqualityOperand::typed(nested_ieee.clone()),
+            EqualityOperand::typed(nested_ieee),
+            &EnumMemberIndex::default(),
+        )
+        .expect_err("nested IEEE is equality-ineligible");
+    assert_eq!(refusal.cause, IllTypedCause::OperatorIneligible);
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_equality_plan_form_denial_precedes_all_other_charges() {
+    let (types, checked, key) = checked_equality();
+    let value = operand(&types, key, 0);
+    let mut meter = Meter::new(LIMITS).with_injected_denial(InjectedDenial {
+        point: ChargePoint::EqualityPlanForm,
+        occurrence: NonZeroU64::MIN,
+    });
+    let Outcome::Incomplete(record) = checked.evaluate(&types, &value, &value, &mut meter) else {
+        panic!("plan formation denies before pair planning");
+    };
+    assert_eq!(record.charge_point, ChargePoint::EqualityPlanForm);
+    assert!(admitted_points(&meter).is_empty());
+}
+
+#[test]
+#[trace("IT-016-SC-03", "TC-096", "TC-026", "FR-008-AC-5")]
+fn admitted_checked_equality_rejects_wrong_operand_before_charging() {
+    let (types, checked, key) = checked_equality();
+    let left = operand(&types, key, 0);
+    let wrong_right = Value::Integer(Integer::one());
+    let mut meter = Meter::new(LIMITS);
+    assert_eq!(
+        checked.evaluate(&types, &left, &wrong_right, &mut meter),
+        Outcome::Refused(Refusal::CheckedInvariant {
+            cause: CheckedInvariantCause::EqualityOperandSourceNotAdmitted
+        })
+    );
+    assert_eq!(meter.admission_count(), 0);
 }
 
 /// Trace: IT-016-SC-03, TC-096, TC-203, FR-277-AC-1, FR-277-AC-2.
