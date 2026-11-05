@@ -192,14 +192,15 @@ retains the body location and no admitted charge; work=1024 returns Integer 7.
 The same test rejects a valid subtraction source substituted for the selected
 addition package with `CheckedFunctionError::OwnerIdentityMismatch` before any
 charge, then successfully executes the original source. This single invocation
-after a source refusal does not establish mixed-request sibling isolation or
-wrong-occurrence refusal. The current disposition is:
+after a source refusal establishes the owner boundary. The separate SC-03
+mixed-request test below establishes occurrence refusal and healthy-sibling
+isolation. The current disposition is:
 
 | Scope | Status | Evidence or remaining work |
 | --- | --- | --- |
 | `combine` work=1, 0 and 1024 | Passed | `function_agreement::actual_generated_function_preserves_the_whole_qsl_call_envelope`: actual generated native symbol and independent FR-485 whole-envelope equality, including explicit work=1 body location, all three limits, exact ordered charges and every counter |
-| Foreign-source owner mismatch followed by original invocation (partial SC-03 control) | Passed | The same test observes typed `OwnerIdentityMismatch`, no admitted charge and zero counters, then the healthy original call; this does not complete SC-03 |
-| Owner and occurrence mismatch; refused item and healthy sibling | Planned | IR-842: wrong-occurrence and mixed-request sibling controls still require exact public refusals, no refused execution or charge, unchanged sibling |
+| Foreign-source owner mismatch followed by original invocation (SC-03 owner control) | Passed | The same test observes typed `OwnerIdentityMismatch`, no admitted charge and zero counters, then the healthy original call |
+| Owner and occurrence mismatch; refused item and healthy sibling (SC-03) | Passed | `generated_oracle_sc03::wrong_occurrence_refuses_without_changing_the_healthy_native_call` uses two real QSL call occurrences and an admitted three-root contract: wrong-occurrence arguments yield a typed per-item `BodyMismatch`, while the healthy sibling retains the same generated claim, symbol and emitted library as standalone generation. A wrong full request position yields typed `AccountingIdentity` with the original accounting index and exact IDs; a wrong item node at a valid position yields typed `Identity` with the original request index and exact IDs. Both fail before a claim map exists. The healthy public symbol executes against a fresh QSL session with whole-envelope and value agreement at work=0, 1 and 1024. The existing foreign-source owner test observes typed `OwnerIdentityMismatch` and zero charge. |
 | TC-187 public vector IDs and mixed-row operations | Planned | IR-842: per-ID admission/evaluation dispatch and generated execution remain unimplemented; IR-669 owns separate QSL/runtime scalar evidence |
 | FR-014 scalar generated oracles | Planned | IR-842: complete per-operation native/QSL agreement remains unimplemented; existing samples are partial, and IR-669 QSL/runtime results supply no generated-oracle credit |
 | FR-018 composite equality generated oracles | Planned | IR-842: per-operation executed native/QSL agreement remains unimplemented |
