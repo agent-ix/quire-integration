@@ -58,6 +58,8 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11r" => Some(RowDispatch::Admitted("admitted")),
         "U11n" | "U11o" => Some(RowDispatch::Topology("definition-cycle")),
         "U11p" | "U11w" => Some(RowDispatch::Topology("missing-name")),
+        "U11q" | "U11z3" => Some(RowDispatch::Topology("invalid-value")),
+        "U11x" => Some(RowDispatch::Topology("missing-name")),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
             missing: "public checked-package BoundedQuantity emission and source-to-CG agreement for admitted carried_quantity operations",
@@ -69,8 +71,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
             pending("QSL/IR/CG/native per-operation dispatch and comparison")
         }
-        "U11q" | "U11x" | "U11y" | "U11z1"
-        | "U11z2" | "U11z3" => {
+        "U11y" | "U11z1" | "U11z2" => {
             pending("QSL admission and mixed-operation disposition")
         }
         "U12" | "U13" | "U14" | "U15" | "U16" | "U17" | "U18" | "U19" | "U20" | "U21" | "U22"
@@ -209,8 +210,9 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             RowDispatch::Topology(expected) => {
                 // Each of these IDs has a value-asserting public QSL control in
                 // tc187_u11_topology, tc187_u11_local_values, tc187_u11_order or
-                // tc187_u11_imported_topology or tc187_u11_dimension_terms. The dispatcher
-                // guards their public row identity and expectation; the separate tests execute them.
+                // tc187_u11_imported_topology, tc187_u11_dimension_terms or
+                // tc187_u11_multidoc_transitive. The dispatcher guards their public
+                // row identity and expectation; the separate tests execute them.
                 assert!(
                     vector.expected.contains(expected),
                     "{} expectation",
@@ -256,8 +258,8 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
         observed,
         BTreeSet::from([
             "U06", "U11a", "U11b", "U11c", "U11d", "U11e", "U11f", "U11g1", "U11g2", "U11g4",
-            "U11h", "U11i", "U11j", "U11k", "U11l", "U11m", "U11n", "U11o", "U11p", "U11r", "U11s",
-            "U11t", "U11u", "U11w",
+            "U11h", "U11i", "U11j", "U11k", "U11l", "U11m", "U11n", "U11o", "U11p", "U11q", "U11r",
+            "U11s", "U11t", "U11u", "U11w", "U11x", "U11z3",
         ])
     );
     assert!(planned > 0, "SC-04 is not yet complete");
