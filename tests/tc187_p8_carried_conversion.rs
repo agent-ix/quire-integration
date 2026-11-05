@@ -237,7 +237,7 @@ fn u07_original_carried_exact_and_nearest_even_preserve_loss_and_precedence() {
                 assert_eq!(
                     outcome,
                     Outcome::Refused(Refusal::InexactConversion {
-                        target: InexactTarget::Decimal(target.clone())
+                        target: InexactTarget::Decimal(Box::new(target.clone()))
                     })
                 );
                 assert_eq!(meter.consumed(LimitKind::WorkUnits), 4);
@@ -328,7 +328,7 @@ fn u08_original_carried_boundaries_refuse_atomically_after_target_domain() {
                 assert_eq!(
                     outcome,
                     Outcome::Refused(Refusal::DecimalOutOfDomain {
-                        expected: target.clone()
+                        target: Box::new(target.clone())
                     })
                 );
                 assert_eq!(meter.consumed(LimitKind::ResultUnits), 0);
