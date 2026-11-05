@@ -1,5 +1,5 @@
 ---
-id: TC-101
+id: TC-103
 title: "Execute selected generated function operations against fresh QSL sessions"
 type: TC
 relationships:
@@ -10,7 +10,7 @@ relationships:
   - target: ix://agent-ix/quire-spec-language/FR-485
     type: references
 ---
-# TC-101: Execute selected generated function operations against fresh QSL sessions
+# TC-103: Execute selected generated function operations against fresh QSL sessions
 
 ## Description
 
