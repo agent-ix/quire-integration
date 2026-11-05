@@ -1594,6 +1594,8 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "thiserror",
+ "tl-syntax",
 ]
 
 [[package]]
@@ -2189,6 +2191,16 @@ name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
+
+[[package]]
+name = "tl-syntax"
+version = "0.3.0"
+source = "git+https://github.com/agent-ix/tl-syntax?branch=main#d97d3d732a8f161337bb57d3559d82bae9d38a5d"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "tracing"

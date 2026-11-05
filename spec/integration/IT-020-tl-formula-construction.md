@@ -51,9 +51,9 @@ return a typed representability refusal.
    construction. Retain Unsupported dimensions unchanged and original outstanding
    premises on successful formula components; return no successful full projection.
 3. IT-020-SC-03: Charge each component graph-entry scheduling visit and each emission
-   visit before its action, and charge each occurrence node before emission. Defaults
+   visit before its action, and charge each occurrence node before scheduling. Defaults
    are max_nodes 65,536, max_work 4,294,967,296, max_bytes 16,777,216. Node limits count
-   occurrences. Check nodes before work when both would fail at emission. Encode the
+   occurrences. Check nodes before work when both would fail at scheduling. Encode the
    actual owner Serialize implementation through a capped writer before invoking its
    canonical writer; reject before accepting the first excess byte. Exact limits admit,
    one less stops at setting+1, counters reset per call and errors expose no artifact.

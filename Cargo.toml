@@ -20,6 +20,10 @@ path = "src/lib.rs"
 qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
 
+tl-syntax = { git = "https://github.com/agent-ix/tl-syntax", branch = "main", features = ["serde"] }
+serde_json = "1"
+thiserror = "2"
+
 [dev-dependencies]
 qsl-analyze = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-specification = { package = "quire-specification-qualification", git = "https://github.com/agent-ix/quire-specification", branch = "main" }
