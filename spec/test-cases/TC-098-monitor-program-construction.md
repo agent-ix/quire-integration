@@ -36,6 +36,10 @@ Every IT-018 success criterion passes. Producer or reader refusal is a failure;
 no test skips an unavailable boundary or remints an identity from constituent parts.
 
 The selected-fact control remains Planned/Unrun until its focused target passes.
+The current producer returns equality witness rows whose `EqualityFactWitness`,
+`EqualityFactWitnessRow`, `EqualityOperandTypeRole` and `EqualityUnitRole` types
+are not publicly exported by `qsl-package`; the external typed translation
+cannot compile until that owning API is exposed. No selected-fact test has run.
 Its intended qualification covers only explicit representable model facts and
 the selected equality's opaque decision or native typed missing-witness result.
 It does not traverse monitor entries or establish a complete generated-source
