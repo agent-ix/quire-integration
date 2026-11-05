@@ -58,17 +58,23 @@ fn original_call_literal_is_typed_by_the_declared_ms_node() {
         .expect("original declared ms node");
     let literals: Vec<_> = nodes
         .iter()
-        .filter(|node| node.body["term"] == "literal" && node.body["value_kind"] == "quantity")
+        .filter_map(|node| match &node.body {
+            quire_contract_ir::CheckedTerm::Literal {
+                type_id,
+                value_kind,
+                value,
+            } if serde_json::to_value(value_kind).expect("literal kind") == "quantity" => {
+                Some((node, type_id, value))
+            }
+            _ => None,
+        })
         .collect();
-    let [literal] = literals.as_slice() else {
+    let [(literal, type_id, value)] = literals.as_slice() else {
         panic!("one original quantity literal: {nodes:#?}");
     };
-    assert_eq!(literal.body["value"], "3");
+    assert_eq!(**value, json!("3"));
     assert_eq!(literal.semantic_type, ms.node_id);
-    assert_eq!(
-        literal.body["type"],
-        serde_json::to_value(&ms.node_id).expect("original ms id")
-    );
+    assert_eq!(**type_id, ms.node_id);
 }
 
 const MODEL: &str = "agent-ix/namespace-clock";

@@ -90,7 +90,7 @@ fn ordinary_ms_type_and_quantity_ms_select_distinct_original_nodes() {
         panic!("parameters binding");
     };
     assert_eq!(name.as_ref(), "parameters");
-    let quire_contract_ir::CheckedTerm::Group {
+    let quire_contract_ir::CheckedTerm::Aggregate {
         members: parameters,
     } = value.as_ref()
     else {

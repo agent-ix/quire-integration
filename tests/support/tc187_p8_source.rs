@@ -59,7 +59,7 @@ pub fn emitted(graph: CheckedGraph, model: Option<(&str, &[u8])>) -> CheckedPack
             .expect("original model evidence");
     }
     match CheckedPackageV2::read(bytes, CheckedPackageReadLimits::bounded(), &evidence) {
-        CheckedPackageV2ReadResult::Admitted(package) => package,
+        CheckedPackageV2ReadResult::Admitted(package) => *package,
         other => panic!("strict IR admission of original emission: {other:?}"),
     }
 }
