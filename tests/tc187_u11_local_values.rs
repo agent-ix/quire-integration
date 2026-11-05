@@ -54,7 +54,8 @@ fn rational(integer: i64) -> Rational {
     Rational::from_integer(Integer::from(integer))
 }
 
-fn assert_non_identity_root(declarations: &str, scale: i64, offset: i64) {
+fn assert_non_identity_root(public_input: &str, declarations: &str, scale: i64, offset: i64) {
+    vector("U11e", public_input, "invalid-value");
     let (source, result) = assemble(declarations);
     let refusal = result.expect_err("a targetless nonidentity root must refuse");
     let [error] = refusal.errors.as_slice() else {
@@ -148,9 +149,14 @@ fn assert_derived_dimension(
 #[trace("QSpec-TC-187", "QSpec-FR-142-AC-15")]
 #[test]
 fn public_u11e_nonidentity_roots_retain_scale_and_offset() {
-    vector("U11e", "unit m : L", "invalid-value");
-    assert_non_identity_root("dimension L; unit m : L = rational(2, 1);", 2, 0);
     assert_non_identity_root(
+        "unit m : L = 2;",
+        "dimension L; unit m : L = rational(2, 1);",
+        2,
+        0,
+    );
+    assert_non_identity_root(
+        "unit m : L = 1 + 1;",
         "dimension L; unit m : L = rational(1, 1) + rational(1, 1);",
         1,
         1,
