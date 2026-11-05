@@ -28,7 +28,7 @@ fn real_plan_root_rows_join_selected_model_and_equality_facts() {
     let packages = package_input([document.as_slice()]).expect("the authored model admits");
     let text = format!(
         r#"language "ix:native" edition "1-draft";
-profile values = "quire.value.complete/v1";
+profile v = "quire.value.complete/v1";
 profile timed = "quire.temporal.timed/v1";
 profile complete = "quire.temporal.complete/v1";
 model Selected = "{identity}";
