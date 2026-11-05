@@ -1253,8 +1253,9 @@ dependencies = [
 [[package]]
 name = "qsl-analyze"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
+ "ix-trace-rs",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -1274,7 +1275,7 @@ dependencies = [
 [[package]]
 name = "qsl-cst"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "ix-trace-rs",
  "logos",
@@ -1286,7 +1287,7 @@ dependencies = [
 [[package]]
 name = "qsl-eval"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1305,7 +1306,7 @@ dependencies = [
 [[package]]
 name = "qsl-forms"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "ix-trace-rs",
  "qsl-cst",
@@ -1318,7 +1319,7 @@ dependencies = [
 [[package]]
 name = "qsl-foundation"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "hashbrown 0.17.1",
  "ix-trace-rs",
@@ -1332,7 +1333,7 @@ dependencies = [
 [[package]]
 name = "qsl-package"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1350,7 +1351,7 @@ dependencies = [
 [[package]]
 name = "qsl-replay"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "base64 0.22.1",
  "ix-trace-rs",
@@ -1377,7 +1378,7 @@ dependencies = [
 [[package]]
 name = "qsl-route"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1391,7 +1392,7 @@ dependencies = [
 [[package]]
 name = "qsl-semantics"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "agent-ix-extraction-frontend",
  "agent-ix-semantic-ir",
@@ -1449,7 +1450,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-codegen"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#457e8d709e185fca3475780b48eda9bdef362e2a"
+source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#d3ccfd8832ab0e508cfc281b1887b60678f53af0"
 dependencies = [
  "command-fds",
  "ix-trace-rs",
@@ -1474,7 +1475,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-ir"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#8476225e7045f35def9ee8e90916be2394221167"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#3a92e7a0152341b1e34fdd2518dc0f20c39a8e59"
 dependencies = [
  "ix-trace-rs",
  "quire-contract-model",
@@ -1486,7 +1487,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-model"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#8476225e7045f35def9ee8e90916be2394221167"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#3a92e7a0152341b1e34fdd2518dc0f20c39a8e59"
 dependencies = [
  "ix-trace-rs",
  "jsonschema 0.17.1",
@@ -1512,7 +1513,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-runtime"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#71c1c858ad072fdab1936252cd501da40aa00eea"
+source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#0de48717d26184a3d6283a8b40529a9b7c16c327"
 dependencies = [
  "quire-exact",
  "quire-semantic-value",
@@ -1521,7 +1522,7 @@ dependencies = [
 [[package]]
 name = "quire-driver"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-driver?branch=main#485a73106a4c5127f8c9ae4820d2bd8f63860e14"
+source = "git+https://github.com/agent-ix/quire-driver?branch=main#9d123829eb5173490ce7e101e53ff2503ba5ef68"
 dependencies = [
  "qsl-foundation",
  "qsl-package",
@@ -1628,7 +1629,7 @@ dependencies = [
 [[package]]
 name = "quire-spec-language"
 version = "0.2.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#68acd90e95a15401c38ea662cc597db70e4c6dde"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#413b64e153c3cf6e3263459ae094db897fb1b217"
 dependencies = [
  "ix-trace-rs",
  "logos",
