@@ -61,6 +61,26 @@ typed generation refusals and actual generated execution.
    independently checked original closed body. No call/child charge subtraction,
    TypeEnvironment, fabricated identity, rewritten IR or replacement evaluator.
 
+8. Extend the original-source slice to U15–U18, U20, U22/U23 and U25–U29.
+   Bind each split operation and allowance through borrowed public facts. For
+   conversion, comparison, arithmetic and carried-target cases, assert independent
+   typed numeric/domain/stop expectations, exact original loci, losses, complete
+   ordered charge records and every counter. Keep static refusals separate from
+   executable checked bodies. U18 must stop on analytical target size without
+   materializing its enormous coefficient.
+9. Attempt unchanged original checking, emission, strict reading, scalar
+   derivation/generation and actual native execution for each eligible family.
+   Preserve exact carried-target, compound-result or other typed refusals as
+   Planned generated agreement. Do not attribute carried targets to bounded
+   parameter policy. Reuse admitted original nominal metadata and actual checked
+   operands in the native caller; no charge subtraction or source reinterpretation.
+10. For U22/U25 verify authentic compound input/target syntax and public body
+    support before claiming source agreement. If the exact source seam is absent,
+    record its measured refusal and retain separately labelled public owner
+    conversion controls on genuine admitted compound units. Never substitute a
+    power computation with extra charges, a nominal direct bridge, or a fabricated
+    checked body. Report a missing public seam for owner routing.
+
 ## Expected Results
 
 Application version: 0.1.0.
@@ -93,3 +113,7 @@ These are the only generated quantity agreements claimed by this artifact.
 
 This artifact establishes no credit for other TC-187 operations or whole
 IT-019-SC-04 completion.
+
+The remaining twelve-row extension is specified but its execution evidence is
+pending. A per-operation result must be measured before any additional IT-019
+status is upgraded; no whole SC-04 completion is implied.
