@@ -163,10 +163,9 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
         panic!("the actual reachable modulo is a root application");
     };
     assert_eq!(operation.identity(), Some("quire.op.integer.mod"));
-    let occurrence = source_node
-        .occurrences
-        .first()
-        .expect("a real source occurrence for modulo");
+    let [occurrence] = source_node.occurrences.as_slice() else {
+        panic!("one exact source occurrence for the selected modulo");
+    };
     let diagnostic = unsupported_at(&changed_package, node, &[], *kind, Some(occurrence)).unwrap();
     assert_eq!(diagnostic.locus.node, *node);
     assert_eq!(

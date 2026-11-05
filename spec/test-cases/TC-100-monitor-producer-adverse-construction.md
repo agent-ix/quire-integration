@@ -123,7 +123,8 @@ rekeying, merged-driver diagnostic and missing-entry IR controls described
 above. The refreshed focused target compiles, but both tests currently stop in
 public QSL `emit_plan_root` with
 `Write(MissingEqualityIdentityContext)` for a generated `quire.op.boolean.ne`
-application. The failure precedes final emission, strict IR admission and all
+application. [QSL-1722](https://linear.app/agent-ix/issue/QSL-1722) owns this
+observed producer failure. It precedes final emission, strict IR admission and all
 new driver/IR assertions. These new boundaries are source-reviewed and
 unexecuted, not passed adverse checks. An earlier producer-only preflight on
 its earlier cohort supplies no new diagnostic or reader qualification.
