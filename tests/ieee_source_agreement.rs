@@ -373,6 +373,15 @@ fn assert_scalar_charge_suffix(id: &str, qsl: &Meter, runtime: &Meter) {
     }
 }
 
+fn asserted_limit(limits: ScalarLimits, kind: LimitKind) -> u64 {
+    match kind {
+        LimitKind::IntegerBits => limits.integer_bits,
+        LimitKind::ValueOccurrences => limits.value_occurrences,
+        LimitKind::WorkUnits => limits.work_units,
+        other => panic!("unasserted IEEE conversion limit kind {other:?}"),
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum ConversionExpectation {
     Completed(u64, IeeeFlags),
@@ -410,6 +419,11 @@ fn assert_float_conversion(
             Outcome::Completed(native),
         ) => {
             assert_eq!(qsl_value, native.value(), "{id} result agreement");
+            assert_eq!(
+                format!("{qsl_value:?}"),
+                format!("{:?}", native.value()),
+                "{id} Debug rendering"
+            );
             assert_eq!(qsl_value.bits(), bits, "{id} QSpec result");
             assert_eq!(native.flags(), flags, "{id} QSpec flags");
             if flags.is_empty() {
@@ -442,13 +456,27 @@ fn assert_float_conversion(
             );
             assert_eq!(native_shortage.consumed, consumed, "{id} consumed");
             assert_eq!(
+                native_shortage.limit,
+                asserted_limit(limits, kind),
+                "{id} runtime limit"
+            );
+            assert_eq!(
                 native_shortage.next_charge,
                 Integer::from(next),
                 "{id} next charge"
             );
             let envelope = u64::from(kind == LimitKind::WorkUnits);
             assert_eq!(qsl_shortage.consumed, native_shortage.consumed + envelope);
-            assert_eq!(qsl_shortage.limit, native_shortage.limit + envelope);
+            assert_eq!(
+                qsl_shortage.limit,
+                asserted_limit(source_limits, kind),
+                "{id} QSL limit"
+            );
+            assert_eq!(
+                qsl_shortage.next_charge,
+                Integer::from(next),
+                "{id} QSL next charge"
+            );
             assert!(losses.is_empty(), "{id} incomplete without flags");
         }
         (expected, qsl, runtime) => {
@@ -496,6 +524,11 @@ fn assert_rational_conversion(
     match (&qsl, &native) {
         (Outcome::Completed(Value::Rational(qsl_value)), Outcome::Completed(native)) => {
             assert_eq!(qsl_value, native.value(), "{id} exact value");
+            assert_eq!(
+                format!("{qsl_value:?}"),
+                format!("{:?}", native.value()),
+                "{id} Debug rendering"
+            );
             if let Some(loss) = native.loss() {
                 assert_eq!(
                     losses,
@@ -538,6 +571,11 @@ fn assert_rational_conversion(
             assert_eq!(native_value.charge_point, point, "{id} QSpec charge point");
             assert_eq!(native_value.consumed, consumed, "{id} QSpec consumed");
             assert_eq!(
+                native_value.limit,
+                asserted_limit(limits, kind),
+                "{id} runtime limit"
+            );
+            assert_eq!(
                 native_value.next_charge,
                 Integer::from(next),
                 "{id} QSpec next charge"
@@ -555,6 +593,16 @@ fn assert_rational_conversion(
                 native_value.consumed + u64::from(native_value.limit_kind == LimitKind::WorkUnits)
             );
             assert_eq!(qsl_value.next_charge, native_value.next_charge);
+            assert_eq!(
+                qsl_value.limit,
+                asserted_limit(source_limits, kind),
+                "{id} QSL limit"
+            );
+            assert_eq!(
+                qsl_value.next_charge,
+                Integer::from(next),
+                "{id} QSL next charge"
+            );
             assert!(losses.is_empty());
         }
         _ => panic!("{id} QSL {qsl:?}; native {native:?}"),
@@ -1747,6 +1795,7 @@ fn tc193_f32_ieee_negation_preserves_bits_and_rounding_independence() {
                 panic!("F32 negation must complete for {input_bits:#010x} in {mode:?}");
             };
             assert_eq!(qsl_value, native.value());
+            assert_eq!(format!("{qsl_value:?}"), format!("{:?}", native.value()));
             assert_eq!(qsl_value.bits(), u64::from(expected_bits));
             assert!(native.flags().is_empty());
             assert!(losses.is_empty());
@@ -1777,6 +1826,7 @@ fn tc193_f32_ieee_negation_preserves_bits_and_rounding_independence() {
                 panic!("F32 double negation must complete for {input_bits:#010x}");
             };
             assert_eq!(value, second.value());
+            assert_eq!(format!("{value:?}"), format!("{:?}", second.value()));
             assert_eq!(value.bits(), u64::from(input_bits));
             assert!(first.flags().is_empty() && second.flags().is_empty());
             assert!(losses.is_empty());
@@ -1800,6 +1850,7 @@ fn tc193_f32_ieee_negation_preserves_bits_and_rounding_independence() {
             panic!("F32 binary64 negation must complete");
         };
         assert_eq!(qsl_value, native.value());
+        assert_eq!(format!("{qsl_value:?}"), format!("{:?}", native.value()));
         assert_eq!(qsl_value.bits(), 0xfff0_0000_0000_0001);
         assert!(native.flags().is_empty());
         assert!(losses.is_empty());
@@ -1830,6 +1881,7 @@ fn tc193_f32_ieee_negation_preserves_bits_and_rounding_independence() {
             panic!("F32 binary64 double negation must complete");
         };
         assert_eq!(value, second.value());
+        assert_eq!(format!("{value:?}"), format!("{:?}", second.value()));
         assert_eq!(value.bits(), wide_input.bits());
         assert!(first.flags().is_empty() && second.flags().is_empty());
         assert!(losses.is_empty());
@@ -1895,6 +1947,11 @@ fn tc193_f33_negation_meter_agrees() {
                 Outcome::Completed(native),
             ) => {
                 assert_eq!(qsl_value, native.value(), "{id} two-sided value");
+                assert_eq!(
+                    format!("{qsl_value:?}"),
+                    format!("{:?}", native.value()),
+                    "{id} Debug rendering"
+                );
                 assert_eq!(qsl_value.bits(), bits, "{id} QSpec bits");
                 assert_eq!(native.flags(), flags);
                 assert!(losses.is_empty());
@@ -1907,6 +1964,11 @@ fn tc193_f33_negation_meter_agrees() {
                 assert_eq!(native_shortage.limit_kind, kind, "{id}");
                 assert_eq!(native_shortage.charge_point, point, "{id}");
                 assert_eq!(native_shortage.consumed, consumed, "{id}");
+                assert_eq!(
+                    native_shortage.limit,
+                    asserted_limit(limits, kind),
+                    "{id} runtime limit"
+                );
                 assert_eq!(native_shortage.next_charge, Integer::from(next), "{id}");
                 assert_eq!(qsl_shortage.limit_kind, kind, "{id}");
                 assert_eq!(qsl_shortage.charge_point, point, "{id}");
@@ -1914,6 +1976,16 @@ fn tc193_f33_negation_meter_agrees() {
                     qsl_shortage.consumed,
                     consumed + u64::from(kind == LimitKind::WorkUnits),
                     "{id}"
+                );
+                assert_eq!(
+                    qsl_shortage.limit,
+                    asserted_limit(source_limits, kind),
+                    "{id} QSL limit"
+                );
+                assert_eq!(
+                    qsl_shortage.next_charge,
+                    Integer::from(next),
+                    "{id} QSL next charge"
                 );
                 assert!(losses.is_empty());
             }
