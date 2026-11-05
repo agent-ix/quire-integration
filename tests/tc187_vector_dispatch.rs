@@ -149,8 +149,8 @@ fn assert_admission(vector: &QualificationVector, case: AdmissionCase) {
     assert_eq!(&source[error.span.start..error.span.end], selected_name);
 }
 
-/// Trace: IT-019-SC-04, QSpec-TC-187.
-#[trace("IT-019-SC-04", "QSpec-TC-187")]
+/// Trace: QSpec-TC-187. This partial slice does not back IT-019-SC-04 yet.
+#[trace("QSpec-TC-187")]
 #[test]
 fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
     let mut seen = BTreeSet::new();
