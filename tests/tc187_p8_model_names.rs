@@ -258,6 +258,14 @@ fn source_and_model_ms_are_independent_and_tick_uses_model_rate() {
     public_row("U34");
     let docs = [document("acme/rpc", "Rate", "us", true, false)];
     let wire = emitted(&format!("{M} {LOCAL} unit ms : Time = rational(1, 1000) * s; unit tick : M::Rate = rational(1, 2) * M::us; function f using v(d: Quantity<ms>): Boolean pure {{ true }} function g using v(d: Quantity<M::ms>): Boolean pure {{ true }}"), &docs, |source, assembled| {
+        let source_ms = assembled.units.unit(nominal(assembled, source, "ms")).expect("native source ms");
+        let model_ms = assembled.units.units().find(|unit| serde_json::to_value(structural_id(&unit.key())).expect("unit ID")["path"] == json!(["scalar_type", "unit", "ix://acme/rpc/unit/ms"])).expect("native model ms");
+        assert_ne!(source_ms.key(), model_ms.key());
+        assert_ne!(source_ms.id(), model_ms.id());
+        assert_ne!(source_ms.dimension_node(), model_ms.dimension_node());
+        assert_eq!(source_ms.canonical().scale(), &quire_exact::Rational::new(1_i64.into(), 1000_i64.into()).expect("source millisecond scale"));
+        assert_eq!(model_ms.canonical().scale(), &quire_exact::Rational::from_integer(1000_i64.into()));
+        assert_eq!(serde_json::to_value(structural_id(&model_ms.root())).expect("model root ID")["path"], json!(["scalar_type", "unit", "ix://acme/rpc/unit/us"]));
         let tick = nominal(assembled, source, "tick");
         let tick = assembled.units.unit(tick).expect("native tick");
         assert_eq!(serde_json::to_value(structural_id(&tick.dimension_node())).expect("dimension ID"), json!({"package": "acme/rpc", "path": ["scalar_type", "dimension", "ix://acme/rpc/dimension/Rate"], "ordinal": 0}));
@@ -309,6 +317,32 @@ fn unitless_imported_length_retains_original_first_refusal() {
         "missing_declaration/missing-name"
     );
     assert_eq!(&source[error.span.start..error.span.end], M);
+    let compiled = qsl_replay::compile_package(
+        qsl_replay::CompileUnit {
+            source: SourceIdentity::new("agent-ix", "tc110-model-names"),
+            package_name: "agent-ix/tc110-model-names".to_owned(),
+            path: "model-names.native",
+            bytes: source.as_bytes(),
+        },
+        docs.iter().map(Vec::as_slice),
+        &qsl_replay::DependencyInput::default(),
+        qsl_replay::StageLimits::default(),
+        qsl_replay::ReplayLimits::default(),
+    )
+    .expect_err("public compiler also refuses unitless Length");
+    let qsl_replay::ReplayRefusal::Recompile(native) = compiled else {
+        panic!("native compile refusal: {compiled:?}")
+    };
+    let qsl_replay::CompileRefusal::Assembly {
+        refusal: native_refusal,
+        region,
+    } = *native
+    else {
+        panic!("first assembly refusal: {native:?}")
+    };
+    assert_eq!(native_refusal, refused);
+    let region = region.expect("original model-selection source region");
+    assert_eq!(&source[region.start..region.end], M);
 }
 
 #[trace("TC-110", "QSpec-TC-187", "QSpec-FR-142-AC-20")]
