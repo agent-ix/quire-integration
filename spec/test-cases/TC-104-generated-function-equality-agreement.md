@@ -37,7 +37,7 @@ no FR-018 raw equality-oracle credit.
    the required Boolean and no location or loss. Work 0 must stop at
    FunctionCall; work 1 must stop at EqualityPlanForm after exactly the outer
    FunctionCall. Stops retain the source body origin, WorkUnits allowance,
-   consumed work and next charge 1, with every other counter zero.
+   consumed work and next charge 1 for FunctionCall or 2 for EqualityPlanForm, with every other counter zero.
 4. Compare actual argument arity and kind refusals, including combined invalid
    count/kind precedence, with zero charges and counters. For Integer inputs
    require the actual Int[0,9] source bound to refuse Integer 10. Independently
@@ -50,6 +50,18 @@ no FR-018 raw equality-oracle credit.
    remain Planned until their specific public routes are exercised. Scalar
    Negate requires an actual typed unsupported-generation observation.
 
+6. Separately qualify the public FR-018 composite equality generator for
+   closed Boolean literal Equal/NotEqual truth tables and Integer equal,
+   less and greater literal pairs. Derive operand semantic types and expression
+   IDs from original QSL emission, authenticate actual lowered contract bytes,
+   and invoke returned native environment/oracle symbols. Evaluate each same
+   source body through a fresh independently checked public QSL evaluator.
+   Compare complete typed outcome, all losses, ordered charges and all counters
+   at work 0, 1 and 1024 without constructor-charge subtraction. Independently
+   require explicit Boolean answers and exact EqualityPlanForm stops (next
+   charge 2 and zero consumed work). Keep nominal shapes and conversions Planned
+   until their own actual complete public observations exist.
+
 ## Expected Results
 
 The four primitive operation rows require 42 complete whole-call envelope
@@ -57,3 +69,7 @@ comparisons, independent Boolean outcomes and exact work stops, plus source
 owner and argument refusals. Pending execution, these rows are Planned. Only
 measured native rows may become Passed. Full FR-021 and SC-05 remain Planned;
 this procedure supplies neither FR-018 credit nor whole-family closure.
+
+The additional FR-018 primitive closed-literal cohort requires 42 operation
+observations. These are separate from the 42 FR-021 whole-call comparisons;
+matching primitive values cannot establish nominal composite closure.
