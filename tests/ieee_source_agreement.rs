@@ -3,16 +3,18 @@
 
 use ix_trace_rs::trace;
 use qsl_eval::value::{CheckedPackageEvaluation, QualifiedName};
-use qsl_package::CheckedPackage;
+use qsl_package::{emit_checked, CheckedPackage};
 use qsl_semantics::check::{CheckCause, PackageDeclarations};
 use qsl_semantics::model::intake::SelectedModels;
 use qsl_semantics::model::object_environment::ObjectEnvironment;
 use qsl_semantics::value::{admit_ieee_profile, DefinitionRole};
 use quire_eval::FamilyOutcome;
 use quire_exact::{
-    compare_ieee, evaluate_ieee, ChargePoint, ExactScalar, IeeeComparison, IeeeFlag, IeeeFlags,
-    IeeeOperand, IeeeOperation, IeeeValue, IeeeWidth, IllTypedCause, InjectedDenial, Integer,
-    LimitKind, Meter, Outcome, Refusal, RoundingMode, ScalarLimits, Value,
+    compare_ieee, convert_ieee_width, evaluate_ieee, exact_to_ieee, ieee_to_exact, ChargePoint,
+    Decimal, ExactScalar, IeeeComparison, IeeeFlag, IeeeFlags, IeeeOperand, IeeeOperation,
+    IeeeResult, IeeeValue, IeeeWidth, IllTypedCause, InjectedDenial, Integer, IntegerInterval,
+    LimitKind, Meter, Outcome, Rational, RationalDomain, Refusal, RoundingMode, ScalarLimits,
+    Undefined, Value,
 };
 use quire_semantic_value::checking::CheckingLimits;
 use quire_semantic_value::loss::ValueLoss;
@@ -279,6 +281,30 @@ fn observed_float_source(
     arguments: Vec<Value>,
     mut meter: Meter,
 ) -> (Outcome<Value>, Vec<ValueLoss>, Meter) {
+    let package = checked_float_source(function);
+    let evaluation = package
+        .call(
+            &QualifiedName::unqualified("f").expect("f is an identifier"),
+            arguments,
+            &ObjectEnvironment::default(),
+            &mut meter,
+        )
+        .expect("S6a calls the checked IEEE callable");
+    let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
+        panic!(
+            "QSL did not reach IEEE callable evaluation: {:?}",
+            evaluation.outcome
+        );
+    };
+    let losses = evaluation
+        .losses
+        .into_iter()
+        .map(|loss| loss.loss)
+        .collect();
+    (outcome, losses, meter)
+}
+
+fn checked_float_source(function: &str) -> CheckedPackage {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
          profile v = \"quire.value.complete/v1\";\n{function}\n"
@@ -304,31 +330,26 @@ fn observed_float_source(
         admit_ieee_profile(&[DefinitionRole::IeeeProfile.reference()], &[])
             .expect("the selected IEEE profile admits"),
     );
-    let package = CheckedPackage::link(
+    CheckedPackage::link(
         declarations
             .check(CheckingLimits::default())
             .expect("S4 checks the IEEE callable source"),
-    );
-    let evaluation = package
-        .call(
-            &QualifiedName::unqualified("f").expect("f is an identifier"),
-            arguments,
-            &ObjectEnvironment::default(),
-            &mut meter,
-        )
-        .expect("S6a calls the checked IEEE callable");
-    let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
-        panic!(
-            "QSL did not reach IEEE callable evaluation: {:?}",
-            evaluation.outcome
-        );
-    };
-    let losses = evaluation
-        .losses
-        .into_iter()
-        .map(|loss| loss.loss)
-        .collect();
-    (outcome, losses, meter)
+    )
+}
+
+fn assert_ieee_carrier(function: &str, identity: &str, expected_count: usize) {
+    let package = checked_float_source(function);
+    let emission = emit_checked(&package).expect("admitted IEEE source emits a checked package");
+    let wire: serde_json::Value =
+        serde_json::from_slice(emission.package().bytes()).expect("checked package is JSON");
+    let nodes = wire["semantic_graph"]["nodes"]
+        .as_array()
+        .expect("checked semantic nodes");
+    let count = nodes
+        .iter()
+        .filter(|node| node["body"]["operation"]["identity"] == identity)
+        .count();
+    assert_eq!(count, expected_count, "{identity} checked-package carrier");
 }
 
 fn assert_scalar_charge_suffix(id: &str, qsl: &Meter, runtime: &Meter) {
@@ -350,6 +371,258 @@ fn assert_scalar_charge_suffix(id: &str, qsl: &Meter, runtime: &Meter) {
             "{id} {counter:?}"
         );
     }
+}
+
+fn asserted_limit(limits: ScalarLimits, kind: LimitKind) -> u64 {
+    match kind {
+        LimitKind::IntegerBits => limits.integer_bits,
+        LimitKind::ValueOccurrences => limits.value_occurrences,
+        LimitKind::WorkUnits => limits.work_units,
+        other => panic!("unasserted IEEE conversion limit kind {other:?}"),
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ConversionExpectation {
+    Completed(u64, IeeeFlags),
+    Refused(&'static str, &'static str),
+    Incomplete(LimitKind, ChargePoint, u64, u64),
+}
+
+fn assert_float_conversion(
+    id: &str,
+    source_ty: &str,
+    target_ty: &str,
+    identity: &str,
+    source_value: Value,
+    limits: ScalarLimits,
+    expected: ConversionExpectation,
+    native: impl FnOnce(&mut Meter) -> Outcome<IeeeResult>,
+) {
+    let function = format!(
+        "function f using v(a: {source_ty}): {target_ty} pure \
+         {{ convert<{target_ty}>(a) }}"
+    );
+    assert_ieee_carrier(&function, identity, 1);
+    let source_limits = ScalarLimits {
+        work_units: limits.work_units.saturating_add(1),
+        ..limits
+    };
+    let (qsl, losses, qsl_meter) =
+        observed_float_source(&function, vec![source_value], Meter::new(source_limits));
+    let mut native_meter = Meter::new(limits);
+    let runtime = native(&mut native_meter);
+    match (expected, qsl, runtime) {
+        (
+            ConversionExpectation::Completed(bits, flags),
+            Outcome::Completed(Value::Float(qsl_value)),
+            Outcome::Completed(native),
+        ) => {
+            assert_eq!(qsl_value, native.value(), "{id} result agreement");
+            assert_eq!(
+                format!("{qsl_value:?}"),
+                format!("{:?}", native.value()),
+                "{id} Debug rendering"
+            );
+            assert_eq!(qsl_value.bits(), bits, "{id} QSpec result");
+            assert_eq!(native.flags(), flags, "{id} QSpec flags");
+            if flags.is_empty() {
+                assert!(losses.is_empty(), "{id} has no flags");
+            } else {
+                assert_eq!(losses, vec![ValueLoss::IeeeFlags(flags)], "{id} QSL flags");
+            }
+        }
+        (
+            ConversionExpectation::Refused(code, cause),
+            Outcome::Refused(qsl_refusal),
+            Outcome::Refused(native_refusal),
+        ) => {
+            assert_eq!(qsl_refusal, native_refusal, "{id} typed refusal");
+            assert_eq!(qsl_refusal.code(), Some(code), "{id} refusal code");
+            assert_eq!(qsl_refusal.cause(), Some(cause), "{id} refusal cause");
+            assert!(losses.is_empty(), "{id} refused without flags");
+        }
+        (
+            ConversionExpectation::Incomplete(kind, point, consumed, next),
+            Outcome::Incomplete(qsl_shortage),
+            Outcome::Incomplete(native_shortage),
+        ) => {
+            assert_eq!(qsl_shortage.limit_kind, kind, "{id} QSL limit kind");
+            assert_eq!(native_shortage.limit_kind, kind, "{id} runtime limit kind");
+            assert_eq!(qsl_shortage.charge_point, point, "{id} QSL charge point");
+            assert_eq!(
+                native_shortage.charge_point, point,
+                "{id} runtime charge point"
+            );
+            assert_eq!(native_shortage.consumed, consumed, "{id} consumed");
+            assert_eq!(
+                native_shortage.limit,
+                asserted_limit(limits, kind),
+                "{id} runtime limit"
+            );
+            assert_eq!(
+                native_shortage.next_charge,
+                Integer::from(next),
+                "{id} next charge"
+            );
+            let envelope = u64::from(kind == LimitKind::WorkUnits);
+            assert_eq!(qsl_shortage.consumed, native_shortage.consumed + envelope);
+            assert_eq!(
+                qsl_shortage.limit,
+                asserted_limit(source_limits, kind),
+                "{id} QSL limit"
+            );
+            assert_eq!(
+                qsl_shortage.next_charge,
+                Integer::from(next),
+                "{id} QSL next charge"
+            );
+            assert!(losses.is_empty(), "{id} incomplete without flags");
+        }
+        (expected, qsl, runtime) => {
+            panic!("{id} expected {expected:?}; QSL {qsl:?}; runtime {runtime:?}")
+        }
+    }
+    assert_scalar_charge_suffix(id, &qsl_meter, &native_meter);
+}
+
+fn rational_domain(
+    numerator: (Integer, Integer),
+    denominator: (Integer, Integer),
+) -> RationalDomain {
+    RationalDomain::new(
+        IntegerInterval::new(numerator.0, numerator.1).expect("ordered numerator bounds"),
+        IntegerInterval::new(denominator.0, denominator.1).expect("ordered denominator bounds"),
+    )
+    .expect("positive denominator bounds")
+}
+
+fn assert_rational_conversion(
+    id: &str,
+    source_ty: &str,
+    target_ty: &str,
+    value: IeeeValue,
+    domain: &RationalDomain,
+    limits: ScalarLimits,
+    expected: Option<Outcome<Value>>,
+) {
+    let function = format!(
+        "function f using v(a: {source_ty}): {target_ty} pure {{ convert<{target_ty}>(a) }}"
+    );
+    assert_ieee_carrier(&function, "quire.op.ieee.to_rational", 1);
+    let source_limits = ScalarLimits {
+        work_units: limits.work_units.saturating_add(1),
+        ..limits
+    };
+    let (qsl, losses, qsl_meter) = observed_float_source(
+        &function,
+        vec![Value::Float(value)],
+        Meter::new(source_limits),
+    );
+    let mut native_meter = Meter::new(limits);
+    let native = ieee_to_exact(value, domain, &mut native_meter);
+    match (&qsl, &native) {
+        (Outcome::Completed(Value::Rational(qsl_value)), Outcome::Completed(native)) => {
+            assert_eq!(qsl_value, native.value(), "{id} exact value");
+            assert_eq!(
+                format!("{qsl_value:?}"),
+                format!("{:?}", native.value()),
+                "{id} Debug rendering"
+            );
+            if let Some(loss) = native.loss() {
+                assert_eq!(
+                    losses,
+                    vec![ValueLoss::IeeeExact(loss)],
+                    "{id} signed-zero loss"
+                );
+            } else {
+                assert!(losses.is_empty(), "{id} lossless conversion");
+            }
+        }
+        (Outcome::Undefined(qsl_value), Outcome::Undefined(native_value)) => {
+            assert_eq!(qsl_value, native_value, "{id} undefined cause");
+            assert!(losses.is_empty());
+        }
+        (Outcome::Refused(qsl_value), Outcome::Refused(native_value)) => {
+            assert_eq!(qsl_value, native_value, "{id} typed refusal");
+            assert!(losses.is_empty());
+        }
+        (Outcome::Incomplete(qsl_value), Outcome::Incomplete(native_value)) => {
+            let (kind, point, consumed, next): (LimitKind, ChargePoint, u64, u64) = match id {
+                "F27 tiny bit denial" => (
+                    LimitKind::IntegerBits,
+                    ChargePoint::IeeeExactIntermediate,
+                    64,
+                    1075,
+                ),
+                "F27 retain denial" => (LimitKind::WorkUnits, ChargePoint::IeeeResultRetain, 2, 1),
+                "F27 infinity operand denial" => {
+                    (LimitKind::WorkUnits, ChargePoint::IeeeOperands, 0, 1)
+                }
+                "F27 exact intermediate denial" => (
+                    LimitKind::WorkUnits,
+                    ChargePoint::IeeeExactIntermediate,
+                    1,
+                    1,
+                ),
+                other => panic!("unexpected rational conversion shortage {other}"),
+            };
+            assert_eq!(native_value.limit_kind, kind, "{id} QSpec limit kind");
+            assert_eq!(native_value.charge_point, point, "{id} QSpec charge point");
+            assert_eq!(native_value.consumed, consumed, "{id} QSpec consumed");
+            assert_eq!(
+                native_value.limit,
+                asserted_limit(limits, kind),
+                "{id} runtime limit"
+            );
+            assert_eq!(
+                native_value.next_charge,
+                Integer::from(next),
+                "{id} QSpec next charge"
+            );
+            assert_eq!(
+                qsl_value.limit_kind, native_value.limit_kind,
+                "{id} limit kind"
+            );
+            assert_eq!(
+                qsl_value.charge_point, native_value.charge_point,
+                "{id} charge point"
+            );
+            assert_eq!(
+                qsl_value.consumed,
+                native_value.consumed + u64::from(native_value.limit_kind == LimitKind::WorkUnits)
+            );
+            assert_eq!(qsl_value.next_charge, native_value.next_charge);
+            assert_eq!(
+                qsl_value.limit,
+                asserted_limit(source_limits, kind),
+                "{id} QSL limit"
+            );
+            assert_eq!(
+                qsl_value.next_charge,
+                Integer::from(next),
+                "{id} QSL next charge"
+            );
+            assert!(losses.is_empty());
+        }
+        _ => panic!("{id} QSL {qsl:?}; native {native:?}"),
+    }
+    if let Some(expected) = expected {
+        match (qsl, expected) {
+            (
+                Outcome::Completed(Value::Rational(actual)),
+                Outcome::Completed(Value::Rational(expected)),
+            ) => assert_eq!(actual, expected, "{id} QSpec result"),
+            (Outcome::Undefined(actual), Outcome::Undefined(expected)) => {
+                assert_eq!(actual, expected, "{id} QSpec undefined")
+            }
+            (Outcome::Refused(actual), Outcome::Refused(expected)) => {
+                assert_eq!(actual, expected, "{id} QSpec refusal")
+            }
+            (actual, expected) => panic!("{id} QSpec expected {expected:?}, got {actual:?}"),
+        }
+    }
+    assert_scalar_charge_suffix(id, &qsl_meter, &native_meter);
 }
 
 fn assert_fma_agreement(id: &str, inputs: [u32; 3], expected_bits: u32, expected_flags: IeeeFlags) {
@@ -1489,6 +1762,719 @@ fn tc193_f26_signed_zero_arithmetic_agrees_in_every_mode() {
 
 #[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
 #[test]
+fn tc193_f32_ieee_negation_preserves_bits_and_rounding_independence() {
+    let row = selected_vector("F32");
+    assert!(row.inputs.contains("0x7f800001"));
+    assert!(row.inputs.contains("0x7ff0000000000001"));
+    let binary32: [(u32, u32); 6] = [
+        (0x3f80_0000, 0xbf80_0000),
+        (0x0000_0000, 0x8000_0000),
+        (0x8000_0000, 0x0000_0000),
+        (0x7f80_0000, 0xff80_0000),
+        (0x7f80_0001, 0xff80_0001),
+        (0xffc0_0005, 0x7fc0_0005),
+    ];
+    for mode in [
+        RoundingMode::NearestEven,
+        RoundingMode::TowardZero,
+        RoundingMode::Exact,
+    ] {
+        let ty = format!("Float32[{}]", mode.as_str());
+        let source = format!("function f using v(a: {ty}): {ty} pure {{ -a }}");
+        assert_ieee_carrier(&source, "quire.op.ieee.float32.negate", 1);
+        for &(input_bits, expected_bits) in &binary32 {
+            let input = IeeeValue::binary32(input_bits);
+            let (qsl, losses, qsl_meter) =
+                observed_float_source(&source, vec![Value::Float(input)], Meter::new(LIMITS));
+            let mut runtime_meter = Meter::new(LIMITS);
+            let runtime = evaluate_ieee(IeeeOperation::Negate(input), mode, &mut runtime_meter)
+                .expect("IEEE negation admits a selected width");
+            let (Outcome::Completed(Value::Float(qsl_value)), Outcome::Completed(native)) =
+                (qsl, runtime)
+            else {
+                panic!("F32 negation must complete for {input_bits:#010x} in {mode:?}");
+            };
+            assert_eq!(qsl_value, native.value());
+            assert_eq!(format!("{qsl_value:?}"), format!("{:?}", native.value()));
+            assert_eq!(qsl_value.bits(), u64::from(expected_bits));
+            assert!(native.flags().is_empty());
+            assert!(losses.is_empty());
+            assert_scalar_charge_suffix("F32", &qsl_meter, &runtime_meter);
+        }
+        let doubled = format!("function f using v(a: {ty}): {ty} pure {{ -(-a) }}");
+        assert_ieee_carrier(&doubled, "quire.op.ieee.float32.negate", 2);
+        for &(input_bits, _) in &binary32 {
+            let input = IeeeValue::binary32(input_bits);
+            let (qsl, losses, qsl_meter) =
+                observed_float_source(&doubled, vec![Value::Float(input)], Meter::new(LIMITS));
+            let mut native_meter = Meter::new(LIMITS);
+            let Outcome::Completed(first) =
+                evaluate_ieee(IeeeOperation::Negate(input), mode, &mut native_meter)
+                    .expect("first negation admits")
+            else {
+                panic!("F32 first native negation must complete");
+            };
+            let Outcome::Completed(second) = evaluate_ieee(
+                IeeeOperation::Negate(first.value()),
+                mode,
+                &mut native_meter,
+            )
+            .expect("second negation admits") else {
+                panic!("F32 second native negation must complete");
+            };
+            let Outcome::Completed(Value::Float(value)) = qsl else {
+                panic!("F32 double negation must complete for {input_bits:#010x}");
+            };
+            assert_eq!(value, second.value());
+            assert_eq!(format!("{value:?}"), format!("{:?}", second.value()));
+            assert_eq!(value.bits(), u64::from(input_bits));
+            assert!(first.flags().is_empty() && second.flags().is_empty());
+            assert!(losses.is_empty());
+            assert_scalar_charge_suffix("F32 double negation", &qsl_meter, &native_meter);
+        }
+        let wide_ty = format!("Float64[{}]", mode.as_str());
+        let wide_source = format!("function f using v(a: {wide_ty}): {wide_ty} pure {{ -a }}");
+        assert_ieee_carrier(&wide_source, "quire.op.ieee.float64.negate", 1);
+        let wide_input = IeeeValue::binary64(0x7ff0_0000_0000_0001);
+        let (qsl, losses, qsl_meter) = observed_float_source(
+            &wide_source,
+            vec![Value::Float(wide_input)],
+            Meter::new(LIMITS),
+        );
+        let mut runtime_meter = Meter::new(LIMITS);
+        let runtime = evaluate_ieee(IeeeOperation::Negate(wide_input), mode, &mut runtime_meter)
+            .expect("binary64 negation admits");
+        let (Outcome::Completed(Value::Float(qsl_value)), Outcome::Completed(native)) =
+            (qsl, runtime)
+        else {
+            panic!("F32 binary64 negation must complete");
+        };
+        assert_eq!(qsl_value, native.value());
+        assert_eq!(format!("{qsl_value:?}"), format!("{:?}", native.value()));
+        assert_eq!(qsl_value.bits(), 0xfff0_0000_0000_0001);
+        assert!(native.flags().is_empty());
+        assert!(losses.is_empty());
+        assert_scalar_charge_suffix("F32 binary64", &qsl_meter, &runtime_meter);
+        let wide_doubled = format!("function f using v(a: {wide_ty}): {wide_ty} pure {{ -(-a) }}");
+        assert_ieee_carrier(&wide_doubled, "quire.op.ieee.float64.negate", 2);
+        let (qsl, losses, qsl_meter) = observed_float_source(
+            &wide_doubled,
+            vec![Value::Float(wide_input)],
+            Meter::new(LIMITS),
+        );
+        let mut native_meter = Meter::new(LIMITS);
+        let Outcome::Completed(first) =
+            evaluate_ieee(IeeeOperation::Negate(wide_input), mode, &mut native_meter)
+                .expect("first binary64 negation admits")
+        else {
+            panic!("F32 first native binary64 negation must complete");
+        };
+        let Outcome::Completed(second) = evaluate_ieee(
+            IeeeOperation::Negate(first.value()),
+            mode,
+            &mut native_meter,
+        )
+        .expect("second binary64 negation admits") else {
+            panic!("F32 second native binary64 negation must complete");
+        };
+        let Outcome::Completed(Value::Float(value)) = qsl else {
+            panic!("F32 binary64 double negation must complete");
+        };
+        assert_eq!(value, second.value());
+        assert_eq!(format!("{value:?}"), format!("{:?}", second.value()));
+        assert_eq!(value.bits(), wide_input.bits());
+        assert!(first.flags().is_empty() && second.flags().is_empty());
+        assert!(losses.is_empty());
+        assert_scalar_charge_suffix("F32 binary64 double negation", &qsl_meter, &native_meter);
+    }
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn tc193_f33_negation_meter_agrees() {
+    assert!(!selected_vector("F33").inputs.is_empty());
+    let input = IeeeValue::binary32(0x3f80_0000);
+    let function =
+        "function f using v(a: Float32[nearest-even]): Float32[nearest-even] pure { -a }";
+    assert_ieee_carrier(function, "quire.op.ieee.float32.negate", 1);
+    for (id, limits, expected) in [
+        (
+            "F33 complete",
+            ieee_limits(32, 1, 2, 1),
+            ConversionExpectation::Completed(0xbf80_0000, IeeeFlags::EMPTY),
+        ),
+        (
+            "F33 retain denial",
+            ieee_limits(32, 1, 1, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::WorkUnits,
+                ChargePoint::IeeeResultRetain,
+                1,
+                1,
+            ),
+        ),
+        (
+            "F33 operand denial",
+            ieee_limits(32, 0, 2, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::ValueOccurrences,
+                ChargePoint::IeeeOperands,
+                0,
+                1,
+            ),
+        ),
+    ] {
+        let source_limits = ScalarLimits {
+            work_units: limits.work_units + 1,
+            ..limits
+        };
+        let (qsl, losses, qsl_meter) = observed_float_source(
+            function,
+            vec![Value::Float(input)],
+            Meter::new(source_limits),
+        );
+        let mut runtime_meter = Meter::new(limits);
+        let native = evaluate_ieee(
+            IeeeOperation::Negate(input),
+            RoundingMode::NearestEven,
+            &mut runtime_meter,
+        )
+        .expect("negation admits");
+        match (expected, qsl, native) {
+            (
+                ConversionExpectation::Completed(bits, flags),
+                Outcome::Completed(Value::Float(qsl_value)),
+                Outcome::Completed(native),
+            ) => {
+                assert_eq!(qsl_value, native.value(), "{id} two-sided value");
+                assert_eq!(
+                    format!("{qsl_value:?}"),
+                    format!("{:?}", native.value()),
+                    "{id} Debug rendering"
+                );
+                assert_eq!(qsl_value.bits(), bits, "{id} QSpec bits");
+                assert_eq!(native.flags(), flags);
+                assert!(losses.is_empty());
+            }
+            (
+                ConversionExpectation::Incomplete(kind, point, consumed, next),
+                Outcome::Incomplete(qsl_shortage),
+                Outcome::Incomplete(native_shortage),
+            ) => {
+                assert_eq!(native_shortage.limit_kind, kind, "{id}");
+                assert_eq!(native_shortage.charge_point, point, "{id}");
+                assert_eq!(native_shortage.consumed, consumed, "{id}");
+                assert_eq!(
+                    native_shortage.limit,
+                    asserted_limit(limits, kind),
+                    "{id} runtime limit"
+                );
+                assert_eq!(native_shortage.next_charge, Integer::from(next), "{id}");
+                assert_eq!(qsl_shortage.limit_kind, kind, "{id}");
+                assert_eq!(qsl_shortage.charge_point, point, "{id}");
+                assert_eq!(
+                    qsl_shortage.consumed,
+                    consumed + u64::from(kind == LimitKind::WorkUnits),
+                    "{id}"
+                );
+                assert_eq!(
+                    qsl_shortage.limit,
+                    asserted_limit(source_limits, kind),
+                    "{id} QSL limit"
+                );
+                assert_eq!(
+                    qsl_shortage.next_charge,
+                    Integer::from(next),
+                    "{id} QSL next charge"
+                );
+                assert!(losses.is_empty());
+            }
+            (expected, qsl, native) => {
+                panic!("{id} expected {expected:?}; QSL {qsl:?}; native {native:?}")
+            }
+        }
+        assert_scalar_charge_suffix(id, &qsl_meter, &runtime_meter);
+    }
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn tc193_f24_f25_f26_f31_width_conversions_agree() {
+    for id in ["F24", "F25", "F26", "F31"] {
+        assert!(
+            !selected_vector(id).inputs.is_empty(),
+            "{id} remains published"
+        );
+    }
+    let f32_one = IeeeValue::binary32(0x3f80_0000);
+    for (id, limits, expected) in [
+        (
+            "F24 widen one",
+            ieee_limits(64, 1, 4, 1),
+            ConversionExpectation::Completed(0x3ff0_0000_0000_0000, IeeeFlags::EMPTY),
+        ),
+        (
+            "F24 widen bit limit",
+            ieee_limits(32, 1, 4, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::IntegerBits,
+                ChargePoint::IeeeExactIntermediate,
+                32,
+                64,
+            ),
+        ),
+    ] {
+        assert_float_conversion(
+            id,
+            "Float32[nearest-even]",
+            "Float64[nearest-even]",
+            "quire.op.ieee.to_float64",
+            Value::Float(f32_one),
+            limits,
+            expected,
+            |meter| {
+                convert_ieee_width(
+                    f32_one,
+                    IeeeWidth::Binary64,
+                    RoundingMode::NearestEven,
+                    meter,
+                )
+            },
+        );
+    }
+    let f64_one = IeeeValue::binary64(0x3ff0_0000_0000_0000);
+    assert_float_conversion(
+        "F24 narrow input bit limit",
+        "Float64[nearest-even]",
+        "Float32[nearest-even]",
+        "quire.op.ieee.to_float32",
+        Value::Float(f64_one),
+        ieee_limits(32, 1, 4, 1),
+        ConversionExpectation::Incomplete(LimitKind::IntegerBits, ChargePoint::IeeeOperands, 0, 64),
+        |meter| {
+            convert_ieee_width(
+                f64_one,
+                IeeeWidth::Binary32,
+                RoundingMode::NearestEven,
+                meter,
+            )
+        },
+    );
+    let negative_zero = IeeeValue::binary32(0x8000_0000);
+    for (id, limits, expected) in [
+        (
+            "F26 signed zero widen",
+            ieee_limits(64, 1, 4, 1),
+            ConversionExpectation::Completed(0x8000_0000_0000_0000, IeeeFlags::EMPTY),
+        ),
+        (
+            "F26 signed zero retain limit",
+            ieee_limits(64, 1, 3, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::WorkUnits,
+                ChargePoint::IeeeResultRetain,
+                3,
+                1,
+            ),
+        ),
+    ] {
+        assert_float_conversion(
+            id,
+            "Float32[nearest-even]",
+            "Float64[nearest-even]",
+            "quire.op.ieee.to_float64",
+            Value::Float(negative_zero),
+            limits,
+            expected,
+            |meter| {
+                convert_ieee_width(
+                    negative_zero,
+                    IeeeWidth::Binary64,
+                    RoundingMode::NearestEven,
+                    meter,
+                )
+            },
+        );
+    }
+    for (id, bits, mode, limits, expected) in [
+        (
+            "F25 signaling payload",
+            0x7ff0_0000_0000_0001,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 2, 1),
+            ConversionExpectation::Completed(
+                0x7fc0_0001,
+                [IeeeFlag::Invalid].into_iter().collect(),
+            ),
+        ),
+        (
+            "F25 negative quiet payload",
+            0xfff8_0000_0000_0003,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 2, 1),
+            ConversionExpectation::Completed(0xffc0_0003, IeeeFlags::EMPTY),
+        ),
+        (
+            "F25 oversized payload",
+            0x7ff8_0000_0040_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 1, 0),
+            ConversionExpectation::Refused(
+                "ieee_nan_payload_not_representable",
+                "payload-exceeds-target",
+            ),
+        ),
+        (
+            "F25 signaling oversized payload",
+            0x7ff0_0000_0040_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 1, 0),
+            ConversionExpectation::Refused(
+                "ieee_nan_payload_not_representable",
+                "payload-exceeds-target",
+            ),
+        ),
+        (
+            "F25 operand denial",
+            0x7ff8_0000_0040_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 0, 0),
+            ConversionExpectation::Incomplete(
+                LimitKind::WorkUnits,
+                ChargePoint::IeeeOperands,
+                0,
+                1,
+            ),
+        ),
+        (
+            "F31 negative infinity",
+            0xfff0_0000_0000_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 2, 1),
+            ConversionExpectation::Completed(0xff80_0000, IeeeFlags::EMPTY),
+        ),
+        (
+            "F31 negative infinity retention",
+            0xfff0_0000_0000_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 1, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::WorkUnits,
+                ChargePoint::IeeeResultRetain,
+                1,
+                1,
+            ),
+        ),
+        (
+            "F31 nearest tenth",
+            0x3fb9_9999_9999_999a,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 4, 1),
+            ConversionExpectation::Completed(
+                0x3dcc_cccd,
+                [IeeeFlag::Inexact].into_iter().collect(),
+            ),
+        ),
+        (
+            "F31 exact tenth",
+            0x3fb9_9999_9999_999a,
+            RoundingMode::Exact,
+            ieee_limits(64, 1, 3, 1),
+            ConversionExpectation::Refused("ieee_not_exact", "rounding-required"),
+        ),
+        (
+            "F31 exact tenth round denial",
+            0x3fb9_9999_9999_999a,
+            RoundingMode::Exact,
+            ieee_limits(64, 1, 2, 1),
+            ConversionExpectation::Incomplete(LimitKind::WorkUnits, ChargePoint::IeeeRound, 2, 1),
+        ),
+        (
+            "F31 exact maximum",
+            0x47ef_ffff_e000_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 4, 1),
+            ConversionExpectation::Completed(0x7f7f_ffff, IeeeFlags::EMPTY),
+        ),
+        (
+            "F31 overflow tie",
+            0x47ef_ffff_f000_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 4, 1),
+            ConversionExpectation::Completed(
+                0x7f80_0000,
+                [IeeeFlag::Overflow, IeeeFlag::Inexact]
+                    .into_iter()
+                    .collect(),
+            ),
+        ),
+        (
+            "F31 overflow retention denial",
+            0x47ef_ffff_f000_0000,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 3, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::WorkUnits,
+                ChargePoint::IeeeResultRetain,
+                3,
+                1,
+            ),
+        ),
+        (
+            "F31 toward-zero maximum",
+            0x47ef_ffff_f000_0000,
+            RoundingMode::TowardZero,
+            ieee_limits(64, 1, 4, 1),
+            ConversionExpectation::Completed(
+                0x7f7f_ffff,
+                [IeeeFlag::Inexact].into_iter().collect(),
+            ),
+        ),
+        (
+            "F31 underflow",
+            0x0000_0000_0000_0001,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 4, 1),
+            ConversionExpectation::Completed(
+                0,
+                [IeeeFlag::Underflow, IeeeFlag::Inexact]
+                    .into_iter()
+                    .collect(),
+            ),
+        ),
+        (
+            "F31 underflow retention denial",
+            0x0000_0000_0000_0001,
+            RoundingMode::NearestEven,
+            ieee_limits(64, 1, 3, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::WorkUnits,
+                ChargePoint::IeeeResultRetain,
+                3,
+                1,
+            ),
+        ),
+    ] {
+        let input = IeeeValue::binary64(bits);
+        let target = format!("Float32[{}]", mode.as_str());
+        assert_float_conversion(
+            id,
+            "Float64[nearest-even]",
+            &target,
+            "quire.op.ieee.to_float32",
+            Value::Float(input),
+            limits,
+            expected,
+            |meter| convert_ieee_width(input, IeeeWidth::Binary32, mode, meter),
+        );
+    }
+    let nan32 = IeeeValue::binary32(0x7fc0_0001);
+    assert_float_conversion(
+        "F25 quiet payload widening",
+        "Float32[nearest-even]",
+        "Float64[nearest-even]",
+        "quire.op.ieee.to_float64",
+        Value::Float(nan32),
+        ieee_limits(32, 1, 2, 1),
+        ConversionExpectation::Completed(0x7ff8_0000_0000_0001, IeeeFlags::EMPTY),
+        |meter| convert_ieee_width(nan32, IeeeWidth::Binary64, RoundingMode::NearestEven, meter),
+    );
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
+fn tc193_f24_f27_f28_exact_conversions_agree() {
+    for id in ["F24", "F27", "F28"] {
+        assert!(
+            !selected_vector(id).inputs.is_empty(),
+            "{id} remains published"
+        );
+    }
+    let third = Rational::new(Integer::from(1_i64), Integer::from(3_i64)).expect("one third");
+    for (id, limits, expected) in [
+        (
+            "F24 one third",
+            ieee_limits(32, 1, 4, 1),
+            ConversionExpectation::Completed(
+                0x3eaa_aaab,
+                [IeeeFlag::Inexact].into_iter().collect(),
+            ),
+        ),
+        (
+            "F24 exact intermediate denial",
+            ieee_limits(2, 1, 4, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::IntegerBits,
+                ChargePoint::IeeeExactIntermediate,
+                2,
+                32,
+            ),
+        ),
+    ] {
+        assert_float_conversion(
+            id,
+            "Rational[0, 1; 1, 3]",
+            "Float32[nearest-even]",
+            "quire.op.ieee.from_exact",
+            Value::Rational(third.clone()),
+            limits,
+            expected,
+            |meter| {
+                exact_to_ieee(
+                    &third,
+                    IeeeWidth::Binary32,
+                    RoundingMode::NearestEven,
+                    meter,
+                )
+            },
+        );
+    }
+    let decimal = Decimal::new(Integer::from(100_i64), 2);
+    for (id, limits, expected) in [
+        (
+            "F28 decimal one",
+            ieee_limits(32, 1, 4, 1),
+            ConversionExpectation::Completed(0x3f80_0000, IeeeFlags::EMPTY),
+        ),
+        (
+            "F28 decimal retained bits",
+            ieee_limits(6, 1, 4, 1),
+            ConversionExpectation::Incomplete(
+                LimitKind::IntegerBits,
+                ChargePoint::IeeeOperands,
+                0,
+                7,
+            ),
+        ),
+    ] {
+        assert_float_conversion(
+            id,
+            "Decimal[0, 100; 0, 2; nearest-even]",
+            "Float32[nearest-even]",
+            "quire.op.ieee.from_exact",
+            Value::Decimal(decimal.clone()),
+            limits,
+            expected,
+            |meter| {
+                exact_to_ieee(
+                    &decimal,
+                    IeeeWidth::Binary32,
+                    RoundingMode::NearestEven,
+                    meter,
+                )
+            },
+        );
+    }
+    let small = rational_domain((0_i64.into(), 1_i64.into()), (1_i64.into(), 2_i64.into()));
+    let half = Rational::new(1_i64.into(), 2_i64.into()).expect("half");
+    assert_rational_conversion(
+        "F24 IEEE half",
+        "Float32[nearest-even]",
+        "Rational[0, 1; 1, 2]",
+        IeeeValue::binary32(0x3f00_0000),
+        &small,
+        ieee_limits(32, 1, 3, 1),
+        Some(Outcome::Completed(Value::Rational(half.clone()))),
+    );
+    assert_rational_conversion(
+        "F24 NaN undefined",
+        "Float32[nearest-even]",
+        "Rational[0, 1; 1, 2]",
+        IeeeValue::binary32(0x7fc0_0000),
+        &small,
+        ieee_limits(32, 1, 2, 1),
+        Some(Outcome::Undefined(Undefined::IeeeNotFinite)),
+    );
+    let tiny_denominator = Integer::from(2_i64).pow(&Integer::from(1074_i64));
+    let large = rational_domain(
+        (0_i64.into(), 1_i64.into()),
+        (1_i64.into(), tiny_denominator.clone()),
+    );
+    let large_ty = format!("Rational[0, 1; 1, {tiny_denominator}]");
+    let tiny =
+        Rational::new(1_i64.into(), tiny_denominator).expect("smallest subnormal exact value");
+    assert_rational_conversion(
+        "F27 tiny exact",
+        "Float64[nearest-even]",
+        &large_ty,
+        IeeeValue::binary64(1),
+        &large,
+        ieee_limits(1075, 1, 3, 1),
+        Some(Outcome::Completed(Value::Rational(tiny))),
+    );
+    assert_rational_conversion(
+        "F27 tiny bit denial",
+        "Float64[nearest-even]",
+        &large_ty,
+        IeeeValue::binary64(1),
+        &large,
+        ieee_limits(1074, 1, 3, 1),
+        None,
+    );
+    let zero = rational_domain((0_i64.into(), 0_i64.into()), (1_i64.into(), 1_i64.into()));
+    assert_rational_conversion(
+        "F27 negative zero",
+        "Float32[nearest-even]",
+        "Rational[0, 0; 1, 1]",
+        IeeeValue::binary32(0x8000_0000),
+        &zero,
+        ieee_limits(32, 1, 3, 1),
+        Some(Outcome::Completed(Value::Rational(Rational::from_integer(
+            0_i64.into(),
+        )))),
+    );
+    assert_rational_conversion(
+        "F27 retain denial",
+        "Float32[nearest-even]",
+        "Rational[0, 0; 1, 1]",
+        IeeeValue::binary32(0x8000_0000),
+        &zero,
+        ieee_limits(32, 1, 2, 1),
+        None,
+    );
+    assert_rational_conversion(
+        "F27 infinity undefined",
+        "Float32[nearest-even]",
+        "Rational[0, 1; 1, 2]",
+        IeeeValue::binary32(0x7f80_0000),
+        &small,
+        ieee_limits(32, 1, 1, 0),
+        Some(Outcome::Undefined(Undefined::IeeeNotFinite)),
+    );
+    assert_rational_conversion(
+        "F27 infinity operand denial",
+        "Float32[nearest-even]",
+        "Rational[0, 1; 1, 2]",
+        IeeeValue::binary32(0x7f80_0000),
+        &small,
+        ieee_limits(32, 1, 0, 0),
+        None,
+    );
+    let integral = rational_domain((0_i64.into(), 1_i64.into()), (1_i64.into(), 1_i64.into()));
+    assert_rational_conversion(
+        "F27 outside domain",
+        "Float32[nearest-even]",
+        "Rational[0, 1; 1, 1]",
+        IeeeValue::binary32(0x3f00_0000),
+        &integral,
+        ieee_limits(32, 1, 2, 0),
+        Some(Outcome::Refused(Refusal::IeeeRationalOutOfDomain {
+            target: Box::new(integral.clone()),
+        })),
+    );
+    assert_rational_conversion(
+        "F27 exact intermediate denial",
+        "Float32[nearest-even]",
+        "Rational[0, 1; 1, 1]",
+        IeeeValue::binary32(0x3f00_0000),
+        &integral,
+        ieee_limits(32, 1, 1, 0),
+        None,
+    );
+}
+
+#[trace("TC-097", "IT-017-SC-01", "IT-017-SC-02", "IT-017-SC-03")]
+#[test]
 fn tc193_f10_binary64_rounding_agrees() {
     let f10 = selected_vector("F10");
     let f10_bits = hex_bits64(f10.inputs);
@@ -2057,19 +3043,6 @@ fn tc193_f01_f02_f02b_order_and_identity_agree() {
     }
 }
 
-enum FCase {
-    Runnable(fn()),
-    Pending {
-        ticket: &'static str,
-        subcase: &'static str,
-    },
-    Partial {
-        run: fn(),
-        ticket: &'static str,
-        subcase: &'static str,
-    },
-}
-
 fn run_f01_f02_available() {
     tc193_f01_f02_numeric_equal_charges_agree();
     tc193_f01_f02_f02b_order_and_identity_agree();
@@ -2080,42 +3053,43 @@ fn run_f04b_add_and_fma() {
     tc193_f04b_f11_fma_agrees_with_runtime_and_separate_rounding();
 }
 
-fn f_case(id: &str) -> FCase {
+fn run_f24_conversion_agreement() {
+    tc193_f24_f25_f26_f31_width_conversions_agree();
+    tc193_f24_f27_f28_exact_conversions_agree();
+}
+
+fn run_f26_signed_zero_agreement() {
+    tc193_f26_signed_zero_arithmetic_agrees_in_every_mode();
+    tc193_f24_f25_f26_f31_width_conversions_agree();
+}
+
+fn f_case(id: &str) -> fn() {
     // Branch-gating QSpec F-ID dispatch: an unknown or newly authored ID fails closed.
     match id {
-        "F01" | "F02" => FCase::Runnable(run_f01_f02_available),
-        "F02b" => FCase::Runnable(tc193_f01_f02_f02b_order_and_identity_agree),
-        "F03" | "F04" => {
-            FCase::Runnable(tc193_selected_add_rows_agree_from_checked_source_to_runtime)
-        }
-        "F04b" => FCase::Runnable(run_f04b_add_and_fma),
-        "F05" => FCase::Runnable(tc193_f05_infinities_and_finite_extrema_agree),
-        "F06" => FCase::Runnable(tc193_f06_cross_width_comparison_refuses_before_evaluation),
-        "F07" | "F08" => {
-            FCase::Runnable(tc193_f07_f08_rounding_modes_agree_from_checked_source_to_runtime)
-        }
-        "F09" | "F14" | "F23" | "F29" => {
-            FCase::Runnable(tc193_f09_f14_f23_f29_exact_refusal_and_rounding_agree)
-        }
-        "F10" => FCase::Runnable(tc193_f10_binary64_rounding_agrees),
-        "F11" => FCase::Runnable(tc193_f04b_f11_fma_agrees_with_runtime_and_separate_rounding),
-        "F12" => FCase::Runnable(tc193_f12_invalid_arithmetic_agrees_in_every_mode),
-        "F13" => FCase::Runnable(tc193_f13_division_flags_are_operation_local),
-        "F15" | "F16" => FCase::Runnable(tc193_f15_f16_subnormal_multiplication_agrees),
-        "F17" => FCase::Runnable(tc193_f17_numeric_equality_accounts_for_named_charges),
-        "F18" | "F21" | "F22" => FCase::Runnable(tc193_f18_f21_f22_metered_arithmetic_agrees),
-        "F19" | "F30" => FCase::Runnable(tc193_f19_f30_square_root_named_charges_agree),
-        "F20" => FCase::Runnable(tc193_f20_admission_refusals_have_no_charge),
-        "F24" | "F25" | "F27" | "F28" | "F31" | "F32" | "F33" => FCase::Pending {
-            ticket: "IR-1283",
-            subcase: "IEEE conversion or negation source and evaluation path",
-        },
-        "F26" => FCase::Partial {
-            run: tc193_f26_signed_zero_arithmetic_agrees_in_every_mode,
-            ticket: "IR-1283",
-            subcase: "signed-zero width conversion",
-        },
-        "F34" => FCase::Runnable(tc193_f34_float_relations_agree_at_both_widths),
+        "F01" | "F02" => run_f01_f02_available,
+        "F02b" => tc193_f01_f02_f02b_order_and_identity_agree,
+        "F03" | "F04" => tc193_selected_add_rows_agree_from_checked_source_to_runtime,
+        "F04b" => run_f04b_add_and_fma,
+        "F05" => tc193_f05_infinities_and_finite_extrema_agree,
+        "F06" => tc193_f06_cross_width_comparison_refuses_before_evaluation,
+        "F07" | "F08" => tc193_f07_f08_rounding_modes_agree_from_checked_source_to_runtime,
+        "F09" | "F14" | "F23" | "F29" => tc193_f09_f14_f23_f29_exact_refusal_and_rounding_agree,
+        "F10" => tc193_f10_binary64_rounding_agrees,
+        "F11" => tc193_f04b_f11_fma_agrees_with_runtime_and_separate_rounding,
+        "F12" => tc193_f12_invalid_arithmetic_agrees_in_every_mode,
+        "F13" => tc193_f13_division_flags_are_operation_local,
+        "F15" | "F16" => tc193_f15_f16_subnormal_multiplication_agrees,
+        "F17" => tc193_f17_numeric_equality_accounts_for_named_charges,
+        "F18" | "F21" | "F22" => tc193_f18_f21_f22_metered_arithmetic_agrees,
+        "F19" | "F30" => tc193_f19_f30_square_root_named_charges_agree,
+        "F20" => tc193_f20_admission_refusals_have_no_charge,
+        "F24" => run_f24_conversion_agreement,
+        "F25" | "F31" => tc193_f24_f25_f26_f31_width_conversions_agree,
+        "F26" => run_f26_signed_zero_agreement,
+        "F27" | "F28" => tc193_f24_f27_f28_exact_conversions_agree,
+        "F32" => tc193_f32_ieee_negation_preserves_bits_and_rounding_independence,
+        "F33" => tc193_f33_negation_meter_agrees,
+        "F34" => tc193_f34_float_relations_agree_at_both_widths,
         other => panic!("unrouted QSpec TC-193 F vector {other}"),
     }
 }
@@ -2124,19 +3098,6 @@ fn f_case(id: &str) -> FCase {
 #[test]
 fn tc193_every_published_f_row_has_a_runnable_or_ticket_backed_route() {
     for row in vectors_of(TestCase::Tc193) {
-        match f_case(row.id) {
-            FCase::Runnable(run) => run(),
-            FCase::Partial {
-                run,
-                ticket,
-                subcase,
-            } => {
-                run();
-                eprintln!("PENDING {} {subcase}: {ticket}", row.id);
-            }
-            FCase::Pending { ticket, subcase } => {
-                eprintln!("PENDING {} {subcase}: {ticket}", row.id);
-            }
-        }
+        f_case(row.id)();
     }
 }
