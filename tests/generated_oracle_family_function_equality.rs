@@ -593,16 +593,35 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
         Default::default(),
     )
     .expect("changed consumer descriptor generation");
-    assert!(matches!(&refused.claim_map.items[8].result,
+    let claim_for = |output: &quire_contract_codegen::CompositeEqualityOracles, index: usize| {
+        let claims = output
+            .claim_map
+            .items
+            .iter()
+            .filter(|claim| claim.node_id == nodes[index])
+            .cloned()
+            .collect::<Vec<_>>();
+        let [claim] = claims.as_slice() else {
+            panic!("one original equality claim at {index}");
+        };
+        claim.clone()
+    };
+    let wrong_claim = claim_for(&refused, 8);
+    assert!(
+        matches!(&wrong_claim.result,
         ClaimDisposition::Refused { refusal: quire_contract_codegen::CompositeEqualityRefusal::OperandTypeMismatch {
             position: 0, expected, found: Some(found),
-        }} if expected == &boolean && found == &integer));
+        }} if expected == &boolean && found == &integer),
+        "wrong descriptor refusal: {wrong_claim:?}"
+    );
+    let healthy_claim = claim_for(&refused, 9);
     assert!(matches!(
-        &refused.claim_map.items[9].result,
+        &healthy_claim.result,
         ClaimDisposition::Generated(_)
     ));
     assert_eq!(
-        refused.claim_map.items[9], output.claim_map.items[9],
+        healthy_claim,
+        claim_for(&output, 9),
         "changed Integer descriptor preserves the complete healthy sibling claim and binding"
     );
     let authority = family_checked_source::checked(&source);
