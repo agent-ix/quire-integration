@@ -76,8 +76,8 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
             declaration_span: clause.clause().span(),
             clock: if profile.contains("fixed-sample") {
                 ClockConfiguration::FixedSample {
-                    epoch: ClockExactNumber::Integer { value: "0".into() },
-                    period: ClockExactNumber::Integer { value: "1".into() },
+                    epoch: ClockExactNumber::Integer { decimal: "0".into() },
+                    period: ClockExactNumber::Integer { decimal: "1".into() },
                     unit: "tick".into(),
                 }
             } else {
@@ -521,25 +521,15 @@ fn exact_node_work_and_canonical_byte_settings_admit_and_first_excess_stops() {
 
 #[trace("IT-020-SC-02", "IT-020-SC-04")]
 #[test]
-fn unbounded_interval_retains_exact_checked_premise_and_codes_roundtrip() {
-    let (package, _, clause) = packages("eventually holds(true)", EVENT);
+fn unbounded_source_retains_original_infinite_trace_classification_and_codes_roundtrip() {
+    let (package, _, clause) = packages("eventually holds(true)", "quire.temporal.infinite-trace/v1");
     let subject = temporal_subject(&package, &clause).expect("subject");
     let classification = mapping_support(&subject, Closure::Complete).expect("classification");
-    let error = construct_tl_formula(
-        &package,
-        &subject,
-        &classification,
-        Closure::Complete,
-        TlFormulaLimits::default(),
-    )
-    .expect_err("unbounded interval needs premise");
-    let TlFormulaError::UnboundedInterval { node, interval } = &error else {
-        panic!("typed unbounded interval: {error:?}")
-    };
-    assert_eq!(node, subject.formula_graph()[0].node);
-    assert_eq!(interval, &subject.formula_graph()[0].interval);
-    for &code in TlFormulaCode::all() {
-        assert_eq!(TlFormulaCode::from_code(code.as_str()), Some(code));
-    }
+    let error = construct_tl_formula(&package, &subject, &classification, Closure::Complete, TlFormulaLimits::default()).expect_err("unbounded infinite profile remains unsupported");
+    let TlFormulaError::Unsupported(retained) = &error else { panic!("original owner disposition: {error:?}") };
+    assert_eq!(retained, &classification);
+    assert_eq!(retained.support, Support::Unsupported { dimensions: vec![Unmatched::InfiniteTrace] });
+    assert_eq!(error.code(), TlFormulaCode::Unsupported);
+    for &code in TlFormulaCode::all() { assert_eq!(TlFormulaCode::from_code(code.as_str()), Some(code)); }
     assert_eq!(TlFormulaCode::from_code("foreign-code"), None);
 }
