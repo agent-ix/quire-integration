@@ -43,7 +43,9 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11b" => Some(RowDispatch::Topology("definition-cycle")),
         "U11c" => Some(RowDispatch::Topology("missing-name")),
         "U11d" => Some(RowDispatch::Topology("incompatible-definition")),
+        "U11e" => Some(RowDispatch::Topology("invalid-value")),
         "U11f" => Some(RowDispatch::Topology("definition-cycle")),
+        "U11g1" | "U11g2" | "U11g4" => Some(RowDispatch::Topology("missing-name")),
         "U11l" => Some(RowDispatch::Topology("definition-cycle")),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
@@ -56,8 +58,8 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
             pending("QSL/IR/CG/native per-operation dispatch and comparison")
         }
-        "U11e" | "U11h" | "U11i" | "U11j" | "U11k" | "U11g1" | "U11g2" | "U11g4"
-        | "U11m" | "U11n" | "U11o" | "U11p" | "U11q" | "U11r" | "U11s" | "U11t" | "U11u"
+        "U11h" | "U11i" | "U11j" | "U11k" | "U11m" | "U11n" | "U11o" | "U11p" | "U11q"
+        | "U11r" | "U11s" | "U11t" | "U11u"
         | "U11w" | "U11x" | "U11y" | "U11z1" | "U11z2" | "U11z3" => {
             pending("QSL admission and mixed-operation disposition")
         }
@@ -196,8 +198,9 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             }
             RowDispatch::Topology(expected) => {
                 // Each of these IDs has a value-asserting public QSL control in
-                // tc187_u11_topology. The dispatcher guards their public row
-                // identity and expectation; the separate test executes them.
+                // tc187_u11_topology or tc187_u11_local_values. The dispatcher
+                // guards their public row identity and expectation; the
+                // separate tests execute them.
                 assert!(
                     vector.expected.contains(expected),
                     "{} expectation",
@@ -226,7 +229,10 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
     }
     assert_eq!(
         observed,
-        BTreeSet::from(["U06", "U11a", "U11b", "U11c", "U11d", "U11f", "U11l"])
+        BTreeSet::from([
+            "U06", "U11a", "U11b", "U11c", "U11d", "U11e", "U11f", "U11g1", "U11g2", "U11g4",
+            "U11l",
+        ])
     );
     assert!(planned > 0, "SC-04 is not yet complete");
     assert!(
