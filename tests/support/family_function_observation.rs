@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Native caller and independent FR-485 observation, with no local body factory.
 
+mod family_function_selection {
+    include!("family_function_selection.rs");
+}
+
+use family_function_selection::declared;
+
 use qsl_replay::{
     acquire_checked_closure, ApplicationBeginRefusal, ApplicationEnvironment, CompileUnit,
     DependencyInput, LibraryName, ReplayLimits, SourceIdentity, StageLimits,
 };
 use quire_contract_codegen::{checked_function_key, CheckedFunctionError, CheckedFunctionSource};
 use quire_contract_model::{
-    CheckedNodeId, CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2,
-    CheckedPackageV2ReadResult,
+    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
 };
 use quire_eval::{CallFailure, Evaluation, FamilyOutcome};
 use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
@@ -29,23 +34,6 @@ fn limits(work: u64) -> ScalarLimits {
         work_units: work,
         result_units: 1024,
     }
-}
-
-fn selected(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
-    let nodes = package
-        .graph()
-        .nodes
-        .iter()
-        .filter(|node| {
-            node.declaration
-                .as_ref()
-                .is_some_and(|decl| decl.qualified_name.iter().map(AsRef::as_ref).eq([name]))
-        })
-        .collect::<Vec<_>>();
-    let [node] = nodes.as_slice() else {
-        panic!("one original declaration {name}");
-    };
-    node.node_id.clone()
 }
 
 fn generated(
@@ -232,7 +220,7 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
         .into_iter()
         .enumerate()
     {
-        let key = checked_function_key(&package, &selected(&package, name)).unwrap();
+        let key = checked_function_key(&package, &declared(&package, name)).unwrap();
         let selection = handle.lookup_callable(&owner, &key).unwrap();
         let mut rejected_meter = Meter::new(limits(1024));
         let refusal = generated(

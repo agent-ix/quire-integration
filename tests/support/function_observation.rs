@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Integration-owned native caller of the actual exported generated function.
+mod family_function_selection {
+    include!("family_function_selection.rs");
+}
+
+use family_function_selection::declared;
+
 use qsl_replay::{
     acquire_checked_closure, ApplicationEnvironment, CompileUnit, DependencyInput, LibraryName,
     ReplayLimits, SourceIdentity, StageLimits,
@@ -161,22 +167,8 @@ fn actual_function_and_fresh_qsl_session_agree() {
     ) else {
         panic!("same exact source admits");
     };
-    let functions = package
-        .graph()
-        .nodes
-        .iter()
-        .filter(|node| {
-            node.declaration.as_ref().is_some_and(|declaration| {
-                declaration
-                    .qualified_name
-                    .iter()
-                    .map(AsRef::as_ref)
-                    .eq(["combine"])
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(functions.len(), 1);
-    let key = checked_function_key(&package, &functions[0].node_id).unwrap();
+    let function = declared(&package, "combine");
+    let key = checked_function_key(&package, &function).unwrap();
     let owner = LibraryName::new(package.name().to_owned()).unwrap();
     let handle = acquired.handle();
     let selection = handle.lookup_callable(&owner, &key).unwrap();

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Selected FR-021 operation rows; other SC-05 operations remain unqualified.
 
+#[path = "support/family_function_selection.rs"]
+mod family_function_selection;
 #[path = "support/generated_oracle.rs"]
 mod generated_oracle;
+
+use family_function_selection::{body, declared};
 
 use ix_trace_rs::trace;
 use qsl_replay::{
@@ -31,44 +35,6 @@ const SOURCE: &str = concat!(
     "function exerciseProduct using v(x: Int[0,9], y: Int[0,9]): Integer pure { product(x,y) }\n",
     "function exerciseRelay using v(x: Int[0,9], y: Int[0,9]): Integer pure { relay(x,y) }\n",
 );
-
-fn declaration(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
-    let selected = package
-        .graph()
-        .nodes
-        .iter()
-        .filter(|node| {
-            node.declaration
-                .as_ref()
-                .is_some_and(|decl| decl.qualified_name.iter().map(AsRef::as_ref).eq([name]))
-        })
-        .collect::<Vec<_>>();
-    let [node] = selected.as_slice() else {
-        panic!("one genuine declaration {name}");
-    };
-    node.node_id.clone()
-}
-
-fn body(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
-    let declaration = declaration(package, name);
-    let Some(CheckedTerm::Aggregate { members }) = package.term(&declaration) else {
-        panic!("native function header");
-    };
-    let selected = members
-        .iter()
-        .filter_map(|member| match member {
-            CheckedTerm::Binding { name, value } if name.as_ref() == "body" => match &**value {
-                CheckedTerm::Reference { target } => Some(target.clone()),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let [body] = selected.as_slice() else {
-        panic!("one original body reference");
-    };
-    body.clone()
-}
 
 #[trace("TC-101", "IT-019-SC-05")]
 #[test]
@@ -111,7 +77,7 @@ fn subtraction_multiplication_and_nested_call_match_fresh_qsl_sessions() {
     let exercise = ["exerciseDifference", "exerciseProduct", "exerciseRelay"];
     let declarations = names
         .iter()
-        .map(|name| declaration(&package, name))
+        .map(|name| declared(&package, name))
         .collect::<Vec<_>>();
     let bodies = names
         .iter()
@@ -216,6 +182,10 @@ fn subtraction_multiplication_and_nested_call_match_fresh_qsl_sessions() {
         assert_eq!(generated.function_node_id, declarations[index]);
         driver = driver.replace(&format!("__SYMBOL_{index}__"), &generated.oracle_symbol);
     }
+    let driver = driver.replace(
+        "include!(\"family_function_selection.rs\");",
+        include_str!("support/family_function_selection.rs"),
+    );
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
         ["SC05 function rows: 9 envelopes, 12 input refusals, 3 owner refusals"]
