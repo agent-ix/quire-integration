@@ -13,8 +13,7 @@ mod oracle_observation;
 use family_scalar_limits::limits;
 
 use ix_trace_rs::trace;
-use qsl_package::{emit_checked, CheckedPackage};
-use qsl_semantics::{check::PackageDeclarations, model::intake::SelectedModels};
+use qsl_package::emit_checked;
 use quire_contract_codegen::{
     derive_exact_scalar_items, generate_exact_scalar_oracles, ClaimDisposition,
     ExactScalarOperation, OperationProvenance,
@@ -25,7 +24,9 @@ use quire_contract_ir::{
 };
 use quire_eval::FamilyOutcome;
 use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, Value};
-use quire_semantic_value::checking::CheckingLimits;
+#[path = "support/family_checked_source.rs"]
+mod family_checked_source;
+use family_checked_source::checked;
 
 struct Row {
     name: String,
@@ -104,30 +105,6 @@ fn source(rows: &[Row]) -> String {
         ));
     }
     source
-}
-
-fn checked(source: &str) -> CheckedPackage {
-    let parsed = qsl_cst::parse(
-        qsl_foundation::SourceIdentity::new("agent-ix", "scalar-operations"),
-        "scalar-operations.native",
-        source.as_bytes(),
-        qsl_cst::Limits::default(),
-    )
-    .expect("original source parses");
-    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
-    let unit = qsl_forms::build_unit(&parsed).expect("original source forms");
-    CheckedPackage::link(
-        PackageDeclarations::assemble(
-            parsed.source().reference().clone(),
-            "agent-ix/scalar-operations".to_owned(),
-            unit,
-            SelectedModels::default(),
-            Vec::new(),
-        )
-        .expect("original source assembles")
-        .check(CheckingLimits::default())
-        .expect("original source checks"),
-    )
 }
 
 #[trace("TC-102", "IT-019-SC-05")]

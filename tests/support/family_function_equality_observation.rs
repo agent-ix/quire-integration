@@ -115,7 +115,7 @@ fn required(
             ChargePoint::EqualityPlanForm
         };
         assert!(
-            matches!(&result.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == work && record.consumed == work && record.next_charge == Integer::one() && record.charge_point == point)
+            matches!(&result.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == work && record.consumed == work && record.next_charge == Integer::from(if work == 0 { 1_u64 } else { 2_u64 }) && record.charge_point == point)
         );
         let location = result
             .location
