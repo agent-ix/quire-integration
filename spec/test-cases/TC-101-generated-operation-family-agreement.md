@@ -81,8 +81,8 @@ FR-014 operation-oracle or FR-018 equality-oracle agreement credit.
 
 ## Expected Results
 
-Status: Planned until these controls execute. Each selected generated function
-and independent source session must agree on the complete exposed envelope,
+The initial cohort has executed two-sided native agreement. Each selected
+generated function and independent source session agrees on the complete exposed envelope,
 with the independent required values and stops above. Source authentication and
 argument refusals remain distinct native boundaries and never become values.
 
@@ -94,3 +94,13 @@ and other boundaries remain Planned under IR-842. FR-014 and FR-018 complete
 operation inventories and their comparison boundaries remain separate work.
 Full IT-019-SC-05 and whole-family agreement remain Planned while any required
 row is unexecuted; source-only classification is not agreement.
+
+The subtraction, multiplication and subtraction-callee rows pass at work 0,
+1 and 1024, including the distinct nested FunctionCall stop and source function
+origins. Their argument arity, kind and Integer-10 out-of-domain refusals match
+fresh QSL admission with zero charges/counters. A separately checked and
+strictly admitted addition-source substitution is refused as the original
+OwnerIdentityMismatch before each healthy symbol executes. The body classifier's
+scalar Integer descriptor does not widen the actual source Int[0,9] signature.
+These observations back only the named operations and boundaries, not a whole
+FR-021 variant, family or IT-019-SC-05 closure.

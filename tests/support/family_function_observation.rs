@@ -196,6 +196,33 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
     ) else {
         panic!("independent original bytes admit");
     };
+    let foreign = SOURCE.replace("left - right", "left + right");
+    assert_ne!(foreign, SOURCE);
+    let foreign_acquisition = acquire_checked_closure(
+        CompileUnit {
+            source: SourceIdentity::new("agent-ix", "family-functions"),
+            package_name: "family-functions".to_owned(),
+            path: "family-functions.native",
+            bytes: foreign.as_bytes(),
+        },
+        [],
+        &DependencyInput::default(),
+        StageLimits::default(),
+        ReplayLimits::default(),
+    )
+    .expect("the changed owner source is independently checked and emitted");
+    let CheckedPackageV2ReadResult::Admitted(foreign_package) = CheckedPackageV2::read(
+        foreign_acquisition.package().bytes(),
+        CheckedPackageReadLimits::bounded(),
+        &evidence,
+    ) else {
+        panic!("the changed owner source is a genuine admitted package");
+    };
+    assert_eq!(foreign_package.name(), package.name());
+    assert_ne!(
+        foreign_acquisition.package().bytes(),
+        acquisition.package().bytes()
+    );
     let mut envelopes = 0;
     let mut input_refusals = 0;
     let mut owner_refusals = 0;
@@ -207,8 +234,6 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
     {
         let key = checked_function_key(&package, &selected(&package, name)).unwrap();
         let selection = handle.lookup_callable(&owner, &key).unwrap();
-        let foreign = SOURCE.replace("left - right", "left + right");
-        assert_ne!(foreign, SOURCE);
         let mut rejected_meter = Meter::new(limits(1024));
         let refusal = generated(
             name,
