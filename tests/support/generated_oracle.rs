@@ -1,15 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Native-only execution of actual CG artifacts for IT-019.
 
-use std::{fs, path::Path, process::Command};
+use std::{
+    fs,
+    path::Path,
+    process::Command,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use quire_contract_codegen::{Artifact, ArtifactBundle};
+
+static NEXT_OBSERVATION: AtomicU64 = AtomicU64::new(0);
 
 /// Compile the actual generated crate plus the integration-owned observation
 /// driver. The driver calls its public generated functions; it supplies no
 /// replacement implementation of an operation.
 pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
     let directory = tempfile::tempdir().expect("owned generated crate directory");
+    // All generated crates share one Cargo target directory. Give each
+    // observation its own package and test target identity so Cargo cannot
+    // reuse another driver's generated library or observation binary.
+    let test_name = format!(
+        "observation_{}_{}",
+        std::process::id(),
+        NEXT_OBSERVATION.fetch_add(1, Ordering::Relaxed)
+    );
     let bundle = ArtifactBundle::new(artifacts.to_vec()).expect("CG artifacts validate");
     for artifact in bundle.artifacts() {
         let destination = directory.path().join(&artifact.path);
@@ -30,9 +45,30 @@ pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
     // generated production manifest and library retain their own dependencies.
     let manifest_path = directory.path().join("Cargo.toml");
     let mut manifest = fs::read_to_string(&manifest_path).expect("generated manifest");
+    let crate_name = [
+        quire_contract_codegen::EXACT_SCALAR_CRATE_NAME,
+        quire_contract_codegen::EXACT_FUNCTION_CRATE_NAME,
+    ]
+    .into_iter()
+    .find(|name| manifest.contains(&format!("name = \"{name}\"")))
+    .expect("the artifact has a known generated package name");
+    manifest = manifest.replacen(
+        &format!("name = \"{crate_name}\""),
+        &format!("name = \"{crate_name}-{test_name}\""),
+        1,
+    );
+    assert!(manifest.contains("[lib]\n"), "generated library target");
+    manifest = manifest.replacen(
+        "[lib]\n",
+        &format!("[lib]\nname = \"{}\"\n", crate_name.replace('-', "_")),
+        1,
+    );
     manifest.push_str(&format!(
         "\n[dev-dependencies]\nquire-exact = {{ {}, features = [\"test-support\"] }}\n",
         quire_contract_codegen::EXACT_DEPENDENCY_SOURCE,
+    ));
+    manifest.push_str(&format!(
+        "\n[[test]]\nname = \"{test_name}\"\npath = \"tests/observation.rs\"\n"
     ));
     fs::write(manifest_path, manifest).expect("enable the dev-only native observer");
     // Cargo alone maintains the child lock. Starting from the actual consumer
@@ -60,7 +96,7 @@ pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
         .arg(directory.path().join("Cargo.toml"))
         .args([
             "--test",
-            "observation",
+            &test_name,
             "--",
             "--nocapture",
             "--test-threads=1",
