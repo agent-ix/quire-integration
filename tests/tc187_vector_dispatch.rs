@@ -22,6 +22,7 @@ enum RowDispatch {
     Admission(AdmissionCase),
     Topology(&'static str),
     Admitted(&'static str),
+    Checked(&'static str),
     Planned {
         tickets: &'static [&'static str],
         missing: &'static str,
@@ -61,6 +62,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11p" | "U11w" => Some(RowDispatch::Topology("missing-name")),
         "U11q" | "U11z3" => Some(RowDispatch::Topology("invalid-value")),
         "U11x" => Some(RowDispatch::Topology("missing-name")),
+        "U30" | "U31" => Some(RowDispatch::Checked("type-mismatch")),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
             missing: "public checked-package BoundedQuantity emission and source-to-CG agreement for admitted carried_quantity operations",
@@ -76,7 +78,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         | "U23" | "U24" | "U25" | "U26" | "U27" | "U28" | "U29" => {
             pending("QSL/IR/CG/native quantity operation and limit dispatch")
         }
-        "U30" | "U31" | "U32" | "U33" | "U34" | "U35" | "U36" | "U37" | "U38" | "U39" | "U40" => {
+        "U32" | "U33" | "U34" | "U35" | "U36" | "U37" | "U38" | "U39" | "U40" => {
             pending("QSL model/namespace admission and generated operation dispatch")
         }
         _ => None,
@@ -234,6 +236,16 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 );
                 observed.insert(vector.id);
             }
+            RowDispatch::Checked(expected) => {
+                // Each complete public cell is bound and observed through
+                // QSL assembly and check in tc187_u30_u31.
+                assert!(
+                    vector.expected.contains(expected),
+                    "{} expectation",
+                    vector.id
+                );
+                observed.insert(vector.id);
+            }
             RowDispatch::Planned { tickets, missing } => {
                 let expected_tickets: &[&str] = match vector.id {
                     "U01" => &["QSL-1737", "IR-1345"],
@@ -258,7 +270,8 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
         BTreeSet::from([
             "U06", "U11a", "U11b", "U11c", "U11d", "U11e", "U11f", "U11g1", "U11g2", "U11g4",
             "U11h", "U11i", "U11j", "U11k", "U11l", "U11m", "U11n", "U11o", "U11p", "U11q", "U11r",
-            "U11s", "U11t", "U11u", "U11w", "U11x", "U11y", "U11z1", "U11z2", "U11z3",
+            "U11s", "U11t", "U11u", "U11w", "U11x", "U11y", "U11z1", "U11z2", "U11z3", "U30",
+            "U31",
         ])
     );
     assert!(planned > 0, "SC-04 is not yet complete");
