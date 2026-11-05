@@ -97,6 +97,11 @@ the full API.
    loss, ordered charges and counters, and each authored denial. D09's injected
    result-retain denial executes independently on both meters. These source
    observations do not resolve parameter-based or zero-divisor admission.
+   D04 uses a shared source type `Decimal[0,8000;3,3;exact]` so the
+   retained operands `(1,0)` and `(8,0)` are members. Its independent RT
+   oracle retains `Decimal[0,1000;3,3;exact]`: source admission must leave
+   result `(125,3)`, absence of loss, ordered charges, and counters unchanged.
+   D12's narrow-type input membership remains outside this source claim.
    IT-017-SC-02: every runnable evaluation case has a real two-sided
    observation and the same specified value or noncompleted result. A case
    that cannot execute remains PENDING under SC-01 and is not agreement.

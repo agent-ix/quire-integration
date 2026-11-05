@@ -396,9 +396,8 @@ fn tc185_decimal_vectors() {
             "D01" => d01(),
             "D02" => d02(),
             "D03" => d03(),
-            // QSL-1393 PENDING: linked S4 requires a nonzero divisor proof;
-            // a source guard adds charges before the authored operation.
-            "D04" => d04_rt_only(),
+            // Shared-type literal source preserves the original RT oracle.
+            "D04" => d04(),
             // Shared-type literals admit exact and rounded thirds.
             "D05" => d05(),
             // QSL-1393 PENDING: zero divisor requires kernel-mode source.
@@ -568,7 +567,7 @@ fn d03() {
     d03_exact_qsl_agreement();
 }
 
-fn d04_rt_only() {
+fn d04() {
     let left = decimal(1, 0);
     let right = decimal(8, 0);
     let ty = target(0, 1000, 3, 3, RoundingMode::Exact);
@@ -577,6 +576,16 @@ fn d04_rt_only() {
         125,
         3,
         false,
+    );
+    // Scale-three membership of 8 requires coefficient 8000. The source
+    // admits both operands while the independent RT oracle keeps its type.
+    literal_division_agreement(
+        "decimal(1,0) / decimal(8,0)",
+        "Decimal[0,8000;3,3;exact]",
+        &left,
+        &right,
+        &ty,
+        UNLIMITED,
     );
 }
 
