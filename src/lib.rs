@@ -1,5 +1,7 @@
 //! Version-locked composition and integration runtime for native Quire V1.
 
+pub mod temporal;
+
 /// Placeholder entry point.
 pub fn hello() -> &'static str {
     "hello from quire_integration"
