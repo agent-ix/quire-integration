@@ -63,7 +63,10 @@ receives only its own measured credit; full family completion remains Planned.
    at work 0, 1 and 1024 without constructor-charge subtraction. Independently
    require explicit Boolean answers and exact EqualityPlanForm stops (next
    charge 2 and zero consumed work). Keep nominal shapes and conversions Planned
-   until their own actual complete public observations exist.
+   until their own actual complete public observations exist. Change only one
+   Integer consumer descriptor to an actual admitted Boolean type and require
+   OperandTypeMismatch at position 0, expected Boolean and found original Integer,
+   with a healthy generated sibling and no execution credit for the refusal.
 
 7. Add original tuple Pair(Boolean, Boolean), record Flag { flag: Boolean; }
    and union Choice { First, Second } declarations with Equal/NotEqual functions
@@ -96,15 +99,16 @@ generation-boundary refusals, each retaining a healthy nominal sibling, and
 actual unary Scalar Negate's UnsupportedOperator with sibling isolation.
 
 `generated_oracle_family_function_equality::primitive_composite_generator_matches_independent_checked_bodies`
-passes 24 FR-018 Boolean operation observations: both operators and all four
-truth pairs at work 0, 1 and 1024. Six closed nonnegative Integer literal
-candidates check and emit, but the generator retains OperandTypeMismatch at
-position 0, with the actual emitted Integer type expected and no found type.
-Their operands are inline typed Literal terms; the public source operand
-confirmation route does not admit them as reference-backed occurrences. These
-six are measured nonexecuted dispositions with healthy Boolean siblings in the
-same request, never Boolean agreement credit. Integer native agreement remains
-Planned under IR-842 pending a genuine supported original-source operand route.
+passes 42 FR-018 operation observations: 24 Boolean truth-table observations
+and 18 closed nonnegative Integer observations, covering Equal/NotEqual over
+equal, less and greater pairs at work 0, 1 and 1024. Original admitted inline
+Literal type IDs must equal the actual Integer descriptor type. Each generated
+native operation compares the complete outcome, losses, ordered admitted charges
+and every counter against independent public evaluation of the same source body,
+with explicit Boolean answers and exact resource stops. Changing only the left
+consumer descriptor to an actual admitted Boolean type retains a typed
+OperandTypeMismatch at position 0 with the original Integer type found, alongside
+a healthy generated sibling; that refusal receives no execution credit.
 
 | Public operation or boundary | Status | Exact evidence or remaining fact |
 | --- | --- | --- |
@@ -129,10 +133,10 @@ Planned under IR-842 pending a genuine supported original-source operand route.
 | FR-021 equality duplicate declaring node | Passed (nonexecuted) | DuplicateDeclaringNode retains actual body ID; healthy sibling |
 | FR-018 Equal / closed Boolean literals | Passed | Four truth pairs and three operation allowances |
 | FR-018 NotEqual / closed Boolean literals | Passed | Four truth pairs and three operation allowances |
-| FR-018 Equal / closed Integer literals | Passed (nonexecuted) | Three genuine emitted inline-literal cells retain OperandTypeMismatch; healthy Boolean siblings |
-| FR-018 NotEqual / closed Integer literals | Passed (nonexecuted) | Three genuine emitted inline-literal cells retain OperandTypeMismatch; healthy Boolean siblings |
+| FR-018 Equal / closed Integer literals | Passed | Three original inline-literal pairs, three allowances; full native operation comparison |
+| FR-018 NotEqual / closed Integer literals | Passed | Three original inline-literal pairs, three allowances; full native operation comparison |
 | FR-018 parameterized Integer operations | Planned | IR-842: original function-body local bindings are unavailable to public evaluate_closed; QSL-1736 tracks that function-stage need. Original protocol-slot frames have a separate public entry, exercised by TC-105 |
-| FR-018 constructed nominal/collection operations | Planned | IR-842: direct closed function-body constructors add child charges; remaining rows need their own matching original protocol-stage or other public operation cohort. TC-105 establishes one genuine tuple protocol-slot route without subtraction |
+| FR-018 constructed nominal/collection operations | Planned | IR-842; QSL-1739 tracks remaining operation-ledger support: direct closed function-body constructors add child charges; remaining rows need their own matching original protocol-stage or other public operation cohort. TC-105 establishes one genuine tuple protocol-slot route without subtraction |
 | FR-018 options, recursive leaves, conversion-target combinations and remaining refusal boundaries | Planned | IR-842: each original-source admission, generator descriptor and complete public operation observation remains to be authored; no blanket constructor claim applies to contextual absent literals |
 | FR-021 deeper nominal shapes, union payloads and remaining per-form boundaries | Planned | IR-842: author additional actual source declarations/constructors, derive admitted nominal inputs and execute their public whole-call cohorts; no missing QSL operation ledger blocks these sessions |
 
