@@ -176,6 +176,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
         "declaring-node",
     ] {
         let mut declarations = functions.clone();
+        let mut function_positions = declaration_positions.clone();
         let mut requests = vec![items[0].clone(), items[9].clone()];
         let mut requested_positions = vec![item_positions[0], item_positions[9]];
         match boundary {
@@ -187,6 +188,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
             "ambiguous" => declarations[1].name = declarations[0].name.clone(),
             "declaring-node" => {
                 declarations.push(declarations[0].clone());
+                function_positions.push(declaration_positions[0]);
             }
             "capability" => {
                 declarations[0].capability_requirements =
@@ -206,7 +208,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
             &package,
             &contract,
             &positions,
-            &declaration_positions,
+            &function_positions,
             &declarations,
             &requested_positions,
             &requests,
