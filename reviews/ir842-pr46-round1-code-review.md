@@ -133,3 +133,13 @@ scope:
   role: examined
   excerpt: First-party cohort refresh; no Cargo.toml dependency changes.
 ```
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | The new assert_required_terminal checks both authority and generated results independently at 0, 1 and 1024; it requires an Evaluation, exact stop payload/body location/admitted prefix/all denied counters at 0/1, and completed Integer 7 with no location at 1024. |
+
+## Latest verdict
+
+Disposition pass 1 at frozen 00142fa8e1b5a3b2cf0d17d3d1c6f11a668f9f8d: PASS within the reviewed partial scope; no open findings and no new findings. Original findings and original review verdicts above are preserved as history. Source fixes were inspected directly. Existing review-fix-combine receipts record compile exit 0 and native exit 0, one selected combine test passing with five filtered out; explicit terminal assertions execute on both paths. Existing review-fix-clippy, format, docs and doc-lint logs were inspected. No Cargo/tests/gates/global metrics rerun by reviewer. All broad TC-187/family/occurrence/mixed-request gaps remain Planned, and final scoped gate remains with lead.
