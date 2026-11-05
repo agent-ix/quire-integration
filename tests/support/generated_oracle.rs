@@ -75,6 +75,9 @@ pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
         .env("CARGO_PROFILE_DEV_DEBUG", "0")
         .output()
         .expect("native artifact compilation and execution starts");
+    if output.status.success() && !output.stderr.is_empty() {
+        eprint!("{}", String::from_utf8_lossy(&output.stderr));
+    }
     assert!(
         output.status.success(),
         "generated native execution failed: {}\n{}",

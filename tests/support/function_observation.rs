@@ -10,6 +10,7 @@ use quire_contract_model::{
 };
 use quire_eval::{CallFailure, Evaluation, FamilyOutcome, FamilyResult};
 use quire_exact::{Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
+use quire_semantic_value::location::Origin;
 use quire_semantic_value::object_closure::ObjectClosure;
 const SOURCE: &str = __AUTHORED_SOURCE__;
 
@@ -195,6 +196,21 @@ fn actual_function_and_fresh_qsl_session_agree() {
         // Both meters have exactly the same original global allowance.
         eprintln!("whole call work={work}: authority={authority:?}; actual={actual:?}; authority charges={:?}; actual charges={:?}; authority counters={:?}; actual counters={:?}", authority_meter.admitted_charges(),generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,authority_meter.consumed(kind))),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
         assert_same_call(&authority, &actual);
+        if work == 1 {
+            let evaluated = actual.as_ref().expect("body stop is an evaluation");
+            let location = evaluated
+                .location
+                .as_ref()
+                .expect("the stopped result has its checked body location");
+            assert!(
+                matches!(location.origin(), Origin::Body { function, index: 0 } if function == "combine")
+            );
+            assert_eq!(location.depth(), 0);
+            assert_eq!(location.last_index(), None);
+            assert!(
+                matches!(&evaluated.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == 1 && record.consumed == 1 && record.next_charge == Integer::from(1_u64) && record.charge_point == quire_exact::ChargePoint::IntegerArithmeticOperands)
+            );
+        }
         assert_eq!(
             authority_meter.admitted_charges(),
             generated_meter.admitted_charges(),
