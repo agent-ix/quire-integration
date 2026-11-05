@@ -84,7 +84,9 @@ fn document(identity: &str, dimension: &str, root: &str, ms: bool, length: bool)
         "contractVersion": "2.0.0", "canonicalization": {"algorithm": "rfc8785-v1"},
         "source": {"identity": format!("ix://{identity}/namespace-input"), "version": "1.0.0", "dialect": "spec-bundle"},
         "package": {"identity": identity, "version": "1.0.0", "mappingVersions": [], "profileVersions": []},
-        "occurrences": [], "extensions": [], "constructs": [], "types": [],
+        "occurrences": [], "extensions": [],
+        "constructs": [{"kind": {"module": identity, "name": "namespace_anchor"}, "moduleVersion": "1.0.0", "construct": {"identity": "namespace-anchor", "shape": "record", "members": {}, "meaning": "quire.meaning.model.object-type/v1"}}],
+        "types": [{"identity": format!("ix://{identity}/NamespaceAnchor"), "displayName": "NamespaceAnchor", "kind": {"module": identity, "name": "namespace_anchor"}, "roles": [], "origin": origin, "constraints": [], "extensions": [], "unknownPolicy": "reject", "supertypes": [], "fields": [], "operations": []}],
         "dimensions": dimensions, "units": units,
     })).expect("native domain input serializes")
 }
@@ -250,7 +252,7 @@ fn three_time_owners_compose_and_missing_names_remain_missing() {
         document("acme/rpc", "Time", "s", false, false),
         document("acme/flow", "Time", "s", false, false),
     ];
-    let wire = emitted(&format!("{RF} {LOCAL} unit tenth : R::Time = rational(1, 10) * R::s; dimension Speed = R::Time ^ -1 * F::Time; function local using v(d: Quantity<s>): Boolean pure {{ true }} function rpc using v(d: Quantity<R::s>): Boolean pure {{ true }} function flow using v(d: Quantity<F::s>): Boolean pure {{ true }}"), &docs);
+    let wire = emitted(&format!("{RF} {LOCAL} unit tenth : R::Time = rational(1, 10) * R::s; dimension Speed = R::Time ^ -1 * F::Time; function u_local using v(d: Quantity<s>): Boolean pure {{ true }} function u_rpc using v(d: Quantity<R::s>): Boolean pure {{ true }} function u_flow using v(d: Quantity<F::s>): Boolean pure {{ true }}"), &docs);
     println!("U35 wire {wire}");
     assert_ne!(
         model_node(&wire, "ix://acme/rpc/dimension/Time")["node_id"],
