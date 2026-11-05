@@ -135,7 +135,7 @@ pub fn imported_unit(
     package: &PackageDeclarations,
     identity: &str,
     name: &str,
-) -> quire_semantic_value::unit::ResolvedUnit {
+) -> quire_semantic_value::unit::Unit {
     package
         .units
         .units()
