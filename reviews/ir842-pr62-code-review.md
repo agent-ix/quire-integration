@@ -23,3 +23,9 @@ CONDITIONAL. The actual QSL value and refusal assertions are strong, but U11e's 
 ## Coverage
 
 Examined QSpec TC-187 U11e/g1/g2/g4 and FR-142-AC-15/16, IT-019-SC-04 and the changed tests/dispatcher. The U11g1/g2/g4 original sources refuse at unanchored `L`; distinct anchored controls assert `L^2`, `L^3`, `L^4` through public UnitGraph, without giving generated-CG credit. The dispatcher fails closed on unknown public IDs. `quire validate` on IT-019, `git diff --check`, and `cargo fmt --check --all` passed. Coder reported focused Cargo tests 3/3 and scoped Clippy pass; no Cargo build was repeated during review.
+
+## Dispositions
+
+| FND | Outcome | Reason |
+| --- | --- | --- |
+| FND-001 | fixed | The U11e test now checks each distinct public input fragment immediately before the corresponding real QSL refusal run. |
