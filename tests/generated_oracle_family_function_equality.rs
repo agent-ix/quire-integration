@@ -552,6 +552,78 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
     )
     .expect("primitive composite API generation");
     assert_eq!(output.claim_map.items.len(), rows.len());
+    let actual_type = |form: &str| {
+        let selected = package
+            .graph()
+            .nodes
+            .iter()
+            .filter(|node| {
+                node.node_tag.as_ref() == "scalar_type" && node.semantic_form.as_ref() == form
+            })
+            .collect::<Vec<_>>();
+        let [node] = selected.as_slice() else {
+            panic!("one actual scalar {form} type");
+        };
+        node.node_id.clone()
+    };
+    let integer = actual_type("integer");
+    let boolean = actual_type("boolean");
+    for index in 8..rows.len() {
+        let Some(CheckedTerm::Application { arguments, .. }) = package.term(&nodes[index]) else {
+            panic!("original Integer application");
+        };
+        for argument in arguments {
+            let CheckedTerm::Literal { type_id, .. } = argument else {
+                panic!("original Integer operand is an inline literal");
+            };
+            assert_eq!(type_id, &integer);
+        }
+        assert_eq!(items[index].left.source_type, integer);
+        assert_eq!(items[index].right.source_type, integer);
+    }
+    let mut wrong_items = items.clone();
+    wrong_items[8].left = EqualityOperandDescriptor::typed(boolean.clone());
+    let refused = generate_composite_equality_oracles(
+        &contract,
+        Some(&package),
+        None,
+        &positions,
+        &indices,
+        &wrong_items,
+        Default::default(),
+    )
+    .expect("changed consumer descriptor generation");
+    let claim_for = |output: &quire_contract_codegen::CompositeEqualityOracles, index: usize| {
+        let claims = output
+            .claim_map
+            .items
+            .iter()
+            .filter(|claim| claim.node_id == nodes[index])
+            .cloned()
+            .collect::<Vec<_>>();
+        let [claim] = claims.as_slice() else {
+            panic!("one original equality claim at {index}");
+        };
+        claim.clone()
+    };
+    let wrong_claim = claim_for(&refused, 8);
+    assert!(
+        matches!(&wrong_claim.result,
+        ClaimDisposition::Refused { refusal: quire_contract_codegen::CompositeEqualityRefusal::OperandTypeMismatch {
+            position: 0, expected, found: Some(found),
+        }} if expected == &boolean && found == &integer),
+        "wrong descriptor refusal: {wrong_claim:?}"
+    );
+    let healthy_claim = claim_for(&refused, 9);
+    assert!(matches!(
+        &healthy_claim.result,
+        ClaimDisposition::Generated(_)
+    ));
+    assert_eq!(
+        healthy_claim,
+        claim_for(&output, 9),
+        "changed Integer descriptor preserves the complete healthy sibling claim and binding"
+    );
     let authority = family_checked_source::checked(&source);
     let mut expected = Vec::new();
     let mut driver = String::from(
@@ -575,26 +647,8 @@ fn observe() {
         let [claim] = claims.as_slice() else {
             panic!("one original equality claim");
         };
-        if !boolean {
-            let ClaimDisposition::Refused {
-                refusal:
-                    quire_contract_codegen::CompositeEqualityRefusal::OperandTypeMismatch {
-                        position: 0,
-                        expected,
-                        found: None,
-                    },
-            } = &claim.result
-            else {
-                panic!(
-                    "original inline Integer literal retains its typed generation refusal: {:?}",
-                    claim.result
-                );
-            };
-            assert_eq!(expected, &items[index].left.source_type);
-            continue;
-        }
         let ClaimDisposition::Generated(generated) = &claim.result else {
-            panic!("healthy Boolean sibling generates: {:?}", claim.result);
+            panic!("original primitive equality generates: {:?}", claim.result);
         };
         let name = format!("equality{index}");
         let function = authority
@@ -666,6 +720,11 @@ println!("IT019_OBSERVATION {{}}",oracle_observation::snapshot(&actual,&losses,&
         }
     }
     driver.push_str("}\n");
+    assert_eq!(
+        expected.len(),
+        42,
+        "24 Boolean and 18 Integer operation observations"
+    );
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
         expected
