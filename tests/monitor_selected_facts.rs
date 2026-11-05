@@ -74,7 +74,14 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         .expect("selected model evidence");
     let package = match read_checked_package(
         emission.package().bytes(),
-        CheckedPackageReadLimits::bounded(),
+        CheckedPackageReadLimits {
+            bytes: 8 * 1024 * 1024,
+            nodes: 100_000,
+            edges: 1_000_000,
+            occurrences: 1_000_000,
+            diagnostics: 1_000,
+            work: 100_000_000,
+        },
         &evidence,
     ) {
         CheckedPackageDispatchResult::AdmittedV2(package) => package,
