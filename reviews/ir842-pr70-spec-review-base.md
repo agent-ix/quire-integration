@@ -23,3 +23,9 @@ CONDITIONAL. Exercise the dimension T case through public QSL before retaining t
 ## Coverage
 
 The changed row distinguishes static QSL checking from generated-oracle equality and keeps all other public IDs Planned. Its complete-cell claim for U30 is premature until `Quantity<T>` uses the authored dimension T. The changed IT-019 file validates.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Revised head 8ca9011 tests the authored dimension T through public QSL and verifies the typed missing-name refusal and exact T span. The IT-019 check-only Passed row is now supported for this alternative; generated agreement remains Planned. |

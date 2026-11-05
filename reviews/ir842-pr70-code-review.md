@@ -23,3 +23,9 @@ CONDITIONAL. U30's dimension-name refusal needs a failing oracle for the authore
 ## Coverage
 
 Examined QSpec FR-142-AC-11/12 and TC-187 U30/U31. `TIME_UNITS` declares `dimension Time`, then the U30 missing-name branch adds `record T`; those are different namespace cases. `f(3 ms)`, `f(3 s)`, `Quantity<nothing>`, bare `d: ms`, returning `d`, and converted-result refusal have real typed checks and exact relevant locations. The dispatcher remains fail-closed. Independent focused tests pass 3/3; formatting, IT-019 validation and diff check pass. No full gate was run in review.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Revised head 8ca9011 changes the real public source to `dimension T; unit s : T; unit ms : T` and removes the substitute `record T`; the `Quantity<T>` assembly refusal now checks typed missing-name and the exact T span. Focused tests pass 2+1, and scoped Clippy passes. |

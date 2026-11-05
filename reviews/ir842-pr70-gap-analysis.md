@@ -23,3 +23,9 @@ CONDITIONAL. The U30 dimension alternative lacks evidence; the other U30 branche
 ## Coverage
 
 Plan completion: not assessed. U30/U31 bind the exact complete public input and expected cells before invoking real QSL source intake. The `record T` substitution can miss a dimension/unit namespace bug. U11g3 stays Planned on QSL-1738, U01 on QSL-1737 and IR-1345, and remaining public IDs on IR-842. Generated operation agreement remains Planned.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | At 8ca9011 the U30 common source declares dimension T, and the `Quantity<T>` alternative supplies no record replacement. Real QSL assembly returns `UnresolvedTypeName` at T with `missing_declaration/missing-name`; focused tests pass. |
