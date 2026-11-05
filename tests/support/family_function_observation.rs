@@ -5,7 +5,12 @@ mod family_function_selection {
     include!("family_function_selection.rs");
 }
 
+mod family_scalar_limits {
+    include!("family_scalar_limits.rs");
+}
+
 use family_function_selection::declared;
+use family_scalar_limits::limits;
 
 use qsl_replay::{
     acquire_checked_closure, ApplicationBeginRefusal, ApplicationEnvironment, CompileUnit,
@@ -17,25 +22,10 @@ use quire_contract_model::{
     CheckedPackageV2ReadResult, CheckedTerm,
 };
 use quire_eval::{CallFailure, Evaluation, FamilyOutcome};
-use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
+use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, Value};
 use quire_semantic_value::{call::InputRefusal, location::Origin, object_closure::ObjectClosure};
 
 const SOURCE: &str = __AUTHORED_SOURCE__;
-
-fn limits(work: u64) -> ScalarLimits {
-    ScalarLimits {
-        integer_bits: 1024,
-        decimal_digits: 1024,
-        scale_expansion: 1024,
-        text_input_bytes: 1024,
-        text_scalars: 1024,
-        normalized_scalars: 1024,
-        unit_edges: 1024,
-        value_occurrences: 1024,
-        work_units: work,
-        result_units: 1024,
-    }
-}
 
 fn generated(
     name: &str,
