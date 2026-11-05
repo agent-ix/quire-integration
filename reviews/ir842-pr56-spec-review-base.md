@@ -28,3 +28,9 @@ Examined units:
 - IT-019 Coverage Status, TC-187 rows (examined, spec/integration/IT-019-generated-oracle-qsl-agreement.md): | TC-187 U06 zero-scale and U11a two-root admission-only cells | Passed | `tc187_vector_dispatch::public_tc187_ids_fail_closed_and_real_admission_controls_refuse` reads both IDs and owner expectations from `vectors_of(TestCase::Tc187)`, then observes each real QSL source's typed topology refusal, retained identity/value and selected source span bef
 
 No plan was supplied. Plan completion: not assessed.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | The Planned row now calls the entries grouped placeholders and states mixed-row operation classifications remain unimplemented. |

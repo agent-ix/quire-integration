@@ -31,3 +31,9 @@ Examined units:
 fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
 
 No plan was supplied. Plan completion: not assessed.
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | The test now traces QSpec-TC-187 only; it explicitly says the partial slice does not back IT-019-SC-04. |
