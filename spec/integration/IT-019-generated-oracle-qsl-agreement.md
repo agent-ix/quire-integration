@@ -33,8 +33,10 @@ QSL public parse, check and checked-package emission → exact emitted V2 bytes
 → Contract IR public strict admission → CG public scalar, composite equality
 or exact-function generator → compile and call the actual generated native
 oracle symbol. Independently reacquire the original QSL source, select the
-checker-issued owner and occurrence, and evaluate it with a fresh QSL FR-485
-session. For TC-187, obtain authored vector IDs and prose through
+checker-issued owner and occurrence, and evaluate it through fresh public QSL
+authority. FR-021 uses whole-call FR-485 sessions; FR-014 and FR-018 may use
+public checked-expression evaluation for complete operation observations, as
+defined in SC-05 below. For TC-187, obtain authored vector IDs and prose through
 `quire_specification::vectors_of(TestCase::Tc187)` and
 `QUALIFICATION_VECTORS`, by reference. Integration owns executable dispatch
 for those IDs; it neither copies the corpus nor implements QSL, IR or CG
@@ -46,7 +48,7 @@ The integration Cargo.lock resolves one coherent QSL, Contract IR, CG and
 QSpec cohort. The Rust toolchain can compile the generated crate locally.
 The native path invokes generated code without Kani or a combined proof/native
 executor. For each run, both sides receive the same admitted claim occurrence,
-operands, domain, type, limits and fresh meter; the QSL comparison session
+operands, domain, type, limits and fresh meter; the QSL comparison authority
 does not register the generated body or derive its expected outcome from the
 generated source. Unsupported or unavailable owner behavior remains Planned
 with the exact missing public path and an open owner ticket. A Planned row is
@@ -157,7 +159,16 @@ where the owner row contains both.
    fails inventory closure, rather than inheriting another row's result.
    IT-019-SC-05: every operation selected by this owner-derived rule has an
    explicit disposition. Runnable cases compare the full exposed envelope
-   against independent QSL authority. A typed-refused or unsupported selection
+   against independent QSL authority. FR-014 and FR-018 operation qualification
+   may use fresh, independently acquired public checked-expression evaluation
+   of the same admitted source occurrence, operands, domain and type. Compare
+   every public operation outcome, loss, ordered admitted charge and consumed
+   counter without subtraction or precharging. This supplies operation evidence,
+   distinct from FR-021's FunctionCall-level FR-485 session envelope; it supplies
+   no callable owner or session-location evidence. A missing complete public
+   observation leaves that row Planned with the exact missing API path. A
+   different source body with mismatched Integer domains is not a substitute.
+   A typed-refused or unsupported selection
    is never converted to a Boolean QSL outcome, and a passing scalar sample
    cannot mark the composite or function family complete.
 6. Publish the per-vector and per-family evidence table with status
@@ -171,7 +182,7 @@ where the owner row contains both.
 
 ## Expected Results
 
-The native generated artifact and independent QSL session agree directly on
+The native generated artifact and independent public QSL authority agree directly on
 each runnable case's complete exposed result and accounting. The work=1
 `combine` location is a required equality, not a tolerated difference.
 Refused and unsupported items produce no executed oracle, and healthy siblings
@@ -203,9 +214,11 @@ isolation. The current disposition is:
 | Owner and occurrence mismatch; refused item and healthy sibling (SC-03) | Passed | `generated_oracle_sc03::wrong_occurrence_refuses_without_changing_the_healthy_native_call` uses two real QSL call occurrences and an admitted three-root contract: wrong-occurrence arguments yield a typed per-item `BodyMismatch`, while the healthy sibling retains the same generated claim, symbol and emitted library as standalone generation. A wrong full request position yields typed `AccountingIdentity` with the original accounting index and exact IDs; a wrong item node at a valid position yields typed `Identity` with the original request index and exact IDs. Both fail before a claim map exists. The healthy public symbol executes against a fresh QSL session with whole-envelope and value agreement at work=0, 1 and 1024. The existing foreign-source owner test observes typed `OwnerIdentityMismatch` and zero charge. |
 | TC-187 U06 zero-scale and U11a two-root admission-only cells | Passed | `tc187_vector_dispatch::public_tc187_ids_fail_closed_and_real_admission_controls_refuse` reads both IDs and owner expectations from `vectors_of(TestCase::Tc187)`, then observes each real QSL source's typed topology refusal, retained identity/value and selected source span before a checked package or generated oracle exists |
 | TC-187 remaining public vector IDs and mixed-row operations | Planned | IR-842: the same test fails on an unknown public ID and records grouped, ticket-backed missing-route placeholders for every other currently exported ID. These placeholders do not classify the operations inside mixed rows. Operation-level dispositions, generated execution and QSL comparison remain unimplemented. IR-669 owns separate QSL/runtime scalar evidence |
-| FR-014 scalar generated oracles | Planned | IR-842: complete per-operation native/QSL agreement remains unimplemented; existing samples are partial, and IR-669 QSL/runtime results supply no generated-oracle credit |
+| FR-014 Boolean Not/And/Or/Implies with `right_may_stop=false`; Equality/Boolean Equal and NotEqual | Passed | TC-102 / `generated_oracle_family_scalar_operations::selected_scalar_operations_match_independently_checked_qsl_bodies`: 22 truth cases at work 0, 1 and 1024 compare complete operation outcomes, losses, ordered charges and every counter against fresh public evaluation of the same closed source body, with independent typed truth and stop expectations |
+| FR-014 remaining operations and Boolean lazy controls | Planned | IR-842: `right_may_stop=true`, parameterized Integer comparisons and the other scalar operation groups need their own complete observations. The public closed-body entry cannot bind function parameters; different literal-body Integer domains receive no agreement credit. IR-669 QSL/runtime results supply no generated-oracle credit |
 | FR-018 composite equality generated oracles | Planned | IR-842: per-operation executed native/QSL agreement remains unimplemented |
-| FR-021 function application generated oracles | Planned | IR-842: remaining per-operation and boundary controls are unimplemented; the passed combine sample supplies no whole-family credit |
+| FR-021 Subtract, Multiply and genuine subtraction-callee Call cohort | Passed | TC-103 / `generated_oracle_family_function::subtraction_multiplication_and_nested_call_match_fresh_qsl_sessions`: nine whole-call envelopes, twelve argument refusals and three alternate-owner refusals; exact results, locations, located losses, charges and every counter |
+| FR-021 remaining function operations and boundaries | Planned | IR-842: other operations and required boundaries need their own executable evidence; the passed cohorts supply no whole-family credit |
 
 Unsupported generation is a typed nonexecuted observation in its own row;
 it cannot be credited as two-sided value agreement. A partial passing slice
@@ -214,7 +227,7 @@ their exact owner tickets in the implementation report.
 
 ## Traceability
 
-This test composes CG FR-014, FR-018 and FR-021 with the QSL FR-485 authority
-and QSpec TC-187 vector source. Test symbols trace to the applicable
+This test composes CG FR-014 and FR-018 with public QSL operation authority,
+CG FR-021 with QSL FR-485 whole-call authority, and the QSpec TC-187 vector source. Test symbols trace to the applicable
 `IT-019-SC-NN` criterion and owner family or vector ID. IT-017 and IT-013
 remain separate evidence for their narrower paths.
