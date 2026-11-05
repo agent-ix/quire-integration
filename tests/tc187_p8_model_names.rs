@@ -85,7 +85,7 @@ fn document(identity: &str, dimension: &str, root: &str, ms: bool, length: bool)
         "source": {"identity": format!("ix://{identity}/namespace-input"), "version": "1.0.0", "dialect": "spec-bundle"},
         "package": {"identity": identity, "version": "1.0.0", "mappingVersions": [], "profileVersions": []},
         "occurrences": [], "extensions": [],
-        "constructs": [{"kind": {"module": identity, "name": "namespace_anchor"}, "moduleVersion": "1.0.0", "construct": {"identity": "namespace-anchor", "shape": "record", "members": {}, "meaning": "quire.meaning.model.object-type/v1"}}],
+        "constructs": [{"kind": {"module": identity, "name": "namespace_anchor"}, "moduleVersion": "1.0.0", "construct": {"identity": "none", "shape": "record", "members": {}, "meaning": "quire.meaning.model.object-type/v1"}}],
         "types": [{"identity": format!("ix://{identity}/NamespaceAnchor"), "displayName": "NamespaceAnchor", "kind": {"module": identity, "name": "namespace_anchor"}, "roles": [], "origin": origin, "constraints": [], "extensions": [], "unknownPolicy": "reject", "supertypes": [], "fields": [], "operations": []}],
         "dimensions": dimensions, "units": units,
     })).expect("native domain input serializes")
@@ -303,7 +303,7 @@ fn duplicate_model_dimension_identity_refuses_at_intake() {
         .expect("dimensions")
         .push(duplicate);
     let bytes = serde_json::to_vec(&native).expect("duplicate input JSON");
-    let text = source(M);
+    let text = source(&format!("{M} {LOCAL}"));
     let parsed = qsl_cst::parse(
         SourceIdentity::new("agent-ix", "tc110-model-names"),
         "model-names.native",
