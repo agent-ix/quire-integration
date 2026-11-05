@@ -53,7 +53,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11l" => Some(RowDispatch::Topology("definition-cycle")),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
-            missing: "public checked-package BoundedQuantity emission and carried_quantity lowerer bounds-policy correction",
+            missing: "public checked-package BoundedQuantity emission and source-to-CG agreement for admitted carried_quantity operations",
         }),
         "U11g3" => Some(RowDispatch::Planned {
             tickets: &["QSL-1738"],
@@ -221,7 +221,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 assert!(!missing.is_empty(), "{} missing route", vector.id);
                 if vector.id == "U01" {
                     assert!(missing.contains("BoundedQuantity"));
-                    assert!(missing.contains("carried_quantity"));
+                    assert!(missing.contains("source-to-CG agreement"));
                 }
                 if vector.id == "U11g3" {
                     assert!(missing.contains("empty map"));
