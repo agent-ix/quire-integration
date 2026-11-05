@@ -5,10 +5,11 @@ use ix_trace_rs::trace;
 use qsl_foundation::SourceIdentity;
 use qsl_package::{emit_checked, CheckedPackage};
 use qsl_semantics::{
-    check::{AssemblyCause, AssemblyRefusal, PackageDeclarations},
+    check::{wire_id::structural_id, AssemblyCause, AssemblyRefusal, PackageDeclarations},
     model::{
         accounting::ModelNormalizationLimits,
-        intake::{admit_unit, package_input},
+        intake::{admit_unit, package_input, UnitIntakeCause},
+        refusal::ModelRefusalCause,
     },
 };
 use quire_contract_ir::{
@@ -127,10 +128,15 @@ fn assemble(
     (source, result)
 }
 
-fn emitted(body: &str, documents: &[Vec<u8>]) -> Value {
-    let (_, assembled) = assemble(body, documents);
+fn emitted(
+    body: &str,
+    documents: &[Vec<u8>],
+    inspect: impl FnOnce(&str, &PackageDeclarations),
+) -> Value {
+    let (source, assembled) = assemble(body, documents);
+    let assembled = assembled.expect("namespace assembly");
+    inspect(&source, &assembled);
     let graph = assembled
-        .expect("namespace assembly")
         .check(CheckingLimits::default())
         .expect("namespace checking");
     let emission = emit_checked(&CheckedPackage::link(graph)).expect("native checked emission");
@@ -161,6 +167,54 @@ fn emitted(body: &str, documents: &[Vec<u8>]) -> Value {
         "strict IR admits original emission"
     );
     wire
+}
+
+fn nominal(assembled: &PackageDeclarations, source: &str, name: &str) -> quire_exact::NodeKey {
+    let keys: Vec<_> = assembled
+        .nominal_spans
+        .iter()
+        .filter(|(_, span)| &source[span.start..span.end] == name)
+        .map(|(key, _)| key.clone())
+        .collect();
+    let [key] = keys.as_slice() else {
+        panic!("one native {name} key: {keys:?}")
+    };
+    key.clone()
+}
+fn declared<'a>(wire: &'a Value, name: &str) -> &'a Value {
+    let found: Vec<_> = nodes(wire)
+        .iter()
+        .filter(|node| node["declaration"]["qualified_name"] == json!([name]))
+        .collect();
+    let [node] = found.as_slice() else {
+        panic!("one declared {name}: {found:?}")
+    };
+    node
+}
+fn parameter<'a>(wire: &'a Value, function: &str) -> &'a Value {
+    let members = declared(wire, function)["body"]["members"]
+        .as_array()
+        .expect("function members");
+    let binding = members
+        .iter()
+        .find(|member| member["name"] == "parameters")
+        .expect("parameter binding");
+    let [reference] = binding["value"]["members"]
+        .as_array()
+        .expect("parameter references")
+        .as_slice()
+    else {
+        panic!("one parameter")
+    };
+    let found: Vec<_> = nodes(wire)
+        .iter()
+        .filter(|node| node["node_id"] == reference["target"])
+        .collect();
+    let [node] = found.as_slice() else {
+        panic!("one actual function parameter: {found:?}")
+    };
+    assert_eq!(node["semantic_form"], "parameter");
+    node
 }
 
 fn nodes(wire: &Value) -> &[Value] {
@@ -203,13 +257,26 @@ fn refusal(body: &str, documents: &[Vec<u8>], name: &str) {
 fn source_and_model_ms_are_independent_and_tick_uses_model_rate() {
     public_row("U34");
     let docs = [document("acme/rpc", "Rate", "us", true, false)];
-    let wire = emitted(&format!("{M} {LOCAL} unit ms : Time = rational(1, 1000) * s; unit tick : M::Rate = rational(1, 2) * M::us; function f using v(d: Quantity<ms>): Boolean pure {{ true }} function g using v(d: Quantity<M::ms>): Boolean pure {{ true }}"), &docs);
+    let wire = emitted(&format!("{M} {LOCAL} unit ms : Time = rational(1, 1000) * s; unit tick : M::Rate = rational(1, 2) * M::us; function f using v(d: Quantity<ms>): Boolean pure {{ true }} function g using v(d: Quantity<M::ms>): Boolean pure {{ true }}"), &docs, |source, assembled| {
+        let tick = nominal(assembled, source, "tick");
+        let tick = assembled.units.unit(tick).expect("native tick");
+        assert_eq!(serde_json::to_value(structural_id(&tick.dimension_node())).expect("dimension ID"), json!({"package": "acme/rpc", "path": ["scalar_type", "dimension", "ix://acme/rpc/dimension/Rate"], "ordinal": 0}));
+        assert_eq!(tick.canonical().scale(), &quire_exact::Rational::new(1_i64.into(), 2_i64.into()).expect("half"));
+    });
     let ms = model_node(&wire, "ix://acme/rpc/unit/ms");
     assert!(
         ms.get("declaration").is_none(),
         "model unit carries no source declaration: {ms}"
     );
-    println!("U34 wire {wire}");
+    assert_eq!(
+        ms["owner"],
+        json!({"kind": "model", "identity": "acme/rpc", "node": "ix://acme/rpc/unit/ms"})
+    );
+    assert_eq!(ms["node_id"]["package"], "acme/rpc");
+    let local_ms = declared(&wire, "ms");
+    assert_ne!(local_ms["node_id"], ms["node_id"]);
+    assert_eq!(parameter(&wire, "f")["semantic_type"], local_ms["node_id"]);
+    assert_eq!(parameter(&wire, "g")["semantic_type"], ms["node_id"]);
     refusal(
         &format!("{M} {LOCAL} unit tick : Rate = rational(1, 2) * M::us;"),
         &docs,
@@ -252,8 +319,36 @@ fn three_time_owners_compose_and_missing_names_remain_missing() {
         document("acme/rpc", "Time", "s", false, false),
         document("acme/flow", "Time", "s", false, false),
     ];
-    let wire = emitted(&format!("{RF} {LOCAL} unit tenth : R::Time = rational(1, 10) * R::s; dimension Speed = R::Time ^ -1 * F::Time; function u_local using v(d: Quantity<s>): Boolean pure {{ true }} function u_rpc using v(d: Quantity<R::s>): Boolean pure {{ true }} function u_flow using v(d: Quantity<F::s>): Boolean pure {{ true }}"), &docs);
-    println!("U35 wire {wire}");
+    let wire = emitted(&format!("{RF} {LOCAL} unit tenth : R::Time = rational(1, 10) * R::s; dimension Speed = R::Time ^ -1 * F::Time; function u_local using v(d: Quantity<s>): Boolean pure {{ true }} function u_rpc using v(d: Quantity<R::s>): Boolean pure {{ true }} function u_flow using v(d: Quantity<F::s>): Boolean pure {{ true }}"), &docs, |source, assembled| {
+        let tenth = assembled.units.unit(nominal(assembled, source, "tenth")).expect("native tenth");
+        assert_eq!(serde_json::to_value(structural_id(&tenth.dimension_node())).expect("dimension ID"), json!({"package": "acme/rpc", "path": ["scalar_type", "dimension", "ix://acme/rpc/dimension/Time"], "ordinal": 0}));
+        assert_eq!(tenth.canonical().scale(), &quire_exact::Rational::new(1_i64.into(), 10_i64.into()).expect("tenth"));
+        let speed = assembled.units.dimension(nominal(assembled, source, "Speed")).expect("native composed Speed");
+        assert_eq!(speed.terms().count(), 2);
+    });
+    let dimensions = [
+        declared(&wire, "Time"),
+        model_node(&wire, "ix://acme/rpc/dimension/Time"),
+        model_node(&wire, "ix://acme/flow/dimension/Time"),
+    ];
+    for (index, left) in dimensions.iter().enumerate() {
+        for right in &dimensions[index + 1..] {
+            assert_ne!(left["node_id"], right["node_id"]);
+        }
+    }
+    let units = [
+        declared(&wire, "s"),
+        model_node(&wire, "ix://acme/rpc/unit/s"),
+        model_node(&wire, "ix://acme/flow/unit/s"),
+    ];
+    for ((function, unit), dimension) in ["u_local", "u_rpc", "u_flow"]
+        .iter()
+        .zip(units)
+        .zip(dimensions)
+    {
+        assert_eq!(parameter(&wire, function)["semantic_type"], unit["node_id"]);
+        assert_eq!(unit["semantic_type"], dimension["node_id"]);
+    }
     assert_ne!(
         model_node(&wire, "ix://acme/rpc/dimension/Time")["node_id"],
         model_node(&wire, "ix://acme/flow/dimension/Time")["node_id"]
@@ -292,7 +387,7 @@ fn three_time_owners_compose_and_missing_names_remain_missing() {
 
 #[trace("TC-110", "QSpec-TC-187", "QSpec-FR-142-AC-20")]
 #[test]
-fn duplicate_model_dimension_identity_refuses_at_intake() {
+fn duplicate_model_dimension_identity_characterizes_current_malformed_intake() {
     public_row("U35");
     let mut native: Value =
         serde_json::from_slice(&document("acme/rpc", "Time", "s", false, false))
@@ -319,13 +414,37 @@ fn duplicate_model_dimension_identity_refuses_at_intake() {
         ModelNormalizationLimits::default(),
     )
     .expect_err("duplicate model identity refuses before assembly");
-    println!("U35 duplicate {refused:?}");
+    assert_eq!(refused.alias, "M");
+    assert_eq!(refused.identity, "acme/rpc");
+    assert_eq!(&text[refused.span.start..refused.span.end], M);
+    let UnitIntakeCause::Refused(refusals) = &refused.cause else {
+        panic!("native model refusal: {refused:?}")
+    };
+    let [first] = refusals.as_slice() else {
+        panic!("one duplicate identity refusal: {refusals:?}")
+    };
+    assert_eq!(
+        first.cause,
+        ModelRefusalCause::IntakeMalformedDeclaration {
+            node: "ix://acme/rpc/dimension/Time".to_owned(),
+            artifact: None,
+            span: None,
+            member: "$.dimensions[1].identity"
+                .parse()
+                .expect("native member path")
+        }
+    );
+    assert_eq!(
+        first.code,
+        qsl_foundation::diagnostic::Code::InvalidModelBinding
+    );
+    assert_eq!(first.detail, "agent-ix-semantic-ir refused this document at $.dimensions[1].identity (/ir/dimensions/1/identity) on ix://acme/rpc/dimension/Time (agent-ix.semantic-ir.DUPLICATE_IDENTITY): the identity ix://acme/rpc/dimension/Time is already declared");
     assert_eq!(
         refused
             .cause
             .catalog_code()
             .expect("catalog cause")
             .to_string(),
-        "invalid_model_binding/conflicting-binding"
+        "invalid_model_binding/malformed-declaration"
     );
 }
