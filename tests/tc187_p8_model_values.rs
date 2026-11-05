@@ -273,14 +273,19 @@ fn selected(
 fn agree(package: &CheckedPackage, whole: bool, native: &Outcome<Quantity>, native_meter: &Meter) {
     let (node, slots) = selected(package, whole);
     let mut meter = Meter::new(limits());
-    let evaluation = qsl_eval::value::expression::evaluate_closed(package, node, slots, &mut meter)
+    let evaluation = qsl_eval::value::evaluate_closed(package, node, slots, &mut meter)
         .expect("original closed QSL stage");
     let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
         panic!("original value stage");
     };
     assert!(evaluation.location.is_none());
     assert!(evaluation.losses.is_empty());
-    let actual = native.clone().map(Value::Quantity);
+    let actual = match native.clone() {
+        Outcome::Completed(value) => Outcome::Completed(Value::Quantity(value)),
+        Outcome::Undefined(reason) => Outcome::Undefined(reason),
+        Outcome::Refused(reason) => Outcome::Refused(reason),
+        Outcome::Incomplete(reason) => Outcome::Incomplete(reason),
+    };
     assert_eq!(outcome, actual, "entire original outcome");
     let losses = Vec::<quire_semantic_value::loss::ValueLoss>::new();
     assert_eq!(
@@ -365,11 +370,11 @@ fn u36_quotients_and_products_preserve_native_canonical_maps_and_ledgers() {
         };
         let expected_dimensions: BTreeMap<_, Integer> = dimension_terms
             .into_iter()
-            .map(|(key, exponent)| (key, exponent.into()))
+            .map(|(key, exponent)| (key, Integer::from(i64::from(exponent))))
             .collect();
         let expected_units: BTreeMap<_, Integer> = unit_terms
             .into_iter()
-            .map(|(key, exponent)| (key, exponent.into()))
+            .map(|(key, exponent)| (key, Integer::from(i64::from(exponent))))
             .collect();
         assert_eq!(
             compound
@@ -453,7 +458,7 @@ fn u36_original_whole_let_bridges_compound_to_dur_with_complete_ledger() {
             .terms()
             .map(|(key, n)| (key, n.clone()))
             .collect::<Vec<_>>(),
-        [(r.root(), Integer::from(1))]
+        [(r.root(), Integer::from(1_i64))]
     );
     assert_eq!(
         compound
@@ -461,7 +466,7 @@ fn u36_original_whole_let_bridges_compound_to_dur_with_complete_ledger() {
             .exponents()
             .map(|(key, n)| (key, n.clone()))
             .collect::<Vec<_>>(),
-        [(r.dimension_node(), Integer::from(1))]
+        [(r.dimension_node(), Integer::from(1_i64))]
     );
     scope.form(bound_unit);
     let converted = convert_quantity(
