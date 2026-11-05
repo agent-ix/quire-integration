@@ -220,15 +220,32 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
     let input =
         qsl_eval::value::evaluate_closed(&checked, function.body, function.slots, &mut input_meter)
             .expect("original source constructor");
+    assert!(input.location.is_none());
+    assert!(input.losses.is_empty());
     let FamilyOutcome::Evaluated(Outcome::Completed(input)) = input.outcome else {
         panic!("original source constructor completes");
     };
-    assert!(matches!(input, Value::Composite(_)));
+    let Value::Composite(composite) = &input else {
+        panic!("original constructor returns its tuple");
+    };
+    assert!(matches!(
+        composite.slots(),
+        [
+            quire_exact::FieldValue::Present(Value::Boolean(true)),
+            quire_exact::FieldValue::Present(Value::Boolean(false))
+        ]
+    ));
+    let quire_exact::ValueType::Composite(owner_key) =
+        &protocol.slots.binders[outcome_slot].value_type
+    else {
+        panic!("original finish binder nominal owner");
+    };
+    assert_eq!(composite.declaration(), owner_key);
     assert!(protocol.slots.binders[outcome_slot]
         .value_type
         .admits(&input));
     assert_eq!(slot.slot_names[outcome_slot], "outcome");
-    let mut expected = Vec::new();
+    let mut expected = vec![format!("source input: {input:?}")];
     let mut driver = format!(
         r#"
 mod oracle_observation;
@@ -262,6 +279,7 @@ let shape=declaration.members().iter().enumerate().map(|(index,member)| match me
 qsl_replay::NominalDeclarationMember::TuplePosition{position,value_type} => {assert_eq!(*position,index);value_type.clone()},
 _=>panic!("source tuple position") }).collect::<Vec<_>>();
 let input=quire_exact::tuple(&shape,declaration.key().clone(),vec![Value::Boolean(true),Value::Boolean(false)]).expect("public construction from actual owner metadata");
+println!("IT019_OBSERVATION source input: {:?}",input);
 "#);
     for work in [1024, 0, 1] {
         let mut frame = vec![None; protocol.slots.binders.len()];
