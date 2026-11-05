@@ -15,7 +15,13 @@ use quire_contract_ir::{CheckedNodeId, CheckedPackageV2, CheckedTerm};
 use quire_eval::FamilyOutcome;
 use quire_exact::{Integer, Outcome, Rational, Value};
 
-#[trace("TC-106", "IT-019-SC-04", "QSpec-TC-187", "QSpec-FR-142")]
+#[trace(
+    "TC-106",
+    "IT-019-SC-04",
+    "QSpec-TC-187",
+    "QSpec-FR-142",
+    "QSpec-FR-142-AC-6"
+)]
 #[test]
 fn public_u12_arithmetic_values_have_their_canonical_compound_units() {
     source::bind(
