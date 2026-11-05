@@ -13,11 +13,11 @@ relationships:
 ## Description
 
 Qualify the IR-721 AC3 construction handoff from genuine QSL production through
-strict IR admission and the driver to RT. This focused contribution covers
-FR-276-AC-6 construction and the changed-target and unsupported-instruction
-parts of FR-276-AC-7. Other AC-7 mutations and event/watermark execution remain
-outside this contribution; a producer preflight alone supplies no construction
-or admission-refusal credit.
+strict IR admission and the driver to RT. The first executable contribution prepares the changed-target and
+unsupported-instruction controls. Full IR-721 AC3 still requires the healthy
+FR-276-AC-6 construction and all FR-276-AC-7 adverse cases listed below. A
+producer preflight alone supplies no construction or admission-refusal credit.
+Event/watermark execution is a separate qualification.
 
 ## Test Procedure
 
@@ -56,6 +56,33 @@ or admission-refusal credit.
    missing type witness or unsupported operation outside the selected closure
    cannot satisfy this control. The original healthy preparation and build
    must remain unaffected by the refused request.
+
+6. Extend the same original producer fixtures with each remaining AC-7 control.
+   Preserve each stage's real typed refusal and first locus. An unrelated
+   earlier setup failure is not evidence for the intended adverse condition.
+   Keep independent original selection fixed for selection-corruption cases;
+   use a fresh authentic selection only for separately emitted valid programs
+   whose lowering or runtime construction is under test.
+
+## Outstanding Construction Controls
+
+All rows below remain Planned under IR-721. The owner column identifies the
+boundary that must supply the observed decision, not a newly asserted blocker.
+The driver signature and error variants must come from its production owner;
+this test invents neither an API nor a diagnostic type.
+
+| Required control | Observed boundary and ownership | Status |
+| --- | --- | --- |
+| Healthy final plan after preparation objects are dropped; two independent builds | Driver FR-015 returns the complete owned program; RT FR-276 runs its real initializer | Planned |
+| Foreign atom or operand and equal numeric subformula under another subject | QSL retains complete subject/body identity; IR resolves real references; driver FR-015 binds the independent original selection | Planned |
+| Missing entry body | IR strict monitor/function closure admission before preparation; driver never initializes a refused input | Planned |
+| Changed initializer under original selection | Producer assigns the actual changed entry/root keys; driver binds them against the independent original selected identity | Planned |
+| Foreign interval or buffer owner; changed activation binding | QSL retains original topology and activation; IR validates reached buffer owners and entry shape; driver binds the independently selected plan | Planned |
+| Changed uncertainty, counter, counter width, tick unit, maximum gap or event rate | IR retains valid exact premises; driver rejects an otherwise valid differing premise under the unchanged original target and selection | Planned |
+| Changed buffer or activation capacity | IR retains exact capacities and their owners; driver compares the independent original capacity premises without recomputing them | Planned |
+| Reachable unsupported ordinary entry instruction | QSL and IR admit the separately emitted entry and its fresh identity; driver FR-015 returns typed Unsupported at that actual locus before init | Planned |
+| Native RT allocation or initialization stop | RT build returns its original typed failure with no monitor, using the genuine retained program and explicit operating allowances | Planned |
+
 
 ## Expected Results
 
