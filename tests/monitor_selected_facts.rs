@@ -222,7 +222,10 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             1_000_000,
         )
         .expect("representable explicit model facts join");
-    assert_eq!(selected.declarations, [selected_declaration.clone()]);
+    assert_eq!(
+        selected.declarations.as_slice(),
+        std::slice::from_ref(selected_declaration)
+    );
     assert_eq!(selected.fields.len(), 1);
     assert_eq!(selected.fields[0].row, *selected_field);
     assert_eq!(selected.fields[0].name.as_ref(), "count");
