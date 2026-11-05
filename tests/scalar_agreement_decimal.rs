@@ -382,7 +382,7 @@ fn assert_decimal_agreement(
     assert_scalar_meter_agreement(qsl_meter, kernel_meter);
 }
 
-#[trace("TC-185", "FR-140", "IT-017-SC-02", "IT-017-SC-03")]
+#[trace("TC-185", "FR-140", "IT-017-SC-02", "IT-017-SC-03", "IT-017-SC-04")]
 #[test]
 fn tc185_decimal_vectors() {
     let mut seen = std::collections::BTreeSet::new();
@@ -437,6 +437,7 @@ fn tc185_decimal_vectors() {
             "D27" => d27(),
             // Two literal sources refuse at S4; the D26 counterpart is admitted.
             "D28" => d28(),
+            "D29" => d29(),
             other => panic!("unimplemented TC-185 vector {other}"),
         }
     }
@@ -1665,6 +1666,121 @@ fn d03_exact_qsl_agreement() {
             "Decimal[-9,9;0,0;exact]",
             &ty,
         );
+    }
+}
+
+fn d29() {
+    const HEADER: &str = "language \"ix:native\" edition \"1-draft\";\n\
+        profile v = \"quire.value.complete/v1\";\n";
+    let cases = [
+        (
+            "Decimal[0,10;0,0]",
+            "Decimal[0,10;0,0;exact]",
+            "type P = Decimal[0,10;0,0];\nfunction f using v(p: P): P pure { p }\n",
+            0, 10, 0, 5,
+        ),
+        (
+            "Decimal[0,100;2,2]",
+            "Decimal[0,100;2,2;exact]",
+            "function f using v(q: Rational[0,2;1,3]): Decimal[0,100;2,2;exact] pure { convert<Decimal[0,100;2,2]>(q) }\n",
+            0, 100, 2, 50,
+        ),
+        (
+            "Decimal[-100,100;2,2]",
+            "Decimal[-100,100;2,2;exact]",
+            "dimension Length;\nunit m : Length = rational(1, 1);\ntype P = Quantity<m, Decimal[-100,100;2,2]>;\nfunction f using v(q: P): P pure { q }\n",
+            -100, 100, 2, 75,
+        ),
+    ];
+    for (index, (missing_mode, explicit_mode, body, lower, upper, scale, coefficient)) in
+        cases.into_iter().enumerate()
+    {
+        let source = format!("{HEADER}{body}");
+        let parsed = qsl_cst::parse(
+            qsl_foundation::SourceIdentity::new("agent-ix", "ir1344-d29"),
+            "decimal.native",
+            source.as_bytes(),
+            qsl_cst::Limits::default(),
+        )
+        .expect("S1 reads the original D29 source");
+        assert!(
+            !parsed.is_admissible(),
+            "D29 case {index} must refuse missing rounding at S1"
+        );
+        assert!(!parsed.diagnostics().is_empty());
+        for diagnostic in parsed.diagnostics() {
+            assert_eq!(diagnostic.phase, qsl_foundation::Phase::Parse);
+            assert_eq!(diagnostic.code, qsl_foundation::Code::InvalidSyntax);
+        }
+        // Refused syntax never enters forms, type checking or evaluation.
+        assert_eq!(source.matches(missing_mode).count(), 1);
+        let exact_source = source.replace(missing_mode, explicit_mode);
+        let exact_parsed = qsl_cst::parse(
+            qsl_foundation::SourceIdentity::new("agent-ix", "ir1344-d29"),
+            "decimal.native",
+            exact_source.as_bytes(),
+            qsl_cst::Limits::default(),
+        )
+        .expect("S1 reads the explicit exact counterpart");
+        assert!(
+            exact_parsed.is_admissible(),
+            "D29 exact case {index}: {:?}",
+            exact_parsed.diagnostics()
+        );
+        let unit =
+            qsl_forms::build_unit(&exact_parsed).expect("S2 builds the explicit exact source");
+        let graph = PackageDeclarations::assemble(
+            exact_parsed.source().reference().clone(),
+            "ir-1344".to_owned(),
+            unit,
+            SelectedModels::default(),
+            Vec::new(),
+        )
+        .expect("S3 assembles the explicit exact source")
+        .check(CheckingLimits::default())
+        .expect("S4 admits the explicit exact counterpart");
+
+        // RT has an explicit rounding carrier, not a source-parser default.
+        // The quantity case checks only its Decimal carrier here; its real
+        // unit m was admitted above, and no RT quantity identity is invented.
+        let ty = target(lower, upper, scale, scale, RoundingMode::Exact);
+        assert_eq!(ty.rounding(), RoundingMode::Exact);
+        let witness = decimal(coefficient, u32::try_from(scale).unwrap());
+        decimal_result(
+            rt(DecimalOperation::Round(&witness), &ty, UNLIMITED).0,
+            coefficient,
+            u32::try_from(scale).unwrap(),
+            false,
+        );
+
+        if index == 1 {
+            let package = CheckedPackage::link(graph);
+            let input = Rational::new(Integer::from(1_i64), Integer::from(2_i64)).unwrap();
+            let mut qsl_meter = Meter::new(UNLIMITED);
+            let evaluated = package
+                .call(
+                    &QualifiedName::unqualified("f").unwrap(),
+                    vec![Value::Rational(input)],
+                    &ObjectEnvironment::default(),
+                    &mut qsl_meter,
+                )
+                .expect("the exact D29 conversion accepts its exact half witness");
+            let FamilyOutcome::Evaluated(qsl) = evaluated.outcome else {
+                panic!("D29 exact conversion must reach the native kernel");
+            };
+            let losses = evaluated
+                .losses
+                .into_iter()
+                .map(|loss| loss.loss)
+                .collect::<Vec<_>>();
+            let one = decimal(1, 0);
+            let two = decimal(2, 0);
+            let (kernel, kernel_meter) = rt(DecimalOperation::Divide(&one, &two), &ty, UNLIMITED);
+            assert!(
+                matches!(&kernel, Outcome::Completed(result) if result.value().representation() == decimal(50, 2).representation() && result.loss().is_none())
+            );
+            assert_decimal_agreement(kernel, &kernel_meter, qsl, &losses, &qsl_meter);
+        }
     }
 }
 
