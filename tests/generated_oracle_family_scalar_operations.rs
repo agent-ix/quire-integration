@@ -20,7 +20,7 @@ use quire_contract_ir::{
     CheckedPackageV2ReadResult, CheckedTerm,
 };
 use quire_eval::FamilyOutcome;
-use quire_exact::{LimitKind, Meter, Outcome, ScalarLimits, Value};
+use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
 use quire_semantic_value::checking::CheckingLimits;
 
 struct Row {
@@ -244,7 +244,11 @@ fn observe() {
                 let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
                     panic!("selected scalar value family");
                 };
-                if work == 1024 {
+                let equality = matches!(
+                    items[index].operation,
+                    ExactScalarOperation::Equality { .. }
+                );
+                if work == 1024 || (work == 1 && !equality) {
                     match (&outcome, value) {
                         (Outcome::Completed(Value::Boolean(actual)), Value::Boolean(expected)) => {
                             assert_eq!(actual, expected, "{name}")
@@ -256,12 +260,24 @@ fn observe() {
                     }
                     assert!(evaluation.location.is_none());
                 }
-                if work == 0 {
+                if work == 0 || (work == 1 && equality) {
+                    let point = if equality {
+                        ChargePoint::EqualityPlanForm
+                    } else {
+                        ChargePoint::BooleanResultRetain
+                    };
+                    let next = Integer::from(if equality { 2_u64 } else { 1_u64 });
                     assert!(
-                        matches!(&outcome,Outcome::Incomplete(stop) if stop.limit_kind==LimitKind::WorkUnits && stop.limit==0 && stop.consumed==0),
+                        matches!(&outcome,Outcome::Incomplete(stop)
+                        if stop.limit_kind==LimitKind::WorkUnits && stop.limit==work
+                        && stop.consumed==0 && stop.next_charge==next && stop.charge_point==point),
                         "{name}: {outcome:?}"
                     );
                     assert!(meter.admitted_charges().is_empty());
+                    for kind in LimitKind::ALL {
+                        assert_eq!(meter.consumed(kind), &Integer::zero(), "{name}: {kind:?}");
+                    }
+                    assert!(evaluation.location.is_some());
                 }
                 assert!(evaluation.losses.is_empty());
                 let losses = evaluation
