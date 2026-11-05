@@ -48,6 +48,7 @@ pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
     let crate_name = [
         quire_contract_codegen::EXACT_SCALAR_CRATE_NAME,
         quire_contract_codegen::EXACT_FUNCTION_CRATE_NAME,
+        quire_contract_codegen::COMPOSITE_EQUALITY_CRATE_NAME,
     ]
     .into_iter()
     .find(|name| manifest.contains(&format!("name = \"{name}\"")))

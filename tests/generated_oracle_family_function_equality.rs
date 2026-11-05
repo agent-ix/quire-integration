@@ -53,13 +53,8 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
         panic!("one canonical scalar Boolean type");
     };
     let boolean = boolean.node_id.clone();
-    let names = ["boolEqual", "boolNotEqual", "intEqual", "intNotEqual"];
-    let exercise = [
-        "exerciseBoolEqual",
-        "exerciseBoolNotEqual",
-        "exerciseIntEqual",
-        "exerciseIntNotEqual",
-    ];
+    let names = family_function_equality_source::NAMES;
+    let exercise = family_function_equality_source::EXERCISES;
     let declarations = names
         .iter()
         .map(|name| declared(&package, name))
@@ -74,6 +69,9 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
         .collect::<Vec<_>>();
     let mut requested = bodies.clone();
     requested.extend(calls.iter().cloned());
+    let negate_body = body(&package, "negate");
+    let negate_call = body(&package, "exerciseNegate");
+    requested.extend([negate_body.clone(), negate_call.clone()]);
     let lowered = package.lower(&requested, &routed_contract_lowering_profile());
     let contract = match ContractPackageWireV1::read_with_source(
         lowered
@@ -108,8 +106,27 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
                     name: name.to_owned(),
                     type_node_id: if index < 2 {
                         boolean.clone()
-                    } else {
+                    } else if index < 4 {
                         integer.clone()
+                    } else {
+                        let Some(CheckedTerm::Application { arguments, .. }) =
+                            package.term(&bodies[index])
+                        else {
+                            panic!("actual nominal equality body");
+                        };
+                        let CheckedTerm::Reference { target } = &arguments[0] else {
+                            panic!("actual nominal parameter reference");
+                        };
+                        let selected = package
+                            .graph()
+                            .nodes
+                            .iter()
+                            .filter(|node| &node.node_id == target)
+                            .collect::<Vec<_>>();
+                        let [node] = selected.as_slice() else {
+                            panic!("one original nominal parameter");
+                        };
+                        node.semantic_type.clone()
                     },
                 })
                 .collect(),
@@ -133,17 +150,161 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
         }).collect();
         ExactFunctionItem { call_node_id: call.clone(), function: names[index].to_owned(), argument_node_ids }
     }).collect::<Vec<_>>();
+    let declaration_positions = (0..names.len()).collect::<Vec<_>>();
+    let item_positions = (names.len()..names.len() * 2).collect::<Vec<_>>();
     let output = generate_exact_function_oracles(
         &package,
         &contract,
         &positions,
-        &[0, 1, 2, 3],
+        &declaration_positions,
         &functions,
-        &[4, 5, 6, 7],
+        &item_positions,
         &items,
     )
     .expect("the selected original function rows generate");
     assert_eq!(output.claim_map.items.len(), names.len());
+    // These are requests over original source nodes, not rewritten IR.
+    use quire_contract_codegen::ExactFunctionRefusal;
+    for boundary in ["result", "capability", "occurrence", "duplicate"] {
+        let mut declarations = functions.clone();
+        let mut requests = vec![items[0].clone(), items[9].clone()];
+        let mut requested_positions = vec![item_positions[0], item_positions[9]];
+        match boundary {
+            "result" => declarations[0].result_type = integer.clone(),
+            "capability" => {
+                declarations[0].capability_requirements =
+                    vec!["unsupported-equality-capability".to_owned()]
+            }
+            "occurrence" => {
+                requests[0].call_node_id = calls[1].clone();
+                requested_positions[0] = item_positions[1];
+            }
+            "duplicate" => {
+                requests.push(items[0].clone());
+                requested_positions.push(item_positions[0]);
+            }
+            _ => unreachable!(),
+        }
+        let measured = generate_exact_function_oracles(
+            &package,
+            &contract,
+            &positions,
+            &declaration_positions,
+            &declarations,
+            &requested_positions,
+            &requests,
+        )
+        .expect("public source-backed boundary request");
+        assert_eq!(
+            measured.claim_map.items.len(),
+            2,
+            "duplicate occurrence collapses without swallowing sibling"
+        );
+        let refused = measured
+            .claim_map
+            .items
+            .iter()
+            .find(|claim| claim.node_id == requests[0].call_node_id)
+            .expect("original refused call retained");
+        let ClaimDisposition::Refused { refusal } = &refused.result else {
+            panic!(
+                "{boundary} must retain a typed refusal: {:?}",
+                refused.result
+            );
+        };
+        match boundary {
+            "result" => assert!(matches!(
+                refusal,
+                ExactFunctionRefusal::SignatureMismatch { .. }
+            )),
+            "capability" => assert!(
+                matches!(refusal, ExactFunctionRefusal::UnsupportedCapability { capability } if capability == "unsupported-equality-capability")
+            ),
+            "occurrence" => assert!(matches!(refusal, ExactFunctionRefusal::BodyMismatch)),
+            "duplicate" => assert_eq!(refusal, &ExactFunctionRefusal::DuplicateRequest),
+            _ => unreachable!(),
+        }
+        let sibling = measured
+            .claim_map
+            .items
+            .iter()
+            .find(|claim| claim.node_id == calls[9])
+            .expect("healthy nominal sibling retained");
+        assert!(
+            matches!(sibling.result, ClaimDisposition::Generated(_)),
+            "{boundary}: healthy sibling: {:?}",
+            sibling.result
+        );
+    }
+    let mut negate_functions = functions.clone();
+    negate_functions.push(ExactFunctionDeclaration {
+        node_id: negate_body,
+        name: "negate".to_owned(),
+        parameters: ["left", "right"]
+            .into_iter()
+            .map(|name| FunctionParameter {
+                name: name.to_owned(),
+                type_node_id: integer.clone(),
+            })
+            .collect(),
+        result_type: integer,
+        body: ExactFunctionBody::Scalar {
+            operator: quire_contract_codegen::oracle::operator_catalog::IntegerOperator::Negate,
+        },
+        capability_requirements: Vec::new(),
+    });
+    let Some(CheckedTerm::Application { arguments, .. }) = package.term(&negate_call) else {
+        panic!("original unary exercise call");
+    };
+    let negate_item = ExactFunctionItem {
+        call_node_id: negate_call.clone(),
+        function: "negate".to_owned(),
+        argument_node_ids: arguments[1..]
+            .iter()
+            .map(|term| match term {
+                CheckedTerm::Reference { target } => target.clone(),
+                other => panic!("original negate argument: {other:?}"),
+            })
+            .collect(),
+    };
+    let mut negate_positions = declaration_positions.clone();
+    negate_positions.push(names.len() * 2);
+    let measured = generate_exact_function_oracles(
+        &package,
+        &contract,
+        &positions,
+        &negate_positions,
+        &negate_functions,
+        &[names.len() * 2 + 1, item_positions[9]],
+        &[negate_item, items[9].clone()],
+    )
+    .expect("original unary body generation disposition");
+    let refusal = measured
+        .claim_map
+        .items
+        .iter()
+        .find(|claim| claim.node_id == negate_call)
+        .expect("actual unary call retained");
+    assert!(
+        matches!(
+            refusal.result,
+            ClaimDisposition::Refused {
+                refusal: ExactFunctionRefusal::UnsupportedOperator { .. }
+            }
+        ),
+        "actual unary operator refusal: {:?}",
+        refusal.result
+    );
+    assert!(matches!(
+        measured
+            .claim_map
+            .items
+            .iter()
+            .find(|claim| claim.node_id == calls[9])
+            .expect("healthy unary sibling retained")
+            .result,
+        ClaimDisposition::Generated(_)
+    ));
     let mut driver = include_str!("support/family_function_equality_observation.rs").to_owned();
     for index in 0..names.len() {
         let claims = output
@@ -174,9 +335,13 @@ fn primitive_function_equality_matches_fresh_qsl_sessions() {
         "include!(\"family_function_equality_source.rs\");",
         include_str!("support/family_function_equality_source.rs"),
     );
+    let driver = driver.replace(
+        "include!(\"family_function_envelope.rs\");",
+        include_str!("support/family_function_envelope.rs"),
+    );
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
-        ["SC05 primitive function equality: 42 envelopes, 14 input refusals, 4 owner refusals"]
+        ["SC05 primitive function equality: 78 envelopes, 32 input refusals, 10 owner refusals"]
     );
 }
 
@@ -261,8 +426,12 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
             };
             assert_eq!(arguments.len(), 2);
             let operand = |index: usize| {
-                let CheckedTerm::Reference { target } = &arguments[index] else {
-                    panic!("actual literal reference");
+                let target = match &arguments[index] {
+                    CheckedTerm::Reference { target } => target,
+                    CheckedTerm::Literal { type_id, .. } => {
+                        return EqualityOperandDescriptor::typed(type_id.clone())
+                    }
+                    other => panic!("original typed equality operand: {other:?}"),
                 };
                 let selected = package
                     .graph()
@@ -342,7 +511,7 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
     let mut driver = String::from(
         r#"
 mod oracle_observation;
-use quire_exact::{Meter,Outcome,Value};
+use quire_exact::{Meter,Outcome,ScalarLimits,Value};
 fn lift(outcome: Outcome<bool>)->Outcome<Value> {
     match outcome { Outcome::Completed(v)=>Outcome::Completed(Value::Boolean(v)), Outcome::Undefined(v)=>Outcome::Undefined(v), Outcome::Refused(v)=>Outcome::Refused(v), Outcome::Incomplete(v)=>Outcome::Incomplete(v) }
 }
@@ -360,8 +529,26 @@ fn observe() {
         let [claim] = claims.as_slice() else {
             panic!("one original equality claim");
         };
+        if !boolean {
+            let ClaimDisposition::Refused {
+                refusal:
+                    quire_contract_codegen::CompositeEqualityRefusal::OperandTypeMismatch {
+                        position: 0,
+                        expected,
+                        found: None,
+                    },
+            } = &claim.result
+            else {
+                panic!(
+                    "original inline Integer literal retains its typed generation refusal: {:?}",
+                    claim.result
+                );
+            };
+            assert_eq!(expected, &items[index].left.source_type);
+            continue;
+        }
         let ClaimDisposition::Generated(generated) = &claim.result else {
-            panic!("primitive equality generates: {:?}", claim.result);
+            panic!("healthy Boolean sibling generates: {:?}", claim.result);
         };
         let name = format!("equality{index}");
         let function = authority

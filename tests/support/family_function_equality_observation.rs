@@ -11,6 +11,8 @@ mod family_scalar_limits {
 
 use family_function_selection::declared;
 use family_scalar_limits::limits;
+mod family_function_envelope { include!("family_function_envelope.rs"); }
+use family_function_envelope::same_envelope;
 
 use qsl_replay::{
     ApplicationBeginRefusal, ApplicationEnvironment, DependencyInput, LibraryName, ReplayLimits, SourceIdentity, StageLimits,
@@ -25,7 +27,7 @@ use quire_exact::{ChargePoint, Integer, LimitKind, Meter, Outcome, Value};
 use quire_semantic_value::{call::InputRefusal, location::Origin, object_closure::ObjectClosure};
 
 mod family_function_equality_source { include!("family_function_equality_source.rs"); }
-use family_function_equality_source::{acquire, SOURCE};
+use family_function_equality_source::{acquire, SOURCE, NAMES};
 
 fn generated(
     name: &str,
@@ -71,26 +73,13 @@ fn generated(
             meter,
         ),
         "intNotEqual" => quire_exact_function_oracles::__SYMBOL_3__(source, package, package, arguments, ObjectClosure::default(), meter),
+        "pairEqual" => quire_exact_function_oracles::__SYMBOL_4__(source, package, package, arguments, ObjectClosure::default(), meter),
+        "pairNotEqual" => quire_exact_function_oracles::__SYMBOL_5__(source, package, package, arguments, ObjectClosure::default(), meter),
+        "flagEqual" => quire_exact_function_oracles::__SYMBOL_6__(source, package, package, arguments, ObjectClosure::default(), meter),
+        "flagNotEqual" => quire_exact_function_oracles::__SYMBOL_7__(source, package, package, arguments, ObjectClosure::default(), meter),
+        "choiceEqual" => quire_exact_function_oracles::__SYMBOL_8__(source, package, package, arguments, ObjectClosure::default(), meter),
+        "choiceNotEqual" => quire_exact_function_oracles::__SYMBOL_9__(source, package, package, arguments, ObjectClosure::default(), meter),
         _ => panic!("unselected function row"),
-    }
-}
-
-fn same_envelope(expected: &Evaluation, actual: &Evaluation) {
-    assert_eq!(expected.location, actual.location, "entire result location");
-    assert_eq!(expected.losses, actual.losses, "ordered located losses");
-    match (&expected.outcome, &actual.outcome) {
-        (
-            FamilyOutcome::Evaluated(Outcome::Completed(Value::Boolean(expected))),
-            FamilyOutcome::Evaluated(Outcome::Completed(Value::Boolean(actual))),
-        ) => assert_eq!(expected, actual),
-        (
-            FamilyOutcome::Evaluated(Outcome::Incomplete(expected)),
-            FamilyOutcome::Evaluated(Outcome::Incomplete(actual)),
-        ) => assert_eq!(expected, actual),
-        _ => panic!(
-            "required Boolean completion or exact incomplete shape: {:?} versus {:?}",
-            expected.outcome, actual.outcome
-        ),
     }
 }
 
@@ -115,7 +104,7 @@ fn required(
             ChargePoint::EqualityPlanForm
         };
         assert!(
-            matches!(&result.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == work && record.consumed == work && record.next_charge == Integer::from(if work == 0 { 1_u64 } else { 2_u64 }) && record.charge_point == point)
+            matches!(&result.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == work && record.consumed == work && record.next_charge == Integer::from(if work == 0 { 1_u64 } else if name.starts_with("pair") { 6_u64 } else if name.starts_with("flag") { 4_u64 } else { 2_u64 }) && record.charge_point == point)
         );
         let location = result
             .location
@@ -167,14 +156,38 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
     let mut owner_refusals = 0;
     let handle = acquisition.handle();
     let owner = LibraryName::new(package.name().to_owned()).unwrap();
-    for (source_index, name) in ["boolEqual", "boolNotEqual", "intEqual", "intNotEqual"].into_iter().enumerate() {
+    for (source_index, name) in NAMES.into_iter().enumerate() {
         let boolean = source_index < 2;
         let samples: Vec<(Value, Value, bool)> = match name {
             "boolEqual" => vec![(Value::Boolean(false),Value::Boolean(false),true),(Value::Boolean(false),Value::Boolean(true),false),(Value::Boolean(true),Value::Boolean(false),false),(Value::Boolean(true),Value::Boolean(true),true)],
             "boolNotEqual" => vec![(Value::Boolean(false),Value::Boolean(false),false),(Value::Boolean(false),Value::Boolean(true),true),(Value::Boolean(true),Value::Boolean(false),true),(Value::Boolean(true),Value::Boolean(true),false)],
             "intEqual" => vec![(Value::Integer(Integer::from(3_i64)),Value::Integer(Integer::from(3_i64)),true),(Value::Integer(Integer::from(2_i64)),Value::Integer(Integer::from(3_i64)),false),(Value::Integer(Integer::from(4_i64)),Value::Integer(Integer::from(3_i64)),false)],
             "intNotEqual" => vec![(Value::Integer(Integer::from(3_i64)),Value::Integer(Integer::from(3_i64)),false),(Value::Integer(Integer::from(2_i64)),Value::Integer(Integer::from(3_i64)),true),(Value::Integer(Integer::from(4_i64)),Value::Integer(Integer::from(3_i64)),true)],
-            _ => panic!("unselected equality row"),
+            nominal => {
+                let (first, second) = match nominal {
+                    "pairEqual" | "pairNotEqual" => ("makePairA", "makePairB"),
+                    "flagEqual" | "flagNotEqual" => ("makeFlagA", "makeFlagB"),
+                    "choiceEqual" | "choiceNotEqual" => ("makeChoiceA", "makeChoiceB"),
+                    _ => panic!("unselected nominal row"),
+                };
+                let construct = |name: &str| {
+                    let key = checked_function_key(&package, &declared(&package, name)).expect("original constructor identity");
+                    let selected = handle.lookup_callable(&owner, &key).expect("original constructor selection");
+                    let environment = ApplicationEnvironment::new(ObjectClosure::default());
+                    let mut registry = handle.registry();
+                    let mut meter = Meter::new(limits(1024));
+                    let evaluation = registry.begin_call(&selected, Vec::new(), &environment, &mut meter).expect("source constructor admission").run().expect("source constructor evaluation");
+                    assert!(evaluation.location.is_none());
+                    assert!(evaluation.losses.is_empty());
+                    let FamilyOutcome::Evaluated(Outcome::Completed(value)) = evaluation.outcome else { panic!("source constructor completes: {evaluation:?}"); };
+                    assert!(matches!(value, Value::Composite(_) | Value::Union(_)), "actual nominal input: {value:?}");
+                    value
+                };
+                let left = construct(first);
+                let right = construct(second);
+                let equal = source_index % 2 == 0;
+                vec![(left.clone(), left.clone(), equal), (left, right, !equal)]
+            }
         };
         let key = checked_function_key(&package, &declared(&package, name)).unwrap();
         let selection = handle.lookup_callable(&owner, &key).unwrap();
@@ -256,7 +269,7 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
             (vec![wrong.clone(), valid.clone()], InputRefusal::WrongValueKind { parameter: 0 }),
             (vec![wrong], InputRefusal::Arity { declared: 2, supplied: 1 }),
         ];
-        if !boolean { invalid.push((vec![Value::Integer(Integer::from(10_i64)), valid], InputRefusal::WrongValueKind { parameter: 0 })); }
+        if (2..4).contains(&source_index) { invalid.push((vec![Value::Integer(Integer::from(10_i64)), valid], InputRefusal::WrongValueKind { parameter: 0 })); }
         for (arguments, required_refusal) in invalid {
             let environment = ApplicationEnvironment::new(ObjectClosure::default());
             let mut authority_meter = Meter::new(limits(1024));
@@ -271,7 +284,7 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
                 Ok(_) => panic!("invalid argument input cannot begin"),
             };
             assert_eq!(
-                *expected,
+                expected,
                 ApplicationBeginRefusal::Call(CallFailure::Input(required_refusal))
             );
             let mut meter = Meter::new(limits(1024));
