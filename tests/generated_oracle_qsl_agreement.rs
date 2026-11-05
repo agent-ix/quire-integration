@@ -114,8 +114,8 @@ fn boolean_outcome(
     }
 }
 
-/// An initial family contribution; whole SC-01..06 remain Planned until the
-/// complete scalar/composite/function coordinator executes their controls.
+/// A scalar sample; complete family and TC-187 coverage remain Planned until
+/// the scalar/composite/function coordinator executes their controls.
 #[trace("TC-099")]
 #[test]
 fn generated_boolean_negation_matches_the_actual_qsl_body() {
@@ -208,7 +208,7 @@ fn unbounded_qsl_integer_source_retains_the_codegen_bound_refusal() {
 
 /// The selected operation is observed from the real bounded-parameter call.
 /// Full caller and generated-body ledgers remain distinct observations here;
-/// this value/occurrence contribution does not claim SC-04 accounting parity.
+/// this value/occurrence contribution does not claim whole-call accounting parity.
 #[trace("TC-099")]
 #[test]
 fn bounded_integer_source_executes_its_generated_oracle_and_observed_qsl_operation() {
@@ -390,7 +390,7 @@ fn bounded_scalar_entry_retains_the_real_quantity_value_position_refusals() {
 mod function_agreement;
 
 /// Complete truth-table and short-circuit native scalar contribution. Source
-/// locations remain a separate source-map axis; this does not qualify SC-04.
+/// locations remain a separate source-map axis; complete family coverage remains Planned.
 #[trace("TC-099")]
 #[test]
 fn generated_boolean_truth_tables_preserve_typed_values_and_ordered_accounting() {
