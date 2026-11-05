@@ -24,7 +24,7 @@ use quire_exact::{Integer, LimitKind, Meter, Outcome, ScalarLimits, Value};
 use quire_semantic_value::checking::CheckingLimits;
 
 struct Row {
-    name: &'static str,
+    name: String,
     syntax: &'static str,
     integer: bool,
     unary: bool,
@@ -42,7 +42,7 @@ fn rows() -> Vec<Row> {
         ("bne", "!=", [false, true, true, false]),
     ] {
         rows.push(Row {
-            name,
+            name: name.to_owned(),
             syntax,
             integer: false,
             unary: false,
@@ -60,7 +60,7 @@ fn rows() -> Vec<Row> {
         });
     }
     rows.push(Row {
-        name: "bnot",
+        name: "bnot".to_owned(),
         syntax: "not",
         integer: false,
         unary: true,
@@ -76,7 +76,7 @@ fn rows() -> Vec<Row> {
         ("imul", "*", [12, 9, 0]),
     ] {
         rows.push(Row {
-            name,
+            name: name.to_owned(),
             syntax,
             integer: true,
             unary: false,
@@ -89,7 +89,7 @@ fn rows() -> Vec<Row> {
         });
     }
     rows.push(Row {
-        name: "ineg",
+        name: "ineg".to_owned(),
         syntax: "-",
         integer: true,
         unary: true,
@@ -108,7 +108,7 @@ fn rows() -> Vec<Row> {
         ("ige", ">=", [true, true, false]),
     ] {
         rows.push(Row {
-            name,
+            name: name.to_owned(),
             syntax,
             integer: true,
             unary: false,
@@ -120,7 +120,26 @@ fn rows() -> Vec<Row> {
                 .collect(),
         });
     }
-    rows
+    rows.into_iter()
+        .flat_map(|row| {
+            if row.integer {
+                vec![row]
+            } else {
+                row.cases
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, case)| Row {
+                        name: format!("{}truth{index}", row.name),
+                        syntax: row.syntax,
+                        integer: false,
+                        unary: row.unary,
+                        boolean_result: true,
+                        cases: vec![case],
+                    })
+                    .collect()
+            }
+        })
+        .collect()
 }
 
 fn source(rows: &[Row]) -> String {
@@ -136,7 +155,9 @@ fn source(rows: &[Row]) -> String {
         };
         let left = format!("left{}", row.name);
         let right = format!("right{}", row.name);
-        let parameters = if row.unary {
+        let parameters = if !row.integer {
+            String::new()
+        } else if row.unary {
             format!("{left}: {ty}")
         } else {
             format!("{left}: {ty}, {right}: {ty}")
@@ -151,7 +172,11 @@ fn source(rows: &[Row]) -> String {
         source.push_str(&format!(
             "function {} using v({parameters}): {result} pure {{ {} }}\n",
             row.name,
-            expression(&left, &right)
+            if row.integer {
+                expression(&left, &right)
+            } else {
+                expression(row.cases[0].0, row.cases[0].1)
+            }
         ));
         for (index, (a, b, _)) in row.cases.iter().enumerate() {
             source.push_str(&format!(
@@ -222,7 +247,7 @@ fn selected_scalar_operations_match_independently_checked_qsl_bodies() {
     };
     let nodes = rows
         .iter()
-        .map(|row| family_function_selection::body(&package, row.name))
+        .map(|row| family_function_selection::body(&package, &row.name))
         .collect::<Vec<_>>();
     let items = derive_exact_scalar_items(&package, &nodes)
         .into_iter()
@@ -267,7 +292,11 @@ fn observe() {
             assert!(!generated.checked_bounds.is_empty());
         }
         for (case, (left, right, value)) in row.cases.iter().enumerate() {
-            let name = format!("{}case{case}", row.name);
+            let name = if row.integer {
+                format!("{}case{case}", row.name)
+            } else {
+                row.name.clone()
+            };
             let function = authority
                 .graph()
                 .function_by_identity(
