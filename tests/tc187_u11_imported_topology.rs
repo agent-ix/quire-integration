@@ -20,21 +20,25 @@ use serde_json::{json, Value};
 const MODEL_IDENTITY: &str = "acme/orders";
 const MODEL_SELECTION: &str = "model P = \"acme/orders\";";
 
-fn vector(id: &str, inputs: &[&str], expectation: &str) {
+fn vector(id: &str, inputs: &str, expectation: &str) {
+    let imported = vectors_of(TestCase::Tc187)
+        .find(|row| row.id == "U11r")
+        .expect("public U11r defines the imported model shared by U11s/t/u");
+    assert!(
+        imported
+            .inputs
+            .contains("`dimension L;` imported from package P (with `unit m : L = 1;` there)"),
+        "U11r imported model: {}",
+        imported.inputs
+    );
     let matches: Vec<_> = vectors_of(TestCase::Tc187)
         .filter(|row| row.id == id)
         .collect();
     let [row] = matches.as_slice() else {
         panic!("exactly one public TC-187 row {id}: {matches:?}");
     };
-    for input in inputs {
-        assert!(row.inputs.contains(input), "{id} input: {}", row.inputs);
-    }
-    assert!(
-        row.expected.contains(expectation),
-        "{id} expected: {}",
-        row.expected
-    );
+    assert_eq!(row.inputs, inputs, "{id} authored imported/local source");
+    assert_eq!(row.expected, expectation, "{id} first expected refusal");
 }
 
 fn model_document() -> Vec<u8> {
@@ -109,7 +113,11 @@ fn first<'a>(id: &str, refusal: &'a AssemblyRefusal) -> &'a qsl_semantics::check
 #[trace("QSpec-TC-187", "QSpec-FR-142-AC-18")]
 #[test]
 fn public_u11s_local_cycle_over_imported_dimension_retains_both_edges() {
-    vector("U11s", &["unit a", "unit b"], "definition-cycle");
+    vector(
+        "U11s",
+        "Imported `dimension L;` with `unit m : L = 1;` in P; local `unit a : L = 1 * b;` and `unit b : L = 1 * a;`",
+        "`invalid_package`/`definition-cycle` at node `L`, retaining `a -> b`, `b -> a`; P's `m` is not re-checked (FR-142-AC-18)",
+    );
     let (source, refusal) = refusal(
         "unit a : P::L = rational(1, 1) * b; \
          unit b : P::L = rational(1, 1) * a;",
@@ -143,7 +151,11 @@ fn public_u11s_local_cycle_over_imported_dimension_retains_both_edges() {
 #[trace("QSpec-TC-187", "QSpec-FR-142-AC-18")]
 #[test]
 fn public_u11t_local_root_conflicts_with_imported_root() {
-    vector("U11t", &["m2"], "conflicting-definition");
+    vector(
+        "U11t",
+        "The U11r imports; local `unit m2 : L = 1;`",
+        "`invalid_package`/`conflicting-definition` retaining the imported root `m` and `m2` (FR-142-AC-18)",
+    );
     let (source, refusal) = refusal("unit m2 : P::L = rational(1, 1);");
     let error = first("U11t", &refusal);
     let AssemblyCause::UnitGraphTopology {
@@ -182,7 +194,11 @@ fn public_u11t_local_root_conflicts_with_imported_root() {
 #[trace("QSpec-TC-187", "QSpec-FR-142-AC-18")]
 #[test]
 fn public_u11u_zero_scale_precedes_imported_root() {
-    vector("U11u", &["unit z"], "invalid-value");
+    vector(
+        "U11u",
+        "The U11r imports; local `unit z : L = 0 * m;`",
+        "`invalid_package`/`invalid-value` at `z` (FR-142-AC-18)",
+    );
     let (source, refusal) = refusal("unit z : P::L = rational(0, 1) * P::m;");
     let error = first("U11u", &refusal);
     assert_eq!(
