@@ -26,4 +26,3 @@ pub fn same_envelope(expected: &Evaluation, actual: &Evaluation) {
         ),
     }
 }
-
