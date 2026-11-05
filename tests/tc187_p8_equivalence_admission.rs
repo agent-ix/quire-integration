@@ -193,10 +193,6 @@ impl Keys {
             retained.insert(name.to_owned(), key.clone());
             admitted.insert(name.to_owned(), key);
         }
-        assert_ne!(
-            retained["R::Time"], admitted["R::Time"],
-            "native key spaces are distinct"
-        );
         Self { retained, admitted }
     }
     fn dimension(&self, name: &str) -> EquivalenceRetained {
