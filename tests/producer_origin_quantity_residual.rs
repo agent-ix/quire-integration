@@ -1030,7 +1030,7 @@ fn admitted_scalar_equality_conversion_rows_preserve_exact_values() {
                 assert_eq!(actual, expected)
             }
             (ExactValue::Decimal(actual), ExactValue::Decimal(expected)) => {
-                assert_eq!(actual, expected)
+                assert_eq!(actual.representation(), expected.representation())
             }
             (actual, expected) => panic!("{source:?} -> {target:?}: {actual:?} != {expected:?}"),
         }
