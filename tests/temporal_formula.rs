@@ -71,6 +71,7 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
     let selections: Vec<_> = graph
         .temporal_clauses()
         .iter()
+        .filter(|_| !profile.contains("infinite-trace"))
         .map(|clause| qsl_package::TemporalClockSelection {
             source: graph.source().clone(),
             declaration_span: clause.clause().span(),
