@@ -12,64 +12,84 @@ relationships:
 
 ## Description
 
-Exercise U12 arithmetic, U19/U24 same-unit addition and the five U14 operations from the public TC-187 vector through original
-QSL source admission. Borrow the public input and expected cells; author original
-source and unit declarations. This is admission evidence, with no generated
-execution or cross-stage value agreement claim.
+Exercise U12 arithmetic, U19/U24 same-unit addition and U14 static refusals from
+the public TC-187 vectors. Borrow the input and expected cells and author original
+source. Separate source-value evidence, source admission, owner operation controls,
+typed generation refusals and actual generated execution.
 
 ## Test Procedure
 
-1. Read U14 through `vectors_of(TestCase::Tc187)` and require its five operation
-   inputs, zero runtime allowance and ill-typed static refusal expectation.
-2. Parse and assemble each original closed function body with genuine metre,
-   second, centimetre and Celsius declarations. Retain actual declaration keys,
-   source identity and the public declaration-region map.
-3. Check with ordinary compiler CheckingLimits, separately from the all-zero
-   runtime ScalarLimits specified by U14. Require each check to refuse before
-   a checked package can be linked or offered to evaluation or generation.
-4. Require the exact source checker IllTyped(TypeMismatch) cause and catalog
-   code, original operation span and source identity for every refusal. QSL's
-   source-checking boundary deliberately generalizes quantity-specific causes.
-   Check the admitted operand unit identities and Celsius affine offset.
-5. Separately pass the corresponding original magnitudes and genuine admitted
-   unit graph identities to the public quantity operation API with every runtime
-   limit zero. Require IncompatibleDimensions for the two dimension mismatches,
-   AffineUnitArithmetic for Celsius addition and division by zero Celsius, and
-   DistinctUnits for centimetre plus metre. Require no admitted charge and zero
-   consumption in all ten counters. These owner operation controls are separate
-   from source admission and do not establish generated agreement.
-
-6. Borrow the U12, U19 and U24 public vector cells without copying their prose.
-   Independently require four U12 magnitudes (6, 3, 4, 1), genuine compound unit
-   terms and dimensions, including the empty dimensionless map. Require U19's
-   magnitude 5 and U24's magnitude 3 in their original metre/centimetre units.
-   Use public owner compound-unit construction on admitted root identities.
-7. Check original direct closed quantity function bodies, emit them unchanged,
-   strictly read their checked package and attempt actual scalar operation
-   derivation/generation. Evaluate the original checked body with fresh limits;
-   retain complete typed outcomes, losses, ordered charges and all ten counters.
-   U19 work 4 must stop at UnitResultRetain after consuming 4 with next charge 1;
-   work 5 and U24 work 5 must complete with the five prescribed charge events
-   and zero edges. If generation admits, execute the actual native oracle and
-   compare the entire observation. If a boundary refuses, retain that exact
-   measured stage/cause and leave generated agreement Planned. Do not subtract
-   child/call charges, reconstruct IR or substitute owner-operation controls.
+1. Read the four public IDs through `vectors_of(TestCase::Tc187)`. Bind each
+   operation, expected value or stop and allowance through small factual selectors;
+   do not duplicate the public prose or a fixture table.
+2. Check each U14 original closed source with ordinary compiler CheckingLimits,
+   separately from runtime ScalarLimits. Require exact source checker
+   IllTyped(TypeMismatch) and catalog `ill_typed/type-mismatch`, original source
+   identity and complete operation span. Require checking to refuse before a
+   checked package can be published for evaluation or generation. QSL deliberately
+   generalizes quantity-specific source causes at this boundary.
+3. Separately pass the U14 original magnitudes and genuine admitted unit graph
+   identities to the public quantity operation API with all ten limits zero.
+   Require two IncompatibleDimensions, two AffineUnitArithmetic (including
+   Celsius division by zero) and one DistinctUnits refusal. Require empty admitted
+   charges and zero consumption in every counter. Assert admitted centimetre
+   scale/identity and Celsius root/offset.
+4. For U12 check full original Boolean equality function bodies and select each
+   actual left checked subexpression through the public child accessor. Evaluate
+   that original node directly with evaluate_closed; do not cut or reconstruct a
+   body, evaluate the equality wrapper, or subtract any charge. Independently
+   require magnitudes 6, 3, 4 and 1. Construct expected compound units with the
+   owner's public API on admitted root keys and verify exact structural terms
+   and base-dimension powers, including the empty dimensionless map. Check full
+   ordered charge records, empty losses and all ten counters.
+5. For U19 and U24 check direct original quantity-returning function bodies.
+   Require U19 magnitude 5 in metres at work 5 and the exact unpaid retention
+   stop at work 4; require U24 magnitude 3 in centimetres at work 5. Compare each
+   full ordered charge record and all ten counters, with no edges and no losses.
+   The stopped original body must retain its genuine source location.
+6. Emit the original checked packages unchanged and strictly admit their IR.
+   Select the actual operation reference for each original body/subexpression.
+   Derive scalar items and retain every typed refusal at its measured stage.
+   Generate the eligible items. Independently recheck the same original source.
+7. For generated additions, obtain operand values from genuine checked literal
+   nodes outside compared meters. Transport actual producer-owned structural key
+   components and nominal metadata through public NodeKey, DimensionNode,
+   UnitNode and UnitGraph constructors; resolve quantities through UnitTable.
+   Require each declared operand key to join the admitted emitted graph. Invoke
+   each actual generated symbol with fresh identical limits and compare full typed
+   outcomes, losses, ordered admitted charges and every counter against the
+   independently checked original closed body. No call/child charge subtraction,
+   TypeEnvironment, fabricated identity, rewritten IR or replacement evaluator.
 
 ## Expected Results
 
-All five original operations refuse statically at their own original source
-occurrence. The affine zero-divisor case never becomes a runtime Undefined
-outcome. No executable checked package, evaluation or generated oracle is
-published. Runtime charging is unreachable at this source admission boundary;
-the separate zero-limit owner operation controls establish their own zero-charge
-refusals, without generated agreement.
-Application version: 0.1.0. The focused
-`tc187_p9_u14_static::original_u14_operations_refuse_at_their_source_occurrence`
-test passes all five original source admissions and all five zero-limit owner
-operation controls. Every source refusal retains `ill_typed/type-mismatch` and
-the full original operation span; all owner operation charges and counters are
-zero. U14 receives no generated-oracle agreement credit.
+Application version: 0.1.0.
 
-U12/U19/U24 execution and native classification remain pending until their
-focused observations run. Their admission does not upgrade the U14 controls to
-generated agreement, nor establish whole TC-187 or whole SC-04 completion.
+`tc187_p9_u14_static::original_u14_operations_refuse_at_their_source_occurrence`
+passes five source-admission and five separate zero-limit owner operation
+controls. The source causes are generic TypeMismatch; the owner operation causes
+retain the detailed dimension/affine/unit distinctions. Celsius division by zero
+refuses statically instead of reaching Undefined. These controls receive no
+generated-agreement credit.
+
+`tc187_u12_arithmetic::public_u12_arithmetic_values_have_their_canonical_compound_units`
+passes all four QSL source-value observations with exact compound terms, dimensions,
+empty losses, ordered charges and counters. Multiplication and both divisions each
+consume work 5, occurrences 2 and result 1; square consumes work 4, occurrences 1
+and result 1. Integer high water is 4 and all other counters are zero. Generated
+agreement remains Planned under IR-1348 for all four operations: square derivation
+refuses RequiresBound on its actual scalar_type/integer exponent; the other three
+derive but their actual CG claims refuse ResultTypeMismatch with expected Unit and
+found compound_unit. IR-1348 owns the compound-result and integer-exponent generation frontiers.
+
+`tc187_u19_u24_addition::original_additions_retain_their_units_and_exact_unpaid_retention`
+passes three actual QSL/native observations. U19 work 5 and U24 work 5 complete
+with five ordered events: two identity reads, arithmetic integer amount 4, target
+domain, and retention. U19 work 4 stops at UnitResultRetain, consumed 4, next charge
+1, retaining exactly the first four events. Integer high water is 4, occurrences
+2, work 5/4/5 and result units 1/0/1; every other counter is zero. All observations
+have empty losses; the incomplete original body retains its original location.
+These are the only generated quantity agreements claimed by this artifact.
+
+This artifact establishes no credit for other TC-187 operations or whole
+IT-019-SC-04 completion.
