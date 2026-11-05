@@ -789,7 +789,16 @@ fn admitted_quantity_equality_converts_left_operand_before_comparison() {
             .collect();
         assert_eq!(points.first(), Some(&ChargePoint::UnitIdentityRead));
         assert!(points.contains(&ChargePoint::UnitResultRetain));
-        assert_eq!(points.last(), Some(&ChargePoint::OrderingResultRetain));
+        assert!(points.contains(&ChargePoint::OrderingResultRetain));
+        let conversion_end = points
+            .iter()
+            .position(|point| *point == ChargePoint::UnitResultRetain)
+            .expect("left operand conversion retains its result");
+        let comparison_start = points
+            .iter()
+            .position(|point| *point == ChargePoint::OrderingOperands)
+            .expect("converted quantities are compared");
+        assert!(conversion_end < comparison_start, "{points:?}");
     }
     assert_eq!(
         types
