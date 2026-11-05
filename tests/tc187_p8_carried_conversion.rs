@@ -111,6 +111,7 @@ fn compare(
     m: &UnitId,
     target: &DecimalType,
     limits: ScalarLimits,
+    expected: Option<(i64, u32, bool)>,
 ) -> (Outcome<Conversion>, Meter) {
     let function = package
         .graph()
@@ -130,6 +131,27 @@ fn compare(
         &mut native_meter,
     )
     .expect("native conversion is well typed");
+    if let Some((coefficient, scale, rounded)) = expected {
+        assert_decimal(&native, coefficient, scale);
+        let Outcome::Completed(conversion) = &native else {
+            unreachable!()
+        };
+        let ConvertedValue::Decimal(result) = conversion.value() else {
+            unreachable!()
+        };
+        if rounded {
+            let loss = result
+                .loss()
+                .expect("U07 retains the complete rounding loss");
+            assert_eq!(loss.exact_numerator(), &Integer::from(127));
+            assert_eq!(loss.exact_denominator(), Integer::from(5000));
+            assert_eq!(loss.rounded_coefficient(), &Integer::from(3));
+            assert_eq!(loss.rounded_scale(), 2);
+            assert_eq!(loss.mode(), RoundingMode::NearestEven);
+        } else {
+            assert!(result.loss().is_none());
+        }
+    }
     let mut source_meter = Meter::new(limits);
     let evaluation =
         qsl_eval::value::evaluate_closed(package, function.body, function.slots, &mut source_meter)
@@ -232,7 +254,17 @@ fn u07_original_carried_exact_and_nearest_even_preserve_loss_and_precedence() {
             limits(15, 5, 1, 4, 1),
             limits(15, 5, 1, 6, 0),
         ] {
-            let (outcome, meter) = compare(&package, &input, &m, &target, allowance);
+            let (outcome, meter) = compare(
+                &package,
+                &input,
+                &m,
+                &target,
+                allowance,
+                (mode == RoundingMode::NearestEven
+                    && allowance.work_units == 6
+                    && allowance.result_units == 1)
+                    .then_some((3, 2, true)),
+            );
             if mode == RoundingMode::Exact {
                 assert_eq!(
                     outcome,
@@ -307,7 +339,14 @@ fn u08_original_carried_boundaries_refuse_atomically_after_target_domain() {
         let (package, m, _) = checked("Decimal[-2,2;0,0;exact]", operand);
         let input = Quantity::new(rational(n, 1), m.clone());
         for work in [3, 1] {
-            let (outcome, meter) = compare(&package, &input, &m, &target, limits(2, 1, 0, work, 1));
+            let (outcome, meter) = compare(
+                &package,
+                &input,
+                &m,
+                &target,
+                limits(2, 1, 0, work, 1),
+                (work == 3 && n.abs() == 2).then_some((n, 0, false)),
+            );
             if work == 1 {
                 stop(
                     &outcome,
