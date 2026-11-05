@@ -175,6 +175,22 @@ fn selected_scalar_operations_match_independently_checked_qsl_bodies() {
             })
         })
         .collect::<Vec<_>>();
+    for item in &items {
+        assert!(
+            matches!(
+                item.operation,
+                ExactScalarOperation::Boolean {
+                    right_may_stop: false,
+                    ..
+                } | ExactScalarOperation::Equality {
+                    operands: quire_contract_codegen::EqualityOperandKind::Boolean,
+                    ..
+                }
+            ),
+            "only selected eager Boolean rows: {:?}",
+            item.operation
+        );
+    }
     let output =
         generate_exact_scalar_oracles(&package, &items).expect("original operation items generate");
     assert_eq!(output.claim_map.items.len(), rows.len());

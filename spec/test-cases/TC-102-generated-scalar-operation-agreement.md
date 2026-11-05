@@ -30,7 +30,8 @@ Neither evaluator is reproduced.
    allowances through the existing generated-artifact helper.
 3. Exercise Boolean Not and full binary truth tables for And, Or, Implies,
    Equality/Boolean Equal and NotEqual: 22 authored cases across six public
-   operation rows. Independently require authored expected truth values rather
+   operation rows. Boolean variants explicitly use `right_may_stop=false`; the
+   `right_may_stop=true` lazy and supplied-stop controls remain Planned. Independently require authored expected truth values rather
    than merely mutual agreement.
 4. Compare complete typed operation outcomes, ordered losses, ordered admitted
    charges and all LimitKind consumed counters at generous work and work zero/one.
