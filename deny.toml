@@ -12,6 +12,12 @@ allow = [
     "Zlib",
 ]
 confidence-threshold = 0.9
+# Production checked views reach these existing transitive dependencies.
+# Keep their additional permissive licenses scoped to the owning crates.
+exceptions = [
+    { name = "ar_archive_writer", allow = ["Apache-2.0 WITH LLVM-exception"] },
+    { name = "borrow-or-share", allow = ["MIT-0"] },
+]
 
 [bans]
 multiple-versions = "allow"
