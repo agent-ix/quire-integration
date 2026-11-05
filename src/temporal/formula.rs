@@ -260,23 +260,24 @@ pub fn construct_tl_formula(
     let mut count = 0;
     charge(&mut count, limits.max_nodes, TlFormulaLimit::Nodes)?;
     charge(&mut work, limits.max_work, TlFormulaLimit::Work)?;
-    let mut pending = vec![(0, 0)];
+    let root_use = graph.first().ok_or_else(invalid)?;
+    let mut pending = vec![(0, root_use, 0)];
     let mut ids = BTreeMap::new();
     let mut checked_leaves = subject.predicate_leaves().iter();
     let mut nodes = Vec::new();
     let mut leaves = Vec::new();
-    while let Some((at, next_operand)) = pending.last_mut() {
-        let used = graph.get(*at).ok_or_else(invalid)?;
+    while let Some((at, used, next_operand)) = pending.last_mut() {
         if let Some(&operand) = used.operands.get(*next_operand) {
             charge(&mut count, limits.max_nodes, TlFormulaLimit::Nodes)?;
             charge(&mut work, limits.max_work, TlFormulaLimit::Work)?;
             *next_operand += 1;
-            pending.push((operand, 0));
+            let operand_use = graph.get(operand).ok_or_else(invalid)?;
+            pending.push((operand, operand_use, 0));
             continue;
         }
-        let at = *at;
-        pending.pop();
         charge(&mut work, limits.max_work, TlFormulaLimit::Work)?;
+        let (at, used) = (*at, *used);
+        pending.pop();
         let id = NodeId(u32::try_from(nodes.len()).map_err(|_| invalid())?);
         let operand_ids: Vec<_> = used
             .operands
