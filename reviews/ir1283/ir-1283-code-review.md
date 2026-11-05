@@ -74,3 +74,7 @@ bindings:
 ## Final disposition
 
 **PASS.** FND-001 is fixed at PR #52 head `4803e50b7d332f47d55561ecb1d0000f2c4b44b6`; no new finding in the fix diff.
+
+## Lock refresh verification
+
+The later dependency refresh at PR #52 head `b4ca5a2e81218630429acba25652183c6c23dca4` changes only the locked QSL cohort from `3e8193af` to `4f12efb7` and the required transitive IR model from `d9e17c77` to `1cd5857f`; Exact stays at `7e06eba7`. The reviewed `tests/ieee_source_agreement.rs` is byte-identical to the previously reviewed head `4803e50b7d332f47d55561ecb1d0000f2c4b44b6`. The asserted denial fields and rendering checks remain in place. The existing FND-001 disposition remains fixed; no new finding in this lock delta. Coder-reported focused evidence: IEEE 23/23, both generated_boolean controls, fmt, all-target Clippy, and diff check pass. **PASS** for this confined refresh review; code lead owns the aggregate gate.

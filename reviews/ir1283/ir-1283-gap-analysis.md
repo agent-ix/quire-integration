@@ -79,3 +79,7 @@ bindings:
 ## Final disposition
 
 **PASS.** FND-001 is fixed at PR #52 head `4803e50b7d332f47d55561ecb1d0000f2c4b44b6`; no new finding in the fix diff.
+
+## Lock refresh verification
+
+At PR #52 head `b4ca5a2e81218630429acba25652183c6c23dca4`, the IEEE test diff is byte-identical to the reviewed head `4803e50b7d332f47d55561ecb1d0000f2c4b44b6`; the only relevant dependency delta is the first-party QSL/IR lock refresh. All previously checked F-row dispatch, two-sided rendering, and IT-017 trace bindings remain present. The existing FND-001 disposition remains fixed; no new gap finding. **PASS** for this confined refresh review.
