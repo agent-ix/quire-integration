@@ -997,7 +997,7 @@ fn admitted_scalar_equality_conversion_rows_preserve_exact_values() {
             ValueType::Decimal(decimal_type(30, 1, 1)),
             ValueType::Decimal(decimal_type(300, 1, 2)),
             two_decimal.clone(),
-            two_decimal,
+            ExactValue::Decimal(Decimal::new(integer(200), 2)),
         ),
         (
             ValueType::Decimal(decimal_type(3, 0, 0)),
