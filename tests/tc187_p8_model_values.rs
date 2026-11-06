@@ -21,7 +21,7 @@ use quire_semantic_value::{
     checking::CheckingLimits,
     quantity::{
         compare_quantity, convert_quantity, evaluate_quantity_unit, QuantityOperation,
-        QuantityRefusal, QuantityTarget, QuantityUnit, UnitScope, UnitTable,
+        QuantityRefusal, QuantityTarget, QuantityUnit, UnitScope,
     },
 };
 #[path = "support/oracle_observation.rs"]
@@ -193,7 +193,11 @@ fn u36_native_incompatibility_refuses_before_every_charge() {
     let d = original_local(&package, &source, "dsec");
     assert_ne!(r.dimension_node(), d.dimension_node());
     assert_eq!(r.dimension(), d.dimension());
-    let table = UnitTable::declared(&package.units);
+    let context = model::checked(
+        "dimension Dur = R::Time; unit dsec : Dur = rational(1, 1);",
+        false,
+    );
+    let table = context.graph().scope().types().units();
     let rq = Quantity::new(exact(3), r.id());
     let fq = Quantity::new(exact(3), f.id());
     let mut meter = Meter::new(limits());
@@ -304,7 +308,6 @@ fn u36_quotients_and_products_preserve_native_canonical_maps_and_ledgers() {
     let original = native_units();
     let r = model::imported_unit(&original, "acme/rpc", "s");
     let f = model::imported_unit(&original, "acme/flow", "s");
-    let table = UnitTable::declared(&original.units);
     let mut products = Vec::new();
     for (expr, divide, other, expected, dimension_terms, unit_terms) in [
         (
@@ -337,6 +340,7 @@ fn u36_quotients_and_products_preserve_native_canonical_maps_and_ledgers() {
             &format!("function observe using v(): Boolean pure {{ ({expr}) = ({expr}) }}"),
             false,
         );
+        let table = package.graph().scope().types().units();
         let left = Quantity::new(exact(3), r.id());
         let right = Quantity::new(exact(if divide { 3 } else { 2 }), other.id());
         let a = table.resolve(&left).expect("actual R operand");
@@ -737,9 +741,8 @@ fn u38_derived_equivalence_admission_and_invalid_ratio_keep_original_dimensions(
         "invalid_package/incompatible-definition"
     );
     mismatch(&format!("{TORQUE} function observe using v(): Quantity<J> pure {{ convert<Quantity<J>>(1 N_m) }}"),false,"convert<Quantity<J>>(1 N_m)");
-    let original = model::assemble(&model::source(TORQUE, false), false)
-        .expect("original derived native graph");
-    let table = UnitTable::declared(&original.units);
+    let context = model::checked(TORQUE, false);
+    let table = context.graph().scope().types().units();
     let quantity = Quantity::new(exact(1), torque.id());
     let mut meter = Meter::new(limits());
     assert_eq!(
@@ -792,7 +795,8 @@ fn u38_u40_unconverted_source_operations_and_unrelated_conversion_refuse() {
         model::assemble(&model::source(model::RF, false), false).expect("original Time relation");
     let f = model::imported_unit(&original, "acme/flow", "s");
     let m = model::imported_unit(&original, "acme/rpc", "m");
-    let table = UnitTable::declared(&original.units);
+    let context = model::checked(model::RF, false);
+    let table = context.graph().scope().types().units();
     let quantity = Quantity::new(exact(3), f.id());
     let mut meter = Meter::new(limits());
     assert_eq!(
