@@ -47,6 +47,15 @@ correspondence, result joins, bridge readers and the remaining limits stay Plann
 `tests/temporal_formula.rs` covers this narrow IT-020/TC-101 boundary; none of the
 whole FR-350 criteria is claimed complete by this component.
 
+The observation revision component strictly admits genuine QObs v1 historical bundle
+bytes, verifies exact selected observation membership including envelope revision, and
+retains the actual current/prior owner values and immutable bytes. It delegates bundle
+lineage to QObs and establishes no selected observation-document lineage, QSL capture
+binding, native Report binding or native/TL result predecessor pair.
+`tests/temporal_observation_revision.rs` covers this partial IT-021/TC-114 boundary.
+Full correspondence and join admission remain Planned. Component scan/byte limits
+exclude owner-internal work, which uses separately supplied native QObs limits.
+
 The plain-language test descriptions are in `spec/integration/`, one file per
 scenario, each with its objective, preconditions, procedure and expected result.
 
