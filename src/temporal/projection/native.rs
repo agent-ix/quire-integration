@@ -45,6 +45,19 @@ pub(super) fn check<'subject, 'input>(
 ) -> Result<Facts<'subject, 'input>, Error> {
     super::super::validate_mapping_binding(package, subject, classification, surrounding)
         .map_err(Error::Binding)?;
+    let observations = selection.observations;
+    for bytes in [
+        selection.observation.bundle().bytes(),
+        selection.clock.bytes(),
+        observations.decision_scope_progress.bytes(),
+        observations.decision_scope_closure.bytes(),
+        observations.surrounding_execution_progress.bytes(),
+        observations.surrounding_execution_closure.bytes(),
+        observations.completeness.bytes(),
+        observations.availability.bytes(),
+    ] {
+        budget.bytes(bytes.len())?;
+    }
     let target = match classification.support {
         Support::Supported { target, .. } => target,
         Support::Unsupported { .. } => {

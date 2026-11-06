@@ -9,7 +9,7 @@ use super::{
 use crate::temporal::{Closure, TemporalSubjectView};
 
 #[derive(Serialize)]
-struct Record<'a, S, D, L, B, I, V, A> {
+struct Record<'a, S, D, L, B, I, V, A, M> {
     profile: &'static str,
     version: u32,
     package: &'a str,
@@ -17,6 +17,7 @@ struct Record<'a, S, D, L, B, I, V, A> {
     declaration: D,
     selections: L,
     bindings: B,
+    models: M,
     intervals: I,
     anchor: &'a str,
     capture_instance: &'a str,
@@ -54,6 +55,16 @@ pub(super) fn encode(
     request: &quire_mltl::request::ValidatedTemporalRequest,
     budget: &mut Budget,
 ) -> Result<Vec<u8>, TlProjectionError> {
+    let mut models = Vec::new();
+    for (node, kind) in package.graph().nodes.iter().zip(package.node_kinds()) {
+        budget.work()?;
+        if *kind
+            == quire_contract_ir::CheckedNodeKind::Model(quire_contract_ir::ModelForm::ModelRoot)
+        {
+            models.push(node);
+        }
+    }
+    models.sort_by(|left, right| left.node_id.cmp(&right.node_id));
     let mut bindings = Vec::with_capacity(built.formula.leaves().len());
     for leaf in built.formula.leaves() {
         budget.work()?;
@@ -137,6 +148,7 @@ pub(super) fn encode(
         ),
         selections: (package.lock(), subject.profile()),
         bindings,
+        models,
         intervals,
         anchor: native.instance.anchor,
         capture_instance: native.instance.capture_instance,
