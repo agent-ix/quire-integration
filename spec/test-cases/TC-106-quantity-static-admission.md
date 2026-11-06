@@ -36,10 +36,12 @@ typed generation refusals and actual generated execution.
    scale/identity and Celsius root/offset.
 4. For U12 check full original Boolean equality function bodies and select each
    actual left checked subexpression through the public child accessor. Evaluate
-   that original node directly with evaluate_closed; do not cut or reconstruct a
-   body, evaluate the equality wrapper, or subtract any charge. Independently
-   require magnitudes 6, 3, 4 and 1. Construct expected compound units with the
-   owner's public API on admitted root keys and verify exact structural terms
+   that original node directly with `evaluate_closed_with_frame`, passing the
+   checked function's retained `formed_units` and its genuine zero-argument
+   frame; do not cut or reconstruct a body, evaluate the equality wrapper, or
+   subtract any charge. Independently require magnitudes 6, 3, 4 and 1.
+   Construct expected compound units with the owner's public API on admitted
+   root keys and verify exact structural terms
    and base-dimension powers, including the empty dimensionless map. Check full
    ordered charge records, empty losses and all ten counters.
 5. For U19 and U24 check direct original quantity-returning function bodies.
