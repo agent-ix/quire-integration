@@ -18,6 +18,13 @@ enum AdmissionCase {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NativeOperation {
+    Add,
+    Convert,
+    Compare,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RowDispatch {
     Admission(AdmissionCase),
     Topology(&'static str),
@@ -28,6 +35,20 @@ enum RowDispatch {
         generated_owner: &'static str,
         missing: &'static str,
     },
+    NativeOriginal {
+        expected: &'static [&'static str],
+        operation: NativeOperation,
+    },
+    NativeOwner {
+        expected: &'static str,
+        generated_owner: &'static str,
+        missing: &'static str,
+    },
+    QslControl {
+        expected: &'static str,
+        remaining_owner: &'static str,
+        missing: &'static str,
+    },
     Planned {
         tickets: &'static [&'static str],
         missing: &'static str,
@@ -36,7 +57,8 @@ enum RowDispatch {
 
 // This is dispatch over public IDs, not a copy of QSpec's inputs or expected
 // prose. A newly exported ID must get its own disposition instead of silently
-// inheriting a passing row. Mixed rows remain Planned until split by operation.
+// inheriting a passing row. Routed mixed rows name only the backed axis and
+// retain their remaining generated or source-authority work.
 fn dispatch(id: &str) -> Option<RowDispatch> {
     let pending = |missing| {
         Some(RowDispatch::Planned {
@@ -68,10 +90,121 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11q" | "U11z3" => Some(RowDispatch::Topology("invalid-value")),
         "U11x" => Some(RowDispatch::Topology("missing-name")),
         "U30" | "U31" => Some(RowDispatch::Checked("type-mismatch")),
+        "U14" => Some(RowDispatch::Checked("ill_typed")),
+        "U12" => Some(RowDispatch::QslValue {
+            expected: "empty dimensionless",
+            generated_owner: "IR-1348",
+            missing: "CG generated agreement for all four original arithmetic operations",
+        }),
         "U13" | "U21" => Some(RowDispatch::QslValue {
             expected: if id == "U13" { "incomplete" } else { "dimensionless" },
             generated_owner: "IR-842",
             missing: "QSL-to-IR-to-CG generated quantity power and native comparison",
+        }),
+        "U16" | "U29" => Some(RowDispatch::QslValue {
+            expected: "unit.target-domain",
+            generated_owner: "IR-1349",
+            missing: "strict IR reader InvalidDerivedShape before CG carried-target generation",
+        }),
+        "U17" => Some(RowDispatch::QslValue {
+            expected: "membership",
+            generated_owner: "IR-1349",
+            missing: "strict IR reader InvalidDerivedShape before CG carried-target generation",
+        }),
+        "U18" => Some(RowDispatch::QslValue {
+            expected: "4294967296",
+            generated_owner: "IR-1349",
+            missing: "strict IR reader InvalidDerivedShape before CG carried-target generation",
+        }),
+        "U28" => Some(RowDispatch::QslValue {
+            expected: "127/500000",
+            generated_owner: "IR-1348",
+            missing: "CG compound-result generation and native comparison",
+        }),
+        "U15" => Some(RowDispatch::NativeOriginal {
+            expected: &["127/50", "unit.edge"],
+            operation: NativeOperation::Convert,
+        }),
+        "U26" => Some(RowDispatch::NativeOriginal {
+            expected: &["-9 u1"],
+            operation: NativeOperation::Convert,
+        }),
+        "U19" => Some(RowDispatch::NativeOriginal {
+            expected: &["5 m", "unit.result-retain"],
+            operation: NativeOperation::Add,
+        }),
+        "U20" => Some(RowDispatch::NativeOriginal {
+            expected: &["3 u2"],
+            operation: NativeOperation::Add,
+        }),
+        "U24" => Some(RowDispatch::NativeOriginal {
+            expected: &["3 cm", "no `unit.edge`"],
+            operation: NativeOperation::Add,
+        }),
+        "U23" => Some(RowDispatch::NativeOriginal {
+            expected: &["false"],
+            operation: NativeOperation::Compare,
+        }),
+        "U22" => Some(RowDispatch::QslControl {
+            expected: "40000",
+            remaining_owner: "IR-1348",
+            missing: "isolated original conversion TypeMismatch; no native agreement",
+        }),
+        "U25" => Some(RowDispatch::QslControl {
+            expected: "1 J",
+            remaining_owner: "IR-1348",
+            missing: "original compound-target InvalidSyntax; no native agreement",
+        }),
+        "U27" => Some(RowDispatch::QslControl {
+            expected: "undefined",
+            remaining_owner: "IR-1348",
+            missing: "full-source UnprovedNonzero and no generated compound agreement",
+        }),
+        "U03" | "U05" | "U09" => Some(RowDispatch::Checked("ill_typed")),
+        "U02" => Some(RowDispatch::NativeOwner {
+            expected: "empty dimension",
+            generated_owner: "IR-842",
+            missing: "CG generated comparison for original normalization operations",
+        }),
+        "U04" => Some(RowDispatch::NativeOwner {
+            expected: "5463/20",
+            generated_owner: "IR-842",
+            missing: "CG generated comparison for original affine conversion",
+        }),
+        "U07" => Some(RowDispatch::NativeOwner {
+            expected: "nearest-even",
+            generated_owner: "IR-842",
+            missing: "CG generated carried conversion and native comparison",
+        }),
+        "U08" => Some(RowDispatch::NativeOwner {
+            expected: "refuse atomically",
+            generated_owner: "IR-842",
+            missing: "CG generated carried conversion and native comparison",
+        }),
+        "U09b" => Some(RowDispatch::NativeOwner {
+            expected: "conversion succeeds exactly",
+            generated_owner: "IR-842",
+            missing: "CG generated comparison for distinct scale-one alias",
+        }),
+        "U10" => Some(RowDispatch::NativeOwner {
+            expected: "1 m",
+            generated_owner: "IR-842",
+            missing: "CG generated comparison for exact tuple and final denial",
+        }),
+        "U36" => Some(RowDispatch::NativeOwner {
+            expected: "unequal compound units",
+            generated_owner: "IR-842",
+            missing: "CG generated comparison, direct dsec conversion and whole-let bridge agreement",
+        }),
+        "U33" => Some(RowDispatch::QslControl {
+            expected: "literal",
+            remaining_owner: "IR-842",
+            missing: "native runtime and generated agreement beyond checked emission",
+        }),
+        "U37" => Some(RowDispatch::QslControl {
+            expected: "conflicting-definition",
+            remaining_owner: "IR-842",
+            missing: "value and generated agreement beyond equivalence admission",
         }),
         "U01" => Some(RowDispatch::Planned {
             tickets: &["QSL-1737", "IR-1345"],
@@ -81,16 +214,11 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
             tickets: &["QSL-1738"],
             missing: "semantic-value derived dimension N = L / L must have an empty map, not N^1",
         }),
-        "U02" | "U03" | "U04" | "U05" | "U07" | "U08" | "U09" | "U09b" | "U10" => {
-            pending("QSL/IR/CG/native per-operation dispatch and comparison")
-        }
-        "U12" | "U14" | "U15" | "U16" | "U17" | "U18" | "U19" | "U20" | "U22"
-        | "U23" | "U24" | "U25" | "U26" | "U27" | "U28" | "U29" => {
-            pending("QSL/IR/CG/native quantity operation and limit dispatch")
-        }
-        "U32" | "U33" | "U34" | "U35" | "U36" | "U37" | "U38" | "U39" | "U40" => {
-            pending("QSL model/namespace admission and generated operation dispatch")
-        }
+        "U32" => pending("duplicate linked ms must refuse at Quantity<ms>, not the second unit declaration; IR-842 QSL owner routing"),
+        "U34" => pending("unitless imported Length refusal lacks the required checked-graph owner pointer; IR-842 owner routing"),
+        "U35" => pending("duplicate model Dimension.identity currently returns malformed-declaration, not required conflicting-binding; IR-842 owner routing"),
+        "U38" | "U40" => pending("intended equivalent-unit positive conversions and dependent operations are unexecuted; IR-842 QSL owner routing"),
+        "U39" => pending("QSL model/namespace admission and generated operation dispatch"),
         _ => None,
     }
 }
@@ -247,8 +375,10 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 observed.insert(vector.id);
             }
             RowDispatch::Checked(expected) => {
-                // Each complete public cell is bound and observed through
-                // QSL assembly and check in tc187_u30_u31.
+                // tc187_u30_u31 binds quantity type checks, while
+                // tc187_p9_u14_static binds five source refusals and separate
+                // zero-limit owner controls. tc187_p8_static_refusals binds
+                // U03/U05/U09 source and owner refusals. No generated credit.
                 assert!(
                     vector.expected.contains(expected),
                     "{} expectation",
@@ -261,11 +391,72 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 generated_owner,
                 missing,
             } => {
-                // tc187_u13_u21_power binds the complete public cells and
-                // checks real QSL values; generated agreement stays Planned.
+                // tc187_u12_arithmetic, tc187_u13_u21_power and the PR #80
+                // conversion/quantity tests bind complete public cells and
+                // check original QSL values. Generated comparisons remain
+                // Planned under their distinct owners.
                 assert!(
                     vector.expected.contains(expected),
                     "{} value expectation",
+                    vector.id
+                );
+                assert!(
+                    matches!(
+                        (vector.id, generated_owner),
+                        ("U12" | "U28", "IR-1348")
+                            | ("U13" | "U21", "IR-842")
+                            | ("U16" | "U17" | "U18" | "U29", "IR-1349")
+                    ),
+                    "{} generated owner",
+                    vector.id
+                );
+                assert!(
+                    missing.contains("CG"),
+                    "{} missing generated path",
+                    vector.id
+                );
+                if generated_owner == "IR-1349" {
+                    assert!(
+                        missing.contains("strict IR reader"),
+                        "{} reader frontier",
+                        vector.id
+                    );
+                }
+                observed.insert(vector.id);
+            }
+            RowDispatch::NativeOriginal {
+                expected,
+                operation,
+            } => {
+                // tc187_u19_u24_addition and the PR #80 conversion/quantity
+                // tests compare only these original operations to native CG.
+                let expected_operation = match vector.id {
+                    "U15" | "U26" => NativeOperation::Convert,
+                    "U19" | "U20" | "U24" => NativeOperation::Add,
+                    "U23" => NativeOperation::Compare,
+                    other => panic!("unexpected native original row {other}"),
+                };
+                assert_eq!(operation, expected_operation, "{} operation", vector.id);
+                for fragment in expected {
+                    assert!(
+                        vector.expected.contains(*fragment),
+                        "{} original {operation:?} expectation: {fragment}",
+                        vector.id
+                    );
+                }
+                observed.insert(vector.id);
+            }
+            RowDispatch::NativeOwner {
+                expected,
+                generated_owner,
+                missing,
+            } => {
+                // tc187_p8_conversion, tc187_p8_carried_conversion and
+                // tc187_p8_model_values compare genuine source operations
+                // with native owner values and ledgers. None executes CG.
+                assert!(
+                    vector.expected.contains(expected),
+                    "{} owner value expectation",
                     vector.id
                 );
                 assert_eq!(generated_owner, "IR-842", "{} generated owner", vector.id);
@@ -274,6 +465,34 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                     "{} missing generated path",
                     vector.id
                 );
+                observed.insert(vector.id);
+            }
+            RowDispatch::QslControl {
+                expected,
+                remaining_owner,
+                missing,
+            } => {
+                // U22/U25 keep source and owner conversion axes separate;
+                // U27 keeps checked-expression authority distinct from its
+                // full-source UnprovedNonzero refusal. U33 is checked
+                // admission/emission; U37 is equivalence admission. None
+                // receives unobserved generated or native runtime credit.
+                assert!(
+                    vector.expected.contains(expected),
+                    "{} expectation",
+                    vector.id
+                );
+                let expected_owner = if matches!(vector.id, "U22" | "U25" | "U27") {
+                    "IR-1348"
+                } else {
+                    "IR-842"
+                };
+                assert_eq!(
+                    remaining_owner, expected_owner,
+                    "{} remaining owner",
+                    vector.id
+                );
+                assert!(!missing.is_empty(), "{} missing original route", vector.id);
                 observed.insert(vector.id);
             }
             RowDispatch::Planned { tickets, missing } => {
@@ -291,6 +510,18 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 if vector.id == "U11g3" {
                     assert!(missing.contains("empty map"));
                 }
+                if vector.id == "U32" {
+                    assert!(missing.contains("Quantity<ms>"));
+                }
+                if vector.id == "U34" {
+                    assert!(missing.contains("owner pointer"));
+                }
+                if vector.id == "U35" {
+                    assert!(missing.contains("conflicting-binding"));
+                }
+                if matches!(vector.id, "U38" | "U40") {
+                    assert!(missing.contains("positive conversions"));
+                }
                 planned += 1;
             }
         }
@@ -301,7 +532,9 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             "U06", "U11a", "U11b", "U11c", "U11d", "U11e", "U11f", "U11g1", "U11g2", "U11g4",
             "U11h", "U11i", "U11j", "U11k", "U11l", "U11m", "U11n", "U11o", "U11p", "U11q", "U11r",
             "U11s", "U11t", "U11u", "U11w", "U11x", "U11y", "U11z1", "U11z2", "U11z3", "U30",
-            "U31", "U13", "U21",
+            "U31", "U12", "U13", "U14", "U15", "U16", "U17", "U18", "U19", "U20", "U21", "U22",
+            "U23", "U24", "U25", "U26", "U27", "U28", "U29", "U02", "U03", "U04", "U05", "U07",
+            "U08", "U09", "U09b", "U10", "U33", "U36", "U37",
         ])
     );
     assert!(planned > 0, "SC-04 is not yet complete");
