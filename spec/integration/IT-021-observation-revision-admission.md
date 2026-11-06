@@ -66,8 +66,9 @@ or agreement is established. This evidence does not complete any whole FR-350 cr
 
 ## Dependencies
 
-Adoption is blocked by the unchanged IT-014 shared dependency cohort guard: the
-normal QObs main dependency currently selects its upstream tagged canonical encoder
-alongside the existing main encoder. This component uses genuine QObs-owned types
-only, but does not waive the one-copy cohort requirement. Upstream normal dependency
-convergence is required before merge; no local override or policy exception is added.
+The normal QObs main dependency now selects the same canonical main encoder as the
+integration graph, including its production `serde_json` feature. The unchanged
+IT-014 shared dependency cohort guard passes with one canonical package identity;
+the previous dependency adoption blocker is resolved. This component uses genuine
+QObs-owned types only. No local override or policy exception is added. Full join and
+native-input prerequisites remain Planned as stated above.

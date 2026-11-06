@@ -55,6 +55,9 @@ binding, native Report binding or native/TL result predecessor pair.
 `tests/temporal_observation_revision.rs` covers this partial IT-021/TC-114 boundary.
 Full correspondence and join admission remain Planned. Component scan/byte limits
 exclude owner-internal work, which uses separately supplied native QObs limits.
+The normal QObs main dependency shares the existing canonical main encoder with its
+production `serde_json` feature. The unchanged IT-014 one-copy dependency cohort check
+passes, resolving the previous dependency adoption blocker.
 
 The plain-language test descriptions are in `spec/integration/`, one file per
 scenario, each with its objective, preconditions, procedure and expected result.
