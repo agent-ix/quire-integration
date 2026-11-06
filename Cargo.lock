@@ -1265,7 +1265,7 @@ dependencies = [
  "qsl-replay",
  "qsl-route",
  "qsl-semantics",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-checked",
  "quire-exact",
  "quire-semantic-value",
@@ -1293,7 +1293,7 @@ dependencies = [
  "qsl-foundation",
  "qsl-package",
  "qsl-semantics",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-checked",
  "quire-eval",
  "quire-exact",
@@ -1338,7 +1338,7 @@ dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
  "qsl-semantics",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-checked",
  "quire-contract-model",
  "quire-exact",
@@ -1363,7 +1363,7 @@ dependencies = [
  "qsl-foundation",
  "qsl-package",
  "qsl-semantics",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-checked",
  "quire-contract-model",
  "quire-eval",
@@ -1399,7 +1399,7 @@ dependencies = [
  "ix-trace-rs",
  "qsl-forms",
  "qsl-foundation",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-checked",
  "quire-contract-model",
  "quire-exact",
@@ -1408,17 +1408,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "quire-canonical"
-version = "0.3.0"
-source = "git+https://github.com/agent-ix/quire-canonical?tag=quire-canonical-v0.3.0#1d73f93f6b8139f10eb5bd5082a0b877958344fa"
-dependencies = [
- "ryu-js",
- "serde",
- "sha2",
  "thiserror",
 ]
 
@@ -1450,7 +1439,7 @@ name = "quire-checked"
 version = "0.1.0"
 source = "git+https://github.com/agent-ix/quire-eval?branch=main#9bb20e6bd6949e94ece964f923c691843763287f"
 dependencies = [
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-exact",
  "quire-semantic-value",
  "quire-walk",
@@ -1467,7 +1456,7 @@ dependencies = [
  "ix-trace-rs",
  "num-bigint",
  "qsl-replay",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-contract-ir",
  "quire-contract-model",
  "quire-contract-runtime",
@@ -1505,7 +1494,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-exact",
  "quire-semantic-value",
  "quire-verification-contracts",
@@ -1540,7 +1529,7 @@ dependencies = [
  "qsl-replay",
  "qsl-route",
  "qsl-semantics",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-contract-codegen",
  "quire-contract-model",
  "quire-exact",
@@ -1613,9 +1602,9 @@ dependencies = [
 [[package]]
 name = "quire-observation"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-observation?branch=main#7a39a3cd7a06decdba49882ed0fb35300c0b84e2"
+source = "git+https://github.com/agent-ix/quire-observation?branch=main#4d5198c4f897ed7477e7a03907b7a11ebaca4557"
 dependencies = [
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?tag=quire-canonical-v0.3.0)",
+ "quire-canonical",
  "serde",
  "serde_json",
  "sha2",
@@ -1647,7 +1636,7 @@ name = "quire-semantic-value"
 version = "0.1.0"
 source = "git+https://github.com/agent-ix/quire-semantic-value?branch=main#30c2493163cf35dd00d6dcaad63a7cbe9b2f5290"
 dependencies = [
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-exact",
  "thiserror",
 ]
@@ -1668,7 +1657,7 @@ dependencies = [
  "qsl-package",
  "qsl-replay",
  "qsl-semantics",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "quire-checked",
  "quire-contract-model",
  "quire-exact",
@@ -1691,7 +1680,7 @@ source = "git+https://github.com/agent-ix/quire-verification-contracts?branch=ma
 dependencies = [
  "chrono",
  "jsonschema 0.55.1",
- "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
+ "quire-canonical",
  "regress",
  "schemars",
  "serde",
