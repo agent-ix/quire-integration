@@ -14,7 +14,7 @@ use quire_contract_ir::{
 };
 use quire_exact::{
     ChargePoint, IllTypedCause, Integer, IntegerInterval, LimitKind, Meter, NodeKey, Outcome,
-    Quantity, Rational, RoundingMode, ScalarLimits, Undefined, UnitId,
+    Quantity, Rational, RoundingMode, ScalarLimits, Undefined, UnitDomain, UnitId,
 };
 use quire_semantic_value::{
     enumeration::EnumDeclaration,
@@ -517,6 +517,31 @@ fn admitted_root_units_have_canonical_compound_terms_and_order_refusal() {
         .expect("different nonzero exponent admits");
     assert_ne!(compound, different);
     assert!(actual.iter().all(|(_, exponent)| !exponent.is_zero()));
+}
+
+/// The same root read from QSL bytes retains its declared identity even when
+/// QSV derives a one-term compound over it.
+#[test]
+#[trace("IT-016-SC-03", "IT-016-SC-05", "TC-096", "FR-275-AC-23")]
+fn admitted_declared_root_differs_from_its_derived_compound_arm() {
+    let admitted = admitted_units();
+    let root = admitted.metre;
+    let declared = UnitId::declared(root.clone());
+    let compound = admitted
+        .graph
+        .compound_unit(&[(root.clone(), Integer::from(1_i64))])
+        .expect("the reader-admitted root forms a compound")
+        .id()
+        .expect("one short root has an exact identity");
+    assert_eq!(declared.domain(), UnitDomain::Declared);
+    assert_eq!(declared.declared_key(), Some(&root));
+    assert_eq!(compound.domain(), UnitDomain::Compound);
+    assert_eq!(
+        compound.compound_terms(),
+        Some([(root, Integer::from(1_i64))].as_slice())
+    );
+    assert_ne!(declared, compound);
+    assert!(declared < compound);
 }
 
 fn meter() -> Meter {
