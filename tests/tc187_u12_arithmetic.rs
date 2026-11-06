@@ -13,7 +13,7 @@ mod source;
 use ix_trace_rs::trace;
 use quire_contract_ir::{CheckedNodeId, CheckedPackageV2, CheckedTerm};
 use quire_eval::FamilyOutcome;
-use quire_exact::{Integer, Outcome, Rational, Value};
+use quire_exact::{ChargePoint, Incomplete, Integer, LimitKind, Outcome, Rational, Value};
 
 #[trace(
     "TC-106",
@@ -118,17 +118,58 @@ fn public_u12_arithmetic_values_have_their_canonical_compound_units() {
             other => panic!("unexpected operation {other}"),
         };
         source::assert_ledger(&meter, reads, true);
+        let unpaid_work = if *name == "square" { 3 } else { 4 };
+        let (denied, denied_meter) =
+            source::evaluate(&original, name, true, source::limits(1024, unpaid_work));
+        assert!(denied.losses.is_empty(), "{name} bounded losses");
+        let FamilyOutcome::Evaluated(Outcome::Incomplete(stop)) = denied.outcome else {
+            panic!(
+                "{name}: expected unpaid retention, got {:?}",
+                denied.outcome
+            );
+        };
+        assert_eq!(
+            stop,
+            Incomplete {
+                limit_kind: LimitKind::WorkUnits,
+                limit: unpaid_work,
+                consumed: unpaid_work,
+                next_charge: Integer::from(1_i64),
+                charge_point: ChargePoint::UnitResultRetain,
+            },
+            "{name} exact unpaid retention"
+        );
+        let graph = original.package.graph();
+        let function = graph
+            .function_by_identity(graph.function_identity(name).expect("source identity"))
+            .expect("source function");
+        let children = function.body.children();
+        let [operation, _] = children.as_slice() else {
+            panic!("{name}: equality children");
+        };
+        assert_eq!(
+            denied.location.as_ref(),
+            Some(operation.location()),
+            "{name} original operation locus"
+        );
+        source::assert_ledger(&denied_meter, reads, false);
     }
     assert_eq!(
         source::generation(
             &original,
             &cases
                 .iter()
-                .map(|(name, _, _, _)| (*name, true, source::limits(1024, 1024)))
+                .flat_map(|(name, _, _, _)| {
+                    let unpaid_work = if *name == "square" { 3 } else { 4 };
+                    [
+                        (*name, true, source::limits(1024, 1024)),
+                        (*name, true, source::limits(1024, unpaid_work)),
+                    ]
+                })
                 .collect::<Vec<_>>(),
-            &["square"],
-            &["product", "quotient", "dimensionless"]
+            &[],
+            &[]
         ),
-        0
+        8
     );
 }

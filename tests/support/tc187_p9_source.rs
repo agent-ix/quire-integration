@@ -466,7 +466,7 @@ fn native_units(original: &Original) -> String {
         );
         let key = native_key(&node.key);
         match &node.form {
-            NominalUnitForm::Dimension { terms } => {
+            NominalUnitForm::Dimension { base, terms } => {
                 let terms = terms
                     .iter()
                     .map(|(key, power)| {
@@ -478,7 +478,8 @@ fn native_units(original: &Original) -> String {
                     })
                     .collect::<Vec<_>>()
                     .join(",");
-                driver.push_str(&format!("dimensions.insert({key},DimensionNode::checked(vec![{terms}],{declaration}).expect(\"original dimension metadata\"));"));
+                let constructor = if *base { "checked" } else { "checked_derived" };
+                driver.push_str(&format!("dimensions.insert({key},DimensionNode::{constructor}(vec![{terms}],{declaration}).expect(\"original dimension metadata\"));"));
             }
             NominalUnitForm::Unit {
                 dimension,
