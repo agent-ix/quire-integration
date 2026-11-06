@@ -61,6 +61,26 @@ typed generation refusals and actual generated execution.
    independently checked original closed body. No call/child charge subtraction,
    TypeEnvironment, fabricated identity, rewritten IR or replacement evaluator.
 
+8. Extend the original-source slice to U15–U18, U20, U22/U23 and U25–U29.
+   Bind each split operation and allowance through borrowed public facts. For
+   conversion, comparison, arithmetic and carried-target cases, assert independent
+   typed numeric/domain/stop expectations, exact original loci, losses, complete
+   ordered charge records and every counter. Keep static refusals separate from
+   executable checked bodies. U18 must stop on analytical target size without
+   materializing its enormous coefficient.
+9. Attempt unchanged original checking, emission, strict reading, scalar
+   derivation/generation and actual native execution for each eligible family.
+   Preserve exact carried-target, compound-result or other typed refusals as
+   Planned generated agreement. Do not attribute carried targets to bounded
+   parameter policy. Reuse admitted original nominal metadata and actual checked
+   operands in the native caller; no charge subtraction or source reinterpretation.
+10. For U22/U25 verify authentic compound input/target syntax and public body
+    support before claiming source agreement. If the exact source seam is absent,
+    record its measured refusal and retain separately labelled public owner
+    conversion controls on genuine admitted compound units. Never substitute a
+    power computation with extra charges, a nominal direct bridge, or a fabricated
+    checked body. Report a missing public seam for owner routing.
+
 ## Expected Results
 
 Application version: 0.1.0.
@@ -77,10 +97,10 @@ passes all four QSL source-value observations with exact compound terms, dimensi
 empty losses, ordered charges and counters. Multiplication and both divisions each
 consume work 5, occurrences 2 and result 1; square consumes work 4, occurrences 1
 and result 1. Integer high water is 4 and all other counters are zero. Generated
-agreement remains Planned under IR-1348 for all four operations: square derivation
+agreement remains Planned under [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and) for all four operations: square derivation
 refuses RequiresBound on its actual scalar_type/integer exponent; the other three
 derive but their actual CG claims refuse ResultTypeMismatch with expected Unit and
-found compound_unit. IR-1348 owns the compound-result and integer-exponent generation frontiers.
+found compound_unit. [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and) owns the compound-result and integer-exponent generation frontiers.
 
 `tc187_u19_u24_addition::original_additions_retain_their_units_and_exact_unpaid_retention`
 passes three actual QSL/native observations. U19 work 5 and U24 work 5 complete
@@ -89,7 +109,40 @@ domain, and retention. U19 work 4 stops at UnitResultRetain, consumed 4, next ch
 1, retaining exactly the first four events. Integer high water is 4, occurrences
 2, work 5/4/5 and result units 1/0/1; every other counter is zero. All observations
 have empty losses; the incomplete original body retains its original location.
-These are the only generated quantity agreements claimed by this artifact.
+These establish the initial three generated addition observations.
 
-This artifact establishes no credit for other TC-187 operations or whole
-IT-019-SC-04 completion.
+The remaining twelve-row extension has the following measured scope. All
+executed operation cells independently check the typed answer or exact unpaid
+stop, every ordered charge amount, all ten counters, losses and original locus.
+
+| Public ID | Executed evidence | Generated agreement or exact remaining boundary |
+| --- | --- | --- |
+| U15 | Two original exact conversion observations: 127/50 cm and the second edge denial | Two full original QSL/native comparisons pass |
+| U16 | Four original carried Decimal observations: exact refuses at both budgets, nearest-even yields 3/100 m with its exact 127/5000-to-(3,2) loss, or stops before target admission | Planned under [IR-1349](https://linear.app/agent-ix/issue/IR-1349/cg-generate-quantityconvert-into-a-carried-quantity-target-with): each isolated emitted carried source fails strict IR admission before CG |
+| U17 | Two original Decimal membership/target-work observations; no retention | Planned under [IR-1349](https://linear.app/agent-ix/issue/IR-1349/cg-generate-quantityconvert-into-a-carried-quantity-target-with), same measured strict-reader precursor |
+| U18 | Original analytical DecimalDigits stop: limit 64, consumed 0, next 4294967296; only the source read is admitted | Planned under [IR-1349](https://linear.app/agent-ix/issue/IR-1349/cg-generate-quantityconvert-into-a-carried-quantity-target-with), same measured strict-reader precursor; no enormous coefficient is materialized |
+| U20 | Two exact source TypeMismatch refusals and separate zero-limit AffineUnitArithmetic controls; the offset-cancelled sibling yields 3 u2 | One full original QSL/native comparison passes for the positive sibling; admission controls receive no native credit |
+| U22 | Nominal N_m-to-J source refusal and separate zero-limit dimension control; two full original let-body values including their power work; three separate owner conversion-only ledgers on the genuine QSL-produced 4 square metres | Isolated original conversion-only and generated agreement remain Planned under [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and): fresh original conversion-subtree checking with its genuine inferred compound parameter type refuses IllTyped(TypeMismatch), lacking retained formed-unit authority |
+| U23 | Two original distinct-unit source refusals and separate zero-limit owner controls; Celsius order/retention stop, reversing order false and Celsius self-equality true | Four full original QSL/native comparisons pass, with no target-domain or generic equality charge |
+| U25 | Direct compound-target source parsing refuses InvalidSyntax at the original asterisk. Two separately labelled owner conversion steps retain the actual intermediate compound value and finish at 1 J, each with read/domain/retain and no edge | Original two-step source/native agreement remains Planned under [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and): compound target grammar and original compound-input frame authority are absent |
+| U26 | Two original exact affine-chain observations: -9 u1 or the third edge denial; the whole three-edge path is retained | Two full original QSL/native comparisons pass |
+| U27 | Full total-function source refuses Unproved(Nonzero) at the original division. The authentic original AST admitted through the public checked-expression value API yields DivisionByZero after two reads, or the exact work-1 second-read stop | Generated agreement remains Planned under [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and); no checked whole-function package is published for this zero-divisor source, and no generated execution is claimed |
+| U28 | Three original compound-product observations at integer limits 20, 13 and 19: 127/500000 with root m exponent 2, or exact right-normalization/multiplication size stops | Planned under [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and): actual CG claim refuses ResultTypeMismatch, expected Unit/found compound_unit |
+| U29 | Four original carried Integer observations: exact inexact-conversion refusal, rounded target-work denial, membership refusal and target-work denial | Planned under [IR-1349](https://linear.app/agent-ix/issue/IR-1349/cg-generate-quantityconvert-into-a-carried-quantity-target-with): each isolated emitted carried source fails strict IR admission before CG |
+
+The carried precursor is observed for seven separately authored complete sources:
+exact/rounded Decimal, outside-domain Decimal, huge-scale Decimal,
+exact/rounded Integer and outside-domain Integer. Every strict reader returns
+InvalidPackage / InvalidDerivedShape at the original scalar_type/carried_quantity
+identity. This establishes no CG derivation or renderer execution for those
+sources. [IR-1349](https://linear.app/agent-ix/issue/IR-1349/cg-generate-quantityconvert-into-a-carried-quantity-target-with) also owns the later carried-target selector/renderer capability;
+fixing only that later stage does not establish the missing reader seam.
+
+The extension executes fifteen original closed-body conversion cells, eight
+original closed quantity/comparison cells, two public original checked-expression
+zero-division cells and nine native comparisons. Two additional full source
+compound conversion values include preparation work and are explicitly separate
+from the five owner-only isolated compound conversion ledgers. The five separate
+zero-limit owner controls are also distinct from source admission.
+
+No whole TC-187 or IT-019-SC-04 completion is implied.
