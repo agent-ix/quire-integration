@@ -11,6 +11,8 @@ use quire_contract_ir::CheckedPackageV2;
 /// Why a supplied classification cannot be consumed for this admitted subject.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MappingBindingRefusal {
+    /// The classification was issued by a different package admission.
+    ForeignClassification,
     /// The subject borrows a different admitted package instance.
     ForeignSubject,
     /// The selected clause cannot be classified under its admitted profile.
@@ -32,6 +34,9 @@ pub fn validate_mapping_binding(
     classification: &Classification,
     surrounding: Closure,
 ) -> Result<(), MappingBindingRefusal> {
+    if !package.retains(classification.selection().admission_binding()) {
+        return Err(MappingBindingRefusal::ForeignClassification);
+    }
     if !subject.belongs_to(package) {
         return Err(MappingBindingRefusal::ForeignSubject);
     }

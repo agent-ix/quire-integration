@@ -110,7 +110,7 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
 }
 
 /// This is the instance-binding precondition, not whole FR-350 projection evidence.
-#[trace("TC-461")]
+#[trace("TC-115", "IT-022-SC-01")]
 #[test]
 fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let (first, second, clause) = packages();
@@ -118,9 +118,19 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let other = temporal_subject(&second, &clause).expect("second subject reads");
     let classification = mapping_support(&subject, Closure::Complete).expect("classification");
     let other_classification = mapping_support(&other, Closure::Complete).expect("classification");
+    assert_eq!(classification.support, other_classification.support);
+    assert_eq!(classification.retained, other_classification.retained);
     assert_eq!(
-        classification, other_classification,
-        "equal content/name is insufficient"
+        classification.selection().package(),
+        other_classification.selection().package()
+    );
+    assert_eq!(
+        classification.selection().definition_artifact(),
+        other_classification.selection().definition_artifact()
+    );
+    assert_ne!(
+        classification.selection().admission_binding(),
+        other_classification.selection().admission_binding()
     );
     assert!(subject.belongs_to(&first));
     assert!(!subject.belongs_to(&second));
@@ -130,6 +140,14 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     );
     assert_eq!(
         validate_mapping_binding(&second, &subject, &classification, Closure::Complete),
+        Err(MappingBindingRefusal::ForeignClassification)
+    );
+    assert_eq!(
+        validate_mapping_binding(&first, &subject, &other_classification, Closure::Complete),
+        Err(MappingBindingRefusal::ForeignClassification)
+    );
+    assert_eq!(
+        validate_mapping_binding(&first, &other, &classification, Closure::Complete),
         Err(MappingBindingRefusal::ForeignSubject)
     );
     assert_eq!(
@@ -160,4 +178,16 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
             ..
         }
     ));
+    let cloned = first.clone();
+    let clone_subject = temporal_subject(&cloned, &clause).expect("clone subject");
+    assert_eq!(
+        validate_mapping_binding(&cloned, &clone_subject, &classification, Closure::Complete),
+        Ok(())
+    );
+    let moved = cloned;
+    let moved_subject = temporal_subject(&moved, &clause).expect("moved subject");
+    assert_eq!(
+        validate_mapping_binding(&moved, &moved_subject, &classification, Closure::Complete),
+        Ok(())
+    );
 }
