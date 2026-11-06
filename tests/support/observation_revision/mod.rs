@@ -124,7 +124,7 @@ impl Fixture {
                 members: vec![Member {
                     object_identity: id("member"),
                     record_identity: record.identity.clone(),
-                    anchor: record.anchor.clone(),
+                    anchor: record.anchor,
                 }],
             },
             records: vec![record],
