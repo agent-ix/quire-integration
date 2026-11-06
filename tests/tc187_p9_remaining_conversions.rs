@@ -1,21 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Original exact and carried quantity conversions at their charged boundaries.
-#[allow(
-    dead_code,
-    reason = "shared support is also used by other independent quantity targets"
-)]
 #[path = "support/family_function_selection.rs"]
 mod family_function_selection;
-#[allow(
-    dead_code,
-    reason = "shared support is also used by other independent quantity targets"
-)]
 #[path = "support/generated_oracle.rs"]
 mod generated_oracle;
-#[allow(
-    dead_code,
-    reason = "shared support is also used by other independent quantity targets"
-)]
 #[path = "support/oracle_observation.rs"]
 mod oracle_observation;
 #[allow(
@@ -274,7 +262,9 @@ fn observe(name: &str, allowance: ScalarLimits, original: &source::Original) {
     "TC-106",
     "IT-019-SC-04",
     "QSpec-TC-187",
+    "QSpec-FR-142-AC-1",
     "QSpec-FR-142-AC-3",
+    "QSpec-FR-142-AC-5",
     "QSpec-FR-142-AC-7"
 )]
 #[test]

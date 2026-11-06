@@ -1,21 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Original affine, comparison and compound quantity operation boundaries.
-#[allow(
-    dead_code,
-    reason = "shared support is also used by other independent quantity targets"
-)]
 #[path = "support/family_function_selection.rs"]
 mod family_function_selection;
-#[allow(
-    dead_code,
-    reason = "shared support is also used by other independent quantity targets"
-)]
 #[path = "support/generated_oracle.rs"]
 mod generated_oracle;
-#[allow(
-    dead_code,
-    reason = "shared support is also used by other independent quantity targets"
-)]
 #[path = "support/oracle_observation.rs"]
 mod oracle_observation;
 #[allow(
@@ -70,7 +58,9 @@ fn limits(i: u64, e: u64, o: u64, w: u64, r: u64) -> ScalarLimits {
     "QSpec-TC-187",
     "QSpec-FR-142-AC-1",
     "QSpec-FR-142-AC-2",
+    "QSpec-FR-142-AC-5",
     "QSpec-FR-142-AC-6",
+    "QSpec-FR-142-AC-9",
     "QSpec-FR-142-AC-7"
 )]
 #[test]
@@ -354,6 +344,9 @@ fn refused_source(expression: &str, result: &str, nonzero: bool) -> qsl_forms::E
     "IT-019-SC-04",
     "QSpec-TC-187",
     "QSpec-FR-142-AC-2",
+    "QSpec-FR-142-AC-5",
+    "QSpec-FR-142-AC-6",
+    "QSpec-FR-142-AC-9",
     "QSpec-FR-142-AC-7"
 )]
 #[test]
@@ -552,8 +545,10 @@ fn original_static_controls_and_public_zero_division_expression_keep_distinct_ax
     "TC-106",
     "IT-019-SC-04",
     "QSpec-TC-187",
-    "QSpec-FR-142-AC-3",
+    "QSpec-FR-142-AC-2",
+    "QSpec-FR-142-AC-4",
     "QSpec-FR-142-AC-6",
+    "QSpec-FR-142-AC-10",
     "QSpec-FR-142-AC-7"
 )]
 #[test]
@@ -761,6 +756,17 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
             .collect::<Vec<_>>(),
         terms
     );
+    let torque_unit = original
+        .units
+        .unit(original.keys["N_m"].clone())
+        .expect("original torque metadata");
+    let energy_unit = original
+        .units
+        .unit(original.keys["J"].clone())
+        .expect("original energy metadata");
+    assert_ne!(torque_unit.dimension_node(), energy_unit.dimension_node());
+    assert_eq!(torque_unit.dimension(), energy_unit.dimension());
+    assert_eq!(bridge.dimension(), torque_unit.dimension());
     let bridge_unit = QuantityUnit::Compound(bridge);
     let bridge_id = table
         .insert(bridge_unit.clone())
@@ -851,6 +857,7 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
         .region
         .as_ref()
         .expect("original syntax refusal region");
+    assert_eq!(region.source(), parsed.source().reference());
     assert_eq!(
         &text[usize::try_from(region.start()).expect("source start")
             ..usize::try_from(region.end()).expect("source end")],
