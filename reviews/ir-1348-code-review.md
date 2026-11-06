@@ -46,3 +46,7 @@ scope:
 ### Round 1 verdict
 
 PASS. Direct GitHub API readback of the PR body confirms the path was removed. No Cargo or wider review rerun.
+
+## Post-review scope extension at f001185a
+
+Focused static review of the U22/U28 follow-up diff found no new code defect. U22 checks the original cut conversion subtree with the checked power's inferred compound parameter type, evaluates it with QSL-produced 4 m² in the checked expression's frame, and asserts the exact converted identity, empty losses, ordered read/domain/retain charges and all counters [3,0,0,1,3,1]. U28 removes only the product from the helper's expected compound refusal set and requires a sixth actual generated native observation through the existing strict IR/CG helper. No production code, dependency lock, dispatcher cell or other test row changed in this extension. The reported focused `tc187_p9_remaining_quantity` result is author evidence; no reviewer Cargo run.

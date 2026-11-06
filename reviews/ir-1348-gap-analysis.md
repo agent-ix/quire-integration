@@ -39,3 +39,7 @@ scope:
 ## Disposition pass 1
 
 No findings required disposition. The scoped manual trace verdict remains PASS at head 61549fc2; the fix touched only TC-106 procedure wording and PR description.
+
+## Post-review scope extension at f001185a
+
+The U22 original conversion source-value claim is backed by the authentic cut expression, inferred parameter type, QSL-produced area value, exact 4 m² and conversion-only ledger assertions. The U28 generated agreement claim is backed by `source::generation` for the unchanged product at its completed limit; the helper requires one IR-confirmed CG claim and compares actual native output to the independently rechecked QSL operation snapshot. The two smaller U28 integer-limit observations remain source-only. No new scoped acceptance gap was found; computed matrix availability is unchanged.

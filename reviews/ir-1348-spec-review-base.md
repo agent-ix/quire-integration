@@ -43,3 +43,7 @@ scope:
 ### Round 1 verdict
 
 PASS. Static inspection of commit 61549fc2 confirms the procedure matches the tested public QSL API. No Cargo or wider review rerun.
+
+## Post-review scope extension at f001185a
+
+Focused static review found the updated IT-019 and TC-106 U22/U28 disposition rows consistent with the added test evidence. U22 now claims an isolated original QSL conversion result and conversion-only accounting, while explicitly retaining generated conversion as Planned. U28 claims one completed generated native observation; the two size-stop source observations remain source-only. U25 and U27 remain Planned with their measured source boundaries. No new specification defect or additional sub-analysis was identified.
