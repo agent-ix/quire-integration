@@ -61,3 +61,18 @@ pub use observation_revision::{
     read_observation_revision, AdmittedObservationRevision, ObservationAdmissionCode,
     ObservationAdmissionError, ObservationAdmissionLimit, ObservationAdmissionLimits,
 };
+
+mod projection;
+
+pub use projection::{
+    project_tl, read_tl_projection, ExpectedTlProjection, NativeProjectionInput, TlInput, TlLimits,
+    TlMissingPremise, TlProjectionCode, TlProjectionError, TlProjectionLimit, TlProjectionPremise,
+    TlProjectionSelection, TlProjectionUsage, ValidatedTlProjection,
+    PROFILE as TL_CORRESPONDENCE_PROFILE,
+};
+
+mod join;
+pub use join::{
+    join_tl, read_tl_join, ExpectedTlJoin, TlJoinCause, TlJoinCode, TlJoinDecision, TlJoinError,
+    TlJoinOwnerRefusals, ValidatedTlJoin, VERSION as TL_JOIN_VERSION,
+};

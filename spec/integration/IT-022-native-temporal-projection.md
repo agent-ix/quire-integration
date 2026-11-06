@@ -19,8 +19,9 @@ successful `project_tl` returns a constructor-private value retaining genuine
 TL formula, proposition-map, trace or position-history, and request reader
 outputs. It retains the original native facts and independent observation-owner
 views. A failed premise returns a typed non-value and no partial projection.
-Strict bridge correspondence readers and result joins are separate obligations;
-this integration does not report them complete.
+The same IR-1005 integration leg also owns strict correspondence reading and
+result joining. Their implementation and tests remain required before this leg
+can claim FR-350 completion; a projection-only result is not completion.
 
 ## Target Integration
 
@@ -51,9 +52,12 @@ data. No absent, conflicting or evicted fact becomes false.
 ## Inputs
 
 `project_tl` takes the actual checked package and subject, QSL classification,
-surrounding closure, native trace and valuation evidence for one declared
-occurrence, actual admitted observation revision, and independent TL/QObs owner
-selections and limits. Selection structs group references to real owner values;
+surrounding closure, the actual native checked-package `EvidenceRequest`,
+ordered `ValuationEvidence`, exact occurrence and `ValuationInstance`, actual admitted observation revision, and independent TL/QObs owner
+selections and limits. This native input spelling is the pending IR-1378 owner
+correction to FR-350's legacy `Trace` spelling; no adapter guesses an opaque
+observation identity from a numeric position. IR-1377 owns normalization of the
+TL request dependency cohort. Selection structs group references to real owner values;
 they do not replace their records, assert trust, or supply an evaluator callback.
 
 ## Test Procedure
@@ -105,3 +109,34 @@ unsupported, incomplete or refused result without a successful partial value.
 The integration preserves current owner limitations as limitations, not successful
 FR-350 evidence. Full correspondence reading, result joining, supersession and
 complete seven-counter qualification remain open under IR-1005.
+
+
+## Correspondence and strict reading
+
+The constructor-private projection retains its original package admission and
+canonical bridge correspondence bytes. The correspondence preserves the actual
+source occurrence span, declaration, selected owner lock/profile, original
+predicate terms with their TL proposition relation, ordered intervals, native
+anchor and capture values, exact clock parameters, observation bundle and each
+independent QObs owner record. It retains complete formula, proposition map,
+trace/history and request byte values without copying their owner schemas.
+Native valuation row order and all six row bindings remain explicit. Native
+completeness facts remain exact opaque source facts; equal progress numbers or
+closed states do not attest a mapping to QObs member identities.
+
+`read_tl_projection` reconstructs the expected value through the same genuine
+constructors/readers with independent original inputs and fresh caller counters.
+It compares complete canonical bytes. Unknown, duplicate, missing, reordered,
+trailing or noncanonical members and changed owner values refuse. Neither the
+constructor nor reader invokes an evaluator.
+
+## Remaining owner prerequisites
+
+Full FR-350 qualification is pending the IR-1377 dependency cohort and IR-1378
+native input correction. A corrected join also needs a public, non-evaluating
+owner operation that authenticates the full actual native and TL direct
+predecessor values; identities alone cannot discharge that requirement. The
+bridge preserves a typed authority refusal until the owner supplies that
+capability. The supported fixed-sample unit domain remains FR-350's authored
+domain; the TL request owner's current nanosecond-only past restriction is an
+upstream limitation rather than a narrower integration contract.

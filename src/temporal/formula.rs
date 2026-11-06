@@ -301,21 +301,7 @@ pub fn construct_tl_formula(
         FormulaDocument::new(profile, root, nodes)
     }
     .map_err(TlFormulaError::OwnerConstruction)?;
-    let mut counter = CappedWriter {
-        used: 0,
-        setting: limits.max_bytes,
-        exceeded: false,
-    };
-    if let Err(error) = serde_json::to_writer(&mut counter, &formula) {
-        if counter.exceeded {
-            return Err(TlFormulaError::LimitReached {
-                limit: TlFormulaLimit::Bytes,
-                value: limits.max_bytes.saturating_add(1),
-                setting: limits.max_bytes,
-            });
-        }
-        return Err(TlFormulaError::OwnerEncoding(error));
-    }
+    check_serialized_size(&formula, limits.max_bytes)?;
     let bytes = formula
         .canonical_json_bytes()
         .map_err(TlFormulaError::OwnerEncoding)?;
@@ -328,6 +314,28 @@ pub fn construct_tl_formula(
         leaves,
         work,
     })
+}
+
+pub(super) fn check_serialized_size(
+    value: &impl serde::Serialize,
+    max_bytes: u64,
+) -> Result<(), TlFormulaError> {
+    let mut counter = CappedWriter {
+        used: 0,
+        setting: max_bytes,
+        exceeded: false,
+    };
+    if let Err(error) = serde_json::to_writer(&mut counter, value) {
+        if counter.exceeded {
+            return Err(TlFormulaError::LimitReached {
+                limit: TlFormulaLimit::Bytes,
+                value: max_bytes.saturating_add(1),
+                setting: max_bytes,
+            });
+        }
+        return Err(TlFormulaError::OwnerEncoding(error));
+    }
+    Ok(())
 }
 
 struct CappedWriter {
