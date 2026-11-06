@@ -610,10 +610,12 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
         panic!("original let operands");
     };
     let mut preparation = Meter::new(limits(128, 8, 8, 64, 4));
-    let evaluated = qsl_eval::value::evaluate_closed(
+    let evaluated = qsl_eval::value::evaluate_closed_with_frame(
         &original.package,
         *power,
         function.slots,
+        Vec::new(),
+        function.formed_units,
         &mut preparation,
     )
     .expect("original power preparation");
