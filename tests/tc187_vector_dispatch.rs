@@ -147,12 +147,12 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         }),
         "U22" => Some(RowDispatch::QslControl {
             expected: "40000",
-            remaining_owner: "IR-842",
+            remaining_owner: "IR-1348",
             missing: "isolated original conversion TypeMismatch; no native agreement",
         }),
         "U25" => Some(RowDispatch::QslControl {
             expected: "1 J",
-            remaining_owner: "IR-842",
+            remaining_owner: "IR-1348",
             missing: "original compound-target InvalidSyntax; no native agreement",
         }),
         "U27" => Some(RowDispatch::QslControl {
@@ -194,7 +194,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U36" => Some(RowDispatch::NativeOwner {
             expected: "unequal compound units",
             generated_owner: "IR-842",
-            missing: "CG generated comparison and selected-model equivalence conversion",
+            missing: "CG generated comparison, direct dsec conversion and whole-let bridge agreement",
         }),
         "U33" => Some(RowDispatch::QslControl {
             expected: "literal",
@@ -482,7 +482,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                     "{} expectation",
                     vector.id
                 );
-                let expected_owner = if vector.id == "U27" {
+                let expected_owner = if matches!(vector.id, "U22" | "U25" | "U27") {
                     "IR-1348"
                 } else {
                     "IR-842"
