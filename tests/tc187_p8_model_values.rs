@@ -829,17 +829,14 @@ fn characterize_missing_equivalent_conversion(
     );
     model::bind(id, &[&expression], &[expected]);
     // This is a measured disagreement with the positive vector, not its acceptance test.
-    mismatch(
-        &format!(
-            "{equivalence} function observe using v(): Quantity<{}::{}> pure {{ {expression} }}",
-            if clock { "G" } else { "F" },
-            unit
-        ),
-        clock,
-        &expression,
+    let body = format!(
+        "{equivalence} function observe using v(): Quantity<{}::{}> pure {{ {expression} }}",
+        if clock { "G" } else { "F" },
+        unit
     );
-    let original = model::assemble(&model::source(equivalence, clock), false)
-        .expect("genuine relation admission");
+    let source = model::source(&body, clock);
+    mismatch(&body, clock, &expression);
+    let original = model::assemble(&source, false).expect("genuine relation admission");
     let r = model::imported_unit(&original, "acme/rpc", "s");
     let target = model::imported_unit(&original, owner, unit);
     let classes = EquivalenceClasses::new(&original.dimension_equivalences);
@@ -877,7 +874,7 @@ fn characterize_missing_equivalent_conversion(
         })
     );
     no_charge(&meter);
-    println!("{id} characterization only; intended {expected} remains Planned; source={expression}; R={r:?}; target={target:?}; classes={classes:?}; native={result:?}; charges={:?}; counters={:?}",meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,meter.consumed(kind))));
+    println!("{id} characterization only; intended {expected} remains Planned; source={source:?}; checker=IllTyped(TypeMismatch) at original conversion body; rows={:?}; R={r:?}; target={target:?}; classes={classes:?}; native={result:?}; charges={:?}; counters={:?}",original.dimension_equivalences,meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,meter.consumed(kind))));
 }
 
 #[trace("TC-113", "QSpec-TC-187")]
