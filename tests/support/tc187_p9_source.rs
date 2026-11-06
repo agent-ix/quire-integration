@@ -34,6 +34,13 @@ pub fn bind(id: &str, inputs: &[&str], expected: &[&str]) {
 /// Checked original source with its admitted nominal unit graph.
 pub struct Original {
     functions: String,
+    declarations: String,
+    /// Original parsed expression trees, retained for public binder evaluation.
+    #[allow(
+        dead_code,
+        reason = "only binder-boundary tests inspect original forms"
+    )]
+    pub expressions: BTreeMap<String, qsl_forms::Expression>,
     /// Original checked package; never reconstructed from a test body.
     pub package: CheckedPackage,
     /// Unit graph admitted from the original source declarations.
@@ -44,7 +51,12 @@ pub struct Original {
 
 /// Parse, assemble and check the complete original source.
 pub fn original(functions: &str) -> Original {
-    let source = format!("language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n{UNITS}\n{functions}");
+    original_with("", functions)
+}
+
+/// Check original functions with additional original unit declarations.
+pub fn original_with(extra: &str, functions: &str) -> Original {
+    let source = source_text(extra, functions);
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "quantity-operations"),
         "quantity-operations.native",
@@ -54,6 +66,16 @@ pub fn original(functions: &str) -> Original {
     .expect("original quantity source parses");
     assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
     let forms = qsl_forms::build_unit(&parsed).expect("original quantity source forms");
+    let expressions = forms
+        .forms()
+        .iter()
+        .filter_map(|form| match form.form() {
+            qsl_forms::DeclarationForm::Function(function) => {
+                Some((function.name.clone(), function.body.clone()))
+            }
+            _ => None,
+        })
+        .collect();
     let declarations = PackageDeclarations::assemble(
         parsed.source().reference().clone(),
         "agent-ix/quantity-operations".to_owned(),
@@ -75,6 +97,8 @@ pub fn original(functions: &str) -> Original {
     );
     Original {
         functions: functions.to_owned(),
+        declarations: extra.to_owned(),
+        expressions,
         package,
         units,
         keys,
@@ -135,18 +159,57 @@ pub fn generation(
     integer_bound_refusals: &[&str],
     compound_result_refusals: &[&str],
 ) -> usize {
+    generation_with(
+        original,
+        cases,
+        integer_bound_refusals,
+        compound_result_refusals,
+        &[],
+    )
+}
+
+/// Execute eligible original quantity families and preserve carried-target derivation stops.
+pub fn generation_with(
+    original: &Original,
+    cases: &[(&str, bool, ScalarLimits)],
+    integer_bound_refusals: &[&str],
+    compound_result_refusals: &[&str],
+    carried_refusals: &[&str],
+) -> usize {
     use quire_contract_codegen::{ClaimDisposition, ExactScalarRefusal, OperationProvenance};
     let emission =
         qsl_package::emit_checked(&original.package).expect("original quantity source emits");
     assert!(emission.omitted().is_empty(), "{:?}", emission.omitted());
     let mut evidence = CheckedPackageEvidence::new();
     evidence.support_feature("quire.value.complete/v1");
-    let CheckedPackageV2ReadResult::Admitted(package) = CheckedPackageV2::read(
+    let read_result = CheckedPackageV2::read(
         emission.package().bytes(),
         CheckedPackageReadLimits::bounded(),
         &evidence,
-    ) else {
-        panic!("original quantity IR admits");
+    );
+    let package = match read_result {
+        CheckedPackageV2ReadResult::Admitted(package) => package,
+        CheckedPackageV2ReadResult::Refused(refusal) if !carried_refusals.is_empty() => {
+            assert!(cases
+                .iter()
+                .all(|(name, _, _)| carried_refusals.contains(name)));
+            assert_eq!(
+                refusal.code,
+                quire_contract_ir::CheckedPackageRefusalCode::InvalidPackage
+            );
+            assert_eq!(
+                refusal.cause,
+                Some(quire_contract_ir::CheckedPackageRefusalCause::InvalidDerivedShape)
+            );
+            let locus = refusal.locus.as_ref().expect("actual carried type locus");
+            assert_eq!(locus.path.len(), 2);
+            assert!(
+                matches!(&locus.path[..],[quire_contract_ir::CheckedNodePathSegment::Name(a),quire_contract_ir::CheckedNodePathSegment::Name(b)] if a.as_ref()=="scalar_type" && b.as_ref()=="carried_quantity")
+            );
+            eprintln!("CARRIED_READER {:?}: InvalidPackage/InvalidDerivedShape at original scalar_type/carried_quantity; no CG claim",carried_refusals);
+            return 0;
+        }
+        other => panic!("original quantity IR admits: {other:?}"),
     };
     let mut nodes = BTreeMap::new();
     let mut items = Vec::new();
@@ -171,6 +234,10 @@ pub fn generation(
         match results.pop().expect("one derived operation") {
             Ok(item) => {
                 assert!(!integer_bound_refusals.contains(name));
+                assert!(
+                    !carried_refusals.contains(name),
+                    "carried source unexpectedly became derivable: {name}"
+                );
                 items.push(item);
             }
             Err(ExactScalarRefusal::RequiresBound { unbounded_type }) => {
@@ -188,11 +255,18 @@ pub fn generation(
                 assert_eq!(refused.semantic_form.as_ref(), "integer");
                 eprintln!("{name}: RequiresBound on genuine scalar_type/integer exponent; generated agreement Planned");
             }
+            Err(other) if carried_refusals.contains(name) => {
+                assert!(
+                    matches!(&other,ExactScalarRefusal::NoDerivableClaim { reason: quire_contract_codegen::ClaimDerivationRefusal::OperandFormsNotDerivable {operation_identity} | quire_contract_codegen::ClaimDerivationRefusal::ModeNotDerivable {operation_identity} } if operation_identity=="quire.op.quantity.convert"),
+                    "{name}: {other:?}"
+                );
+                eprintln!("CARRIED_DERIVATION {name}: {other:?}");
+            }
             Err(other) => panic!("{name}: unexpected derivation refusal: {other:?}"),
         }
         nodes.insert(*name, node);
     }
-    let authority = self::original(&original.functions);
+    let authority = self::original_with(&original.declarations, &original.functions);
     let output =
         generate_exact_scalar_oracles(&package, &items).expect("quantity generation boundary");
     assert!(output.claim_map.blocked.is_empty());
@@ -202,7 +276,7 @@ pub fn generation(
 mod oracle_observation;
 use quire_exact::{{Meter,Outcome,Quantity,Value,ScalarLimits}};
 use quire_semantic_value::quantity::UnitTable;
-fn lift(outcome: Outcome<Quantity>)->Outcome<Value> {{ match outcome {{ Outcome::Completed(v)=>Outcome::Completed(Value::Quantity(v)),Outcome::Undefined(v)=>Outcome::Undefined(v),Outcome::Refused(v)=>Outcome::Refused(v),Outcome::Incomplete(v)=>Outcome::Incomplete(v) }} }}
+fn lift<T>(outcome: Outcome<T>,value:impl FnOnce(T)->Value)->Outcome<Value> {{ match outcome {{ Outcome::Completed(v)=>Outcome::Completed(value(v)),Outcome::Undefined(v)=>Outcome::Undefined(v),Outcome::Refused(v)=>Outcome::Refused(v),Outcome::Incomplete(v)=>Outcome::Incomplete(v) }} }}
 #[test]
 fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
 "#,
@@ -210,7 +284,7 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
     );
     let mut expected = Vec::new();
     for (name, child, limits) in cases {
-        if integer_bound_refusals.contains(name) {
+        if integer_bound_refusals.contains(name) || carried_refusals.contains(name) {
             continue;
         }
         let claims = output
@@ -251,7 +325,19 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
             function.body
         };
         let operands = operation.children();
-        assert_eq!(operands.len(), 2);
+        let item = items
+            .iter()
+            .find(|item| item.node_id == nodes[name])
+            .expect("derived original item");
+        let conversion = matches!(
+            item.operation,
+            quire_contract_codegen::ExactScalarOperation::QuantityConversion
+        );
+        let comparison = matches!(
+            item.operation,
+            quire_contract_codegen::ExactScalarOperation::QuantityComparison { .. }
+        );
+        assert_eq!(operands.len(), if conversion { 1 } else { 2 });
         let mut arguments = Vec::new();
         driver.push_str("{\n");
         for (index, operand) in operands.into_iter().enumerate() {
@@ -304,12 +390,25 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
         expected.push(super::oracle_observation::snapshot(
             &outcome, &losses, &meter,
         ));
-        driver.push_str(&format!(r#"let mut meter=Meter::new({limits:?});
-let (actual,identified)=quire_exact_scalar_oracles::{}({}, &mut meter).expect("actual generated quantity operation");
-if let Outcome::Completed(ref quantity)=actual {{ assert_eq!(quantity.unit(), &identified.id()); }}
-let actual=lift(actual); let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new();
-println!("IT019_OBSERVATION {{}}",oracle_observation::snapshot(&actual,&losses,&meter)); }}
-"#,generated.symbol,arguments.join(",")));
+        if conversion {
+            let quire_exact::ValueType::Quantity(unit_id) = operation.value_type() else {
+                panic!("exact conversion result type");
+            };
+            let key = unit_id
+                .declared_key()
+                .expect("exact declared conversion target");
+            driver.push_str(&format!("let target=quire_semantic_value::quantity::IdentifiedUnit::new(table.get(quire_exact::UnitId::declared({})).expect(\"original target\").clone()).expect(\"admitted target identity\");\n",native_key(key)));
+            arguments.push("&target".to_owned());
+        }
+        driver.push_str(&format!("let mut meter=Meter::new({limits:?});\n"));
+        if comparison {
+            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated comparison\"); let actual=lift(actual,Value::Boolean);\n",generated.symbol,arguments.join(",")));
+        } else if conversion {
+            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated conversion\"); let actual=lift(actual,Value::Quantity);\n",generated.symbol,arguments.join(",")));
+        } else {
+            driver.push_str(&format!("let (actual,identified)=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated arithmetic\"); if let Outcome::Completed(ref quantity)=actual {{ assert_eq!(quantity.unit(),&identified.id()); }} let actual=lift(actual,Value::Quantity);\n",generated.symbol,arguments.join(",")));
+        }
+        driver.push_str("let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new(); println!(\"IT019_OBSERVATION {}\",oracle_observation::snapshot(&actual,&losses,&meter)); }\n");
     }
     driver.push_str("}\n");
     if expected.is_empty() {
@@ -425,17 +524,9 @@ fn same_key(id: &quire_contract_ir::CheckedNodeId, key: &NodeKey) -> bool {
 
 /// Check the independently required small root-unit operation schedule.
 pub fn assert_ledger(meter: &Meter, read_bits: &[u64], retained: bool) {
-    use quire_exact::{AdmittedCharge, ChargePoint, LimitKind};
-    let charge = |point, integer_bits, value_occurrences| AdmittedCharge {
-        point,
-        integer_bits,
-        value_occurrences,
-        decimal_digits: None,
-        scale_expansion: None,
-        text_input_bytes: None,
-        text_scalars: None,
-        normalized_scalars: None,
-        unit_edges: None,
+    use quire_exact::ChargePoint;
+    let charge = |point, integer_bits, value_occurrences| {
+        self::charge(point, integer_bits, None, None, value_occurrences)
     };
     let mut expected = read_bits
         .iter()
@@ -453,26 +544,72 @@ pub fn assert_ledger(meter: &Meter, read_bits: &[u64], retained: bool) {
     if retained {
         expected.push(charge(ChargePoint::UnitResultRetain, None, Some(1)));
     }
+    accounting(
+        meter,
+        &expected,
+        [
+            4,
+            0,
+            0,
+            u64::try_from(read_bits.len()).expect("small reads"),
+            u64::try_from(expected.len()).expect("small ledger"),
+            u64::from(retained),
+        ],
+    );
+}
+
+fn native_rational(value: &quire_exact::Rational) -> String {
+    format!("quire_exact::Rational::new({:?}.parse().expect(\"original numerator\"),{:?}.parse().expect(\"original denominator\")).expect(\"original rational\")",value.numerator().to_string(),value.denominator().to_string())
+}
+
+/// Compare complete owner charge records without projecting away any amount.
+pub fn assert_charges(meter: &Meter, expected: &[quire_exact::AdmittedCharge]) {
     assert_eq!(meter.admitted_charges(), expected);
+}
+
+/// Construct a complete independent event expectation for the quantity ledger.
+pub fn charge(
+    point: quire_exact::ChargePoint,
+    bits: Option<u64>,
+    digits: Option<u64>,
+    edges: Option<u64>,
+    occurrences: Option<u64>,
+) -> quire_exact::AdmittedCharge {
+    quire_exact::AdmittedCharge {
+        point,
+        integer_bits: bits,
+        decimal_digits: digits,
+        unit_edges: edges,
+        value_occurrences: occurrences,
+        scale_expansion: None,
+        text_input_bytes: None,
+        text_scalars: None,
+        normalized_scalars: None,
+    }
+}
+/// Check ordered records and all ten counters against independently selected totals.
+pub fn accounting(meter: &Meter, events: &[quire_exact::AdmittedCharge], totals: [u64; 6]) {
+    use quire_exact::LimitKind;
+    assert_charges(meter, events);
     for kind in LimitKind::ALL {
         let expected = match kind {
-            LimitKind::IntegerBits => 4,
-            LimitKind::ValueOccurrences => {
-                u64::try_from(read_bits.len()).expect("small read count")
-            }
-            LimitKind::WorkUnits => u64::try_from(expected.len()).expect("small charge count"),
-            LimitKind::ResultUnits => u64::from(retained),
-            LimitKind::DecimalDigits
-            | LimitKind::ScaleExpansion
+            LimitKind::IntegerBits => totals[0],
+            LimitKind::DecimalDigits => totals[1],
+            LimitKind::UnitEdges => totals[2],
+            LimitKind::ValueOccurrences => totals[3],
+            LimitKind::WorkUnits => totals[4],
+            LimitKind::ResultUnits => totals[5],
+            LimitKind::ScaleExpansion
             | LimitKind::TextInputBytes
             | LimitKind::TextScalars
-            | LimitKind::NormalizedScalars
-            | LimitKind::UnitEdges => 0,
+            | LimitKind::NormalizedScalars => 0,
         };
         assert_eq!(meter.consumed(kind), expected, "{kind:?}");
     }
 }
 
-fn native_rational(value: &quire_exact::Rational) -> String {
-    format!("quire_exact::Rational::new({:?}.parse().expect(\"original numerator\"),{:?}.parse().expect(\"original denominator\")).expect(\"original rational\")",value.numerator().to_string(),value.denominator().to_string())
+/// Original source text shared by admitted and statically refused operation controls.
+pub fn source_text(extra: &str, functions: &str) -> String {
+    let source = format!("language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n{UNITS}\n{extra}\n{functions}");
+    source
 }
