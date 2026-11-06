@@ -1587,6 +1587,7 @@ dependencies = [
  "quire-driver",
  "quire-eval",
  "quire-exact",
+ "quire-observation",
  "quire-semantic-value",
  "quire-spec-language",
  "quire-specification-qualification",
@@ -1596,6 +1597,18 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tl-syntax",
+]
+
+[[package]]
+name = "quire-observation"
+version = "0.1.0"
+source = "git+https://github.com/agent-ix/quire-observation?branch=main#4d5198c4f897ed7477e7a03907b7a11ebaca4557"
+dependencies = [
+ "quire-canonical",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
 ]
 
 [[package]]

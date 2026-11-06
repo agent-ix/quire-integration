@@ -49,3 +49,10 @@ pub use formula::{
     construct_tl_formula, TlFormulaCode, TlFormulaComponent, TlFormulaError, TlFormulaLeaf,
     TlFormulaLimit, TlFormulaLimits,
 };
+
+mod observation_revision;
+
+pub use observation_revision::{
+    read_observation_revision, AdmittedObservationRevision, ObservationAdmissionCode,
+    ObservationAdmissionError, ObservationAdmissionLimit, ObservationAdmissionLimits,
+};
