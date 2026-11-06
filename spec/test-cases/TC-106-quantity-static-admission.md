@@ -96,11 +96,14 @@ generated-agreement credit.
 passes all four QSL source-value observations with exact compound terms, dimensions,
 empty losses, ordered charges and counters. Multiplication and both divisions each
 consume work 5, occurrences 2 and result 1; square consumes work 4, occurrences 1
-and result 1. Integer high water is 4 and all other counters are zero. Generated
-agreement remains Planned under [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and) for all four operations: square derivation
-refuses RequiresBound on its actual scalar_type/integer exponent; the other three
-derive but their actual CG claims refuse ResultTypeMismatch with expected Unit and
-found compound_unit. [IR-1348](https://linear.app/agent-ix/issue/IR-1348/cgir-generate-quantity-multiplydividecancel-compound-unit-result-and) owns the compound-result and integer-exponent generation frontiers.
+and result 1. Integer high water is 4 and all other counters are zero. The
+original package emits, strictly admits through IR and yields four `ir_confirmed`
+CG claims whose generated native symbols agree with independently rechecked
+original operation nodes. Product, quotient, square and dimensionless
+cancellation each agree on the completed value, empty losses, ordered charges
+and every counter. One-below-retention work limits add four native comparisons
+of the exact `UnitResultRetain` stop, original operation locus and unpaid result
+unit; no equality-wrapper charges are included.
 
 `tc187_u19_u24_addition::original_additions_retain_their_units_and_exact_unpaid_retention`
 passes three actual QSL/native observations. U19 work 5 and U24 work 5 complete
