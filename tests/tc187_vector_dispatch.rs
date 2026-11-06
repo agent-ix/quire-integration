@@ -388,9 +388,9 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 generated_owner,
                 missing,
             } => {
-                // tc187_u13_u21_power and the PR #80 conversion/quantity
-                // tests bind public source-value cells. Their generated
-                // comparisons remain Planned under distinct owners.
+                // The power, conversion and quantity tests bind public
+                // source-value cells. Generated comparisons for those rows
+                // remain Planned under distinct owners.
                 assert!(
                     vector.expected.contains(expected),
                     "{} value expectation",
