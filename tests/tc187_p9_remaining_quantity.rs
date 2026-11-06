@@ -111,9 +111,9 @@ fn original_quantity_boundaries_preserve_composed_units_and_adverse_stops() {
                 ("product", true, limits(20, 2, 2, 11, 1)),
             ],
             &[],
-            &["product"]
+            &[]
         ),
-        5
+        6
     );
 }
 
@@ -553,7 +553,10 @@ fn original_static_controls_and_public_zero_division_expression_keep_distinct_ax
 )]
 #[test]
 fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence() {
-    use quire_exact::{ChargePoint as P, Incomplete, Integer, Meter, Outcome, Quantity, Rational};
+    use qsl_eval::value::CheckedPackageEvaluation;
+    use quire_exact::{
+        ChargePoint as P, Incomplete, Integer, Meter, Outcome, Quantity, Rational, Value,
+    };
     use quire_semantic_value::checking::{CheckMode, CheckingLimits};
     use quire_semantic_value::quantity::{ConvertedValue, QuantityTarget, QuantityUnit, UnitTable};
     let original = source::original_with(EXTRA, FUNCTIONS);
@@ -610,10 +613,12 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
         panic!("original let operands");
     };
     let mut preparation = Meter::new(limits(128, 8, 8, 64, 4));
-    let evaluated = qsl_eval::value::evaluate_closed(
+    let evaluated = qsl_eval::value::evaluate_closed_with_frame(
         &original.package,
         *power,
         function.slots,
+        Vec::new(),
+        function.formed_units,
         &mut preparation,
     )
     .expect("original power preparation");
@@ -634,7 +639,7 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
     let conversion = parsed
         .cut(body.id(), &std::collections::BTreeMap::new())
         .expect("original conversion subtree");
-    let refusal = graph
+    let checked = graph
         .check_expression(
             vec![("area".to_owned(), power.value_type().clone())],
             &conversion,
@@ -642,11 +647,7 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
             CheckMode::Kernel,
             CheckingLimits::default(),
         )
-        .expect_err("fresh compound parameter type lacks retained formed-unit authority");
-    assert_eq!(
-        refusal.cause,
-        qsl_semantics::check::CheckCause::IllTyped(quire_exact::IllTypedCause::TypeMismatch)
-    );
+        .expect("original conversion retains formed-unit authority");
     let mut table = UnitTable::declared(&original.units);
     let compound = original
         .units
@@ -655,6 +656,42 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
     assert_eq!(
         area.unit(),
         &compound.id().expect("owner compound identity")
+    );
+    let mut isolated_meter = Meter::new(limits(3, 0, 1, 3, 1));
+    let isolated = original
+        .package
+        .evaluate(
+            &checked,
+            vec![Value::Quantity(area.clone())],
+            &qsl_semantics::model::object_environment::ObjectEnvironment::default(),
+            &mut isolated_meter,
+        )
+        .expect("original compound conversion evaluates in its checked frame");
+    assert!(isolated.losses.is_empty());
+    assert!(isolated.location.is_none());
+    let FamilyOutcome::Evaluated(Outcome::Completed(Value::Quantity(converted))) = isolated.outcome
+    else {
+        panic!("isolated original compound conversion completes");
+    };
+    assert_eq!(
+        converted.magnitude(),
+        &Rational::from_integer(Integer::from(4_i64))
+    );
+    assert_eq!(
+        converted.unit(),
+        &original
+            .units
+            .declared_unit_id(original.keys["m2"].clone())
+            .expect("declared area target")
+    );
+    source::accounting(
+        &isolated_meter,
+        &[
+            source::charge(P::UnitIdentityRead, Some(3), None, None, Some(1)),
+            source::charge(P::UnitTargetDomain, None, None, None, None),
+            source::charge(P::UnitResultRetain, None, None, None, Some(1)),
+        ],
+        [3, 0, 0, 1, 3, 1],
     );
     table
         .insert(QuantityUnit::Compound(compound))

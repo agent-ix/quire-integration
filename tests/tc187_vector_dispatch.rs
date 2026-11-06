@@ -35,6 +35,7 @@ enum RowDispatch {
         generated_owner: &'static str,
         missing: &'static str,
     },
+    GeneratedArithmetic(&'static str),
     NativeOriginal {
         expected: &'static [&'static str],
         operation: NativeOperation,
@@ -91,11 +92,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11x" => Some(RowDispatch::Topology("missing-name")),
         "U30" | "U31" => Some(RowDispatch::Checked("type-mismatch")),
         "U14" => Some(RowDispatch::Checked("ill_typed")),
-        "U12" => Some(RowDispatch::QslValue {
-            expected: "empty dimensionless",
-            generated_owner: "IR-1348",
-            missing: "CG generated agreement for all four original arithmetic operations",
-        }),
+        "U12" => Some(RowDispatch::GeneratedArithmetic("empty dimensionless")),
         "U13" | "U21" => Some(RowDispatch::QslValue {
             expected: if id == "U13" { "incomplete" } else { "dimensionless" },
             generated_owner: "IR-842",
@@ -391,10 +388,9 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 generated_owner,
                 missing,
             } => {
-                // tc187_u12_arithmetic, tc187_u13_u21_power and the PR #80
-                // conversion/quantity tests bind complete public cells and
-                // check original QSL values. Generated comparisons remain
-                // Planned under their distinct owners.
+                // The power, conversion and quantity tests bind public
+                // source-value cells. Generated comparisons for those rows
+                // remain Planned under distinct owners.
                 assert!(
                     vector.expected.contains(expected),
                     "{} value expectation",
@@ -403,7 +399,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 assert!(
                     matches!(
                         (vector.id, generated_owner),
-                        ("U12" | "U28", "IR-1348")
+                        ("U28", "IR-1348")
                             | ("U13" | "U21", "IR-842")
                             | ("U16" | "U17" | "U18" | "U29", "IR-1349")
                     ),
@@ -422,6 +418,16 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                         vector.id
                     );
                 }
+                observed.insert(vector.id);
+            }
+            RowDispatch::GeneratedArithmetic(expected) => {
+                // tc187_u12_arithmetic independently executes the original
+                // QSL operations and their generated native symbols.
+                assert!(
+                    vector.expected.contains(expected),
+                    "{} generated arithmetic expectation",
+                    vector.id
+                );
                 observed.insert(vector.id);
             }
             RowDispatch::NativeOriginal {
