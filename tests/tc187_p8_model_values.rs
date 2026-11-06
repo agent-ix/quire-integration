@@ -5,24 +5,6 @@ mod model;
 
 use ix_trace_rs::trace;
 
-#[trace("TC-113", "QSpec-TC-187", "QSpec-FR-142-AC-23")]
-#[test]
-fn probe_u38_original_equivalent_conversion_positive() {
-    model::bind("U38", &["convert<Quantity<F::s>>(3 R::s)"], &["3 F::s"]);
-    model::checked(&format!("{} function observe using v(): Quantity<F::s> pure {{ convert<Quantity<F::s>>(3 R::s) }}", model::RF), false);
-}
-
-#[trace("TC-113", "QSpec-TC-187", "QSpec-FR-142-AC-26")]
-#[test]
-fn probe_u40_original_equivalent_conversion_positive() {
-    model::bind(
-        "U40",
-        &["convert<Quantity<G::ms>>(3 R::s)"],
-        &["3000 G::ms"],
-    );
-    model::checked(&format!("{} function observe using v(): Quantity<G::ms> pure {{ convert<Quantity<G::ms>>(3 R::s) }}", model::RG), true);
-}
-
 use std::collections::BTreeMap;
 
 use qsl_package::CheckedPackage;
@@ -78,9 +60,9 @@ fn mismatch(body: &str, clock: bool, selected: &str) {
     let [refusal] = refusals.as_slice() else {
         panic!("one original refusal: {refusals:?}");
     };
-    assert!(
-        matches!(&refusal.cause, CheckCause::IllTyped(_)),
-        "{refusal:?}"
+    assert_eq!(
+        refusal.cause,
+        CheckCause::IllTyped(IllTypedCause::TypeMismatch)
     );
     assert_eq!(
         refusal.cause.catalog_code().map(|code| code.to_string()),
@@ -504,15 +486,12 @@ fn span(source: &str, text: &str) -> qsl_foundation::Span {
         end: start + text.len(),
     }
 }
-fn dimension(package: &PackageDeclarations, alias: &str) -> quire_exact::NodeKey {
+fn dimension(package: &PackageDeclarations, source: &str, alias: &str) -> quire_exact::NodeKey {
     match alias {
         "R::Time" => model::imported_unit(package, "acme/rpc", "s").dimension_node(),
         "F::Time" => model::imported_unit(package, "acme/flow", "s").dimension_node(),
         "G::Time" => model::imported_unit(package, "acme/clock", "ms").dimension_node(),
-        "Time" => {
-            let source = model::source("", false);
-            original_local(package, &source, "s").dimension_node()
-        }
+        "Time" => original_local(package, source, "s").dimension_node(),
         _ => panic!("unselected dimension {alias}"),
     }
 }
@@ -523,7 +502,7 @@ fn admitted_equivalences(body: &str, clock: bool, pairs: &[(&str, [&str; 2], Rat
     let classes = EquivalenceClasses::new(&original.dimension_equivalences);
     for (row, (text, names, ratio)) in original.dimension_equivalences.iter().zip(pairs) {
         assert_eq!(row.span, span(&source, text));
-        let mut keys = names.map(|name| dimension(&original, name));
+        let mut keys = names.map(|name| dimension(&original, &source, name));
         let expected_scale = if keys[0] < keys[1] {
             ratio.clone()
         } else {
@@ -532,8 +511,8 @@ fn admitted_equivalences(body: &str, clock: bool, pairs: &[(&str, [&str; 2], Rat
         };
         assert_eq!(row.dimensions, keys);
         assert_eq!(row.root_scale, expected_scale);
-        let (root, a) = classes.class(dimension(&original, names[0]));
-        let (other, b) = classes.class(dimension(&original, names[1]));
+        let (root, a) = classes.class(dimension(&original, &source, names[0]));
+        let (other, b) = classes.class(dimension(&original, &source, names[1]));
         assert_eq!(root, other);
         assert_eq!(
             a.div(&b),
@@ -828,4 +807,99 @@ fn u38_u40_unconverted_source_operations_and_unrelated_conversion_refuse() {
         })
     );
     no_charge(&meter);
+}
+
+fn characterize_missing_equivalent_conversion(
+    id: &str,
+    equivalence: &str,
+    owner: &str,
+    unit: &str,
+    expected: &str,
+    ratio: i64,
+    clock: bool,
+) {
+    let expression = format!(
+        "convert<Quantity<{}::{}>>(3 R::s)",
+        if clock { "G" } else { "F" },
+        unit
+    );
+    model::bind(id, &[&expression], &[expected]);
+    // This is a measured disagreement with the positive vector, not its acceptance test.
+    mismatch(
+        &format!(
+            "{equivalence} function observe using v(): Quantity<{}::{}> pure {{ {expression} }}",
+            if clock { "G" } else { "F" },
+            unit
+        ),
+        clock,
+        &expression,
+    );
+    let original = model::assemble(&model::source(equivalence, clock), false)
+        .expect("genuine relation admission");
+    let r = model::imported_unit(&original, "acme/rpc", "s");
+    let target = model::imported_unit(&original, owner, unit);
+    let classes = EquivalenceClasses::new(&original.dimension_equivalences);
+    let (root, rsize) = classes.class(r.dimension_node());
+    let (target_root, target_size) = classes.class(target.dimension_node());
+    assert_eq!(root, target_root);
+    assert_eq!(rsize.div(&target_size), Some(exact(ratio)));
+    assert_ne!(r.dimension_node(), target.dimension_node());
+    let context = model::checked(equivalence, clock);
+    let table = context.graph().scope().types().units();
+    assert_eq!(
+        table.get(r.id()),
+        Some(&QuantityUnit::Declared(Box::new(r.clone())))
+    );
+    assert_eq!(
+        table.get(target.id()),
+        Some(&QuantityUnit::Declared(Box::new(target.clone())))
+    );
+    let quantity = Quantity::new(exact(3), r.id());
+    let mut meter = Meter::new(limits());
+    let result = convert_quantity(
+        table
+            .resolve(&quantity)
+            .expect("actual original context source"),
+        table
+            .get(target.id())
+            .expect("actual original context target"),
+        &QuantityTarget::Exact,
+        &mut meter,
+    );
+    assert_eq!(
+        result,
+        Err(IllTyped {
+            cause: IllTypedCause::IncompatibleDimensions
+        })
+    );
+    no_charge(&meter);
+    println!("{id} characterization only; intended {expected} remains Planned; source={expression}; R={r:?}; target={target:?}; classes={classes:?}; native={result:?}; charges={:?}; counters={:?}",meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,meter.consumed(kind))));
+}
+
+#[trace("TC-113", "QSpec-TC-187")]
+#[test]
+fn characterize_u38_checked_and_native_conversion_missing_equivalence_effect() {
+    characterize_missing_equivalent_conversion(
+        "U38",
+        model::RF,
+        "acme/flow",
+        "s",
+        "3 F::s",
+        1,
+        false,
+    );
+}
+
+#[trace("TC-113", "QSpec-TC-187")]
+#[test]
+fn characterize_u40_checked_and_native_conversion_missing_equivalence_effect() {
+    characterize_missing_equivalent_conversion(
+        "U40",
+        model::RG,
+        "acme/clock",
+        "ms",
+        "3000 G::ms",
+        1000,
+        true,
+    );
 }
