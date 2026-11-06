@@ -102,8 +102,9 @@ CG claims whose generated native symbols agree with independently rechecked
 original operation nodes. Product, quotient, square and dimensionless
 cancellation each agree on the completed value, empty losses, ordered charges
 and every counter. One-below-retention work limits add four native comparisons
-of the exact `UnitResultRetain` stop, original operation locus and unpaid result
-unit; no equality-wrapper charges are included.
+of the exact `UnitResultRetain` outcome and unpaid meter; the independent QSL
+refusal location is each original operation locus. No equality-wrapper charges
+are included.
 
 `tc187_u19_u24_addition::original_additions_retain_their_units_and_exact_unpaid_retention`
 passes three actual QSL/native observations. U19 work 5 and U24 work 5 complete
