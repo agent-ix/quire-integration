@@ -155,3 +155,13 @@ Existing focused evidence was inspected, not rerun: six component tests, nine fo
   ]
 }
 ```
+
+## Dependency adoption disposition — round 1
+
+The earlier source PASS and historical red dependency evidence above remain unchanged. The known adoption blocker is now resolved: The normal QObs main dependency now uses the existing canonical main encoder with its production serde_json feature. The lock removes the separate tagged canonical identity and updates only QObs; all other package identities remain unchanged. The actual unchanged IT-014 named cohort test passed one test with zero failures. No consumer override, local pin, guard weakening or policy exception was introduced.
+
+The same reviewer inspected the normal dependency adoption and README/IT-021 status delta. Production component, fixture/tests, manifest and cohort guard are unchanged. No new source or specification findings were identified. Current review clearance is PASS for this partial component and dependency adoption, conditional only on the still-pending final scoped integration gate. No final gate, build, retest or census was performed by this reviewer. Full FR-350/native-TL join and QSL-1732/1733/1734 prerequisites remain Planned; this disposition grants no whole-criterion acceptance.
+
+## Dispositions
+
+There were no real FND rows to disposition; the original placeholder remains a placeholder. The separately tracked dependency adoption blocker is resolved by the evidence described above. Original findings, scope excerpts and review comments are preserved.
