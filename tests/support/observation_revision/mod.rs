@@ -222,6 +222,47 @@ impl Fixture {
             .collect();
         bundle::Selection::new(components, replacements)
     }
+    pub fn availability_document(&self) -> &Document {
+        &self.documents.last().unwrap().1
+    }
+    pub fn replace_availability(
+        &self,
+        revision: u64,
+        prior: &Document,
+    ) -> (Document, bundle::Selection) {
+        let document = a::availability::derive(
+            self.context(revision, Some(prior)),
+            &a::availability::Selection::new(
+                vec![id("result")],
+                vec![id("result")],
+                a::availability::DependencyState::Available,
+                a::availability::DependencyState::Available,
+            ),
+            limits(),
+        )
+        .unwrap();
+        let role = bundle::ComponentRole::Availability;
+        let components = self
+            .documents
+            .iter()
+            .map(|(item_role, item)| {
+                bundle::Component::from_document(
+                    *item_role,
+                    if *item_role == role { &document } else { item },
+                )
+                .unwrap()
+            })
+            .collect();
+        let replacement = bundle::Replacement::new(
+            &bundle::Component::from_document(role, prior).unwrap(),
+            &bundle::Component::from_document(role, &document).unwrap(),
+        )
+        .unwrap();
+        (
+            document,
+            bundle::Selection::new(components, vec![replacement]),
+        )
+    }
     fn cutoff(&self) -> a::observation::CutoffSelection {
         a::observation::CutoffSelection::new(
             id("clock"),

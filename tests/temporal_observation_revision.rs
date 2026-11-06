@@ -97,9 +97,10 @@ fn corrected_bundle_can_retain_unchanged_observation() {
         limits(),
     )
     .unwrap();
+    let (_, second_selection) = f.replace_availability(2, f.availability_document());
     let second = bundle::publish(
         f.context(2, Some(first.document())),
-        &f.selection(None),
+        &second_selection,
         Some(first.lineage()),
         owner_limits(),
     )
@@ -107,7 +108,7 @@ fn corrected_bundle_can_retain_unchanged_observation() {
     let admitted = read_observation_revision(
         second.document().bytes(),
         f.context(2, Some(first.document())),
-        &f.selection(None),
+        &second_selection,
         &observation,
         Some(&prior),
         owner_limits(),
@@ -191,9 +192,10 @@ fn missing_foreign_and_non_direct_predecessors_preserve_native_refusal() {
         limits(),
     )
     .unwrap();
+    let (availability2, second_selection) = f.replace_availability(2, f.availability_document());
     let second = bundle::publish(
         f.context(2, Some(first.document())),
-        &f.selection(None),
+        &second_selection,
         Some(first.lineage()),
         owner_limits(),
     )
@@ -201,16 +203,17 @@ fn missing_foreign_and_non_direct_predecessors_preserve_native_refusal() {
     let next = read_observation_revision(
         second.document().bytes(),
         f.context(2, Some(first.document())),
-        &f.selection(None),
+        &second_selection,
         &observation,
         Some(&prior),
         owner_limits(),
         limits(),
     )
     .unwrap();
+    let (_, third_selection) = f.replace_availability(3, &availability2);
     let third = bundle::publish(
         f.context(3, Some(second.document())),
-        &f.selection(None),
+        &third_selection,
         Some(second.lineage()),
         owner_limits(),
     )
@@ -233,7 +236,7 @@ fn missing_foreign_and_non_direct_predecessors_preserve_native_refusal() {
         let error = read_observation_revision(
             second.document().bytes(),
             f.context(2, Some(first.document())),
-            &f.selection(None),
+            &second_selection,
             &observation,
             supplied,
             owner_limits(),
@@ -245,7 +248,7 @@ fn missing_foreign_and_non_direct_predecessors_preserve_native_refusal() {
     let error = read_observation_revision(
         third.document().bytes(),
         f.context(3, Some(second.document())),
-        &f.selection(None),
+        &third_selection,
         &observation,
         Some(&prior),
         owner_limits(),
@@ -328,7 +331,7 @@ fn exact_limits_admit_one_less_refuses_before_excess_action_and_counters_reset()
             .unwrap(),
         max_work: admitted.work(),
     };
-    assert_eq!(admitted.work(), 12);
+    assert_eq!(admitted.work(), 16);
     for _ in 0..2 {
         let receipt = read_observation_revision(
             first.document().bytes(),
@@ -340,7 +343,7 @@ fn exact_limits_admit_one_less_refuses_before_excess_action_and_counters_reset()
             exact,
         )
         .unwrap();
-        assert_eq!(receipt.work(), 12);
+        assert_eq!(receipt.work(), 16);
     }
     for (bounded, limit, value, setting) in [
         (
