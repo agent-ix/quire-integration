@@ -29,6 +29,10 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new() -> Self {
+        Self::with_owner("observation-owner")
+    }
+
+    pub fn with_owner(owner_identity: &str) -> Self {
         let mut producer = StaticProducerBundle {
             bundle_identity: Some("integration:producer".into()),
             bundle_revision: Some(Revision::producer("original")),
@@ -138,7 +142,7 @@ impl Fixture {
             other => panic!("real admission: {other:?}"),
         };
         let owner = AuthoritySelection {
-            definition_identity: id("observation-owner"),
+            definition_identity: id(owner_identity),
             definition_revision: id("owner-version"),
             definition_digest: Digest::new([3; 32]),
         };

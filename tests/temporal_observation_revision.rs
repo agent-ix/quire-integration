@@ -215,7 +215,21 @@ fn missing_foreign_and_non_direct_predecessors_preserve_native_refusal() {
         owner_limits(),
     )
     .unwrap();
-    for supplied in [None, Some(&next)] {
+    let foreign_fixture = Fixture::with_owner("other-bundle-owner");
+    let foreign_bundle = initial(&foreign_fixture);
+    let foreign_observation =
+        foreign_fixture.observation(foreign_fixture.observation_document(), 1, None);
+    let foreign_receipt = read_observation_revision(
+        foreign_bundle.document().bytes(),
+        foreign_fixture.context(1, None),
+        &foreign_fixture.selection(None),
+        &foreign_observation,
+        None,
+        owner_limits(),
+        limits(),
+    )
+    .unwrap();
+    for supplied in [None, Some(&next), Some(&foreign_receipt)] {
         let error = read_observation_revision(
             second.document().bytes(),
             f.context(2, Some(first.document())),
@@ -376,6 +390,20 @@ fn exact_limits_admit_one_less_refuses_before_excess_action_and_counters_reset()
     )
     .unwrap_err();
     assert_eq!(error.code(), ObservationAdmissionCode::LimitReached);
+    let error = read_observation_revision(
+        first.document().bytes(),
+        f.context(1, None),
+        &f.selection(None),
+        &observation,
+        None,
+        Limits {
+            max_input_bytes: 0,
+            ..owner_limits()
+        },
+        limits(),
+    )
+    .unwrap_err();
+    assert_eq!(owner_code(error), ErrorCode::ResourceIncomplete);
     for code in ObservationAdmissionCode::all() {
         assert_eq!(
             ObservationAdmissionCode::from_code(code.as_str()),
