@@ -63,3 +63,11 @@ observation-document lineage, QSL capture/native binding, duplicate valuation ev
 complete correspondence, native/TL result predecessors, `ValidatedTlJoin`, `join_tl`,
 `read_tl_join` and complete FR-350 resource accounting remain Planned. No final Boolean
 or agreement is established. This evidence does not complete any whole FR-350 criterion.
+
+## Dependencies
+
+Adoption is blocked by the unchanged IT-014 shared dependency cohort guard: the
+normal QObs main dependency currently selects its upstream tagged canonical encoder
+alongside the existing main encoder. This component uses genuine QObs-owned types
+only, but does not waive the one-copy cohort requirement. Upstream normal dependency
+convergence is required before merge; no local override or policy exception is added.
