@@ -36,6 +36,10 @@ contract IR checked-package reader → admitted declaration, member, unit,
 expression and function identities → QSV / quire-exact / RT public entry points.
 The source of each semantic key is the admitted package, including for negative
 tests whose *operation* is malformed after admission.
+Unit identity controls may instead use QSL's public admitted context from the
+same real producer run. This retained-context route includes checked but unused
+unit declarations; it is distinct from a claim that their nodes occur in the
+emitted bytes or pass the strict reader.
 
 ## Preconditions
 
@@ -48,15 +52,22 @@ revision. The test report identifies the producer command, application version
 and observed outcome, and points to that lock for the source revision; it adds
 no separate revision record. Neither package bytes nor derived identity values
 are frozen as fixtures.
+For retained-context unit controls, compile authored source through QSL's
+`compile_admitted` facade and take the checked unit facts from its
+`AdmittedContext`. Build the QSV unit graph from those same checked facts. A
+strict-reader claim requires a separate emitted-byte check that locates every
+root used by that claim in the canonical bytes.
 
 ## Inputs
 
 Author source for the unit, enum, quantity, composite and function scenarios
 needed by the RT test rows listed below. Read any QSL-owned corpus directly from
-its locked checkout. Use admitted structural identities from the emitted package;
-never construct semantic node keys from a digest, byte string or constituent
-parts in an RT test. Vary malformed operations and meter limits while retaining
-the admitted package as the common identity source.
+its locked checkout. Use admitted structural identities from emitted packages
+for strict-reader controls, or from the same QSL compilation's retained
+`AdmittedContext` for the checked-unused-unit handoff control. Never construct
+semantic node keys from a digest, byte string or constituent parts in an RT
+test. Vary malformed operations and meter limits while retaining the real
+producer run as the common identity source.
 
 ## Test Procedure
 
@@ -87,13 +98,18 @@ the admitted package as the common identity source.
    different declarations compare unequal and enums compare by variant.
    RT's separate FR-277-AC-8 source inspection remains in RT.
 
-   The oversized `Identity` refusal and equal-byte declared/compound `UnitId`
-   identity routes remain Planned under IR-1339 / QSL-1720. The selected QSL
-   producer has no admitted source route for either case. An integration test
-   may exercise a case only after QSL merges an admitted source route for it.
-   If QSL rules a case non-admissible, the integration and RT rows remain
-   Planned and cite that source-level disposition. Synthetic identities do
-   not satisfy this scenario.
+   QSL-1720 supplies two admitted producer-origin unit routes. A real declared
+   root and a derived one-term compound over that same root have distinct
+   structural `UnitId` arms, ordered declared before compound; the former
+   "equal-byte" wording does not describe an additional current source value.
+   A separate 32-root source with a long package name reaches the actual exact
+   handoff's oversized `Identity(InputBytes)` refusal through checked unused
+   roots retained by `AdmittedContext`. This second route proves the retained
+   context and handoff, not strict-reader acceptance of unused nodes. The
+   short-name, touched-root control separately proves emitted-byte admission.
+   Synthetic identities do not satisfy either route. RT's broader TC-026
+   equality matrix and TC-201 quantity matrix retain their own acceptance
+   status until the corresponding consumer observations are executed.
 4. Apply admitted functions and expressions through the seven moved TC-194
    identity-dependent cases in `exact_function_application.rs`.
    IT-016-SC-04: FR-273-AC-2/3/5/8 retain arity and argument-validation
@@ -111,13 +127,16 @@ the admitted package as the common identity source.
 
 ## Expected Results
 
-The admitted producer identities survive IR reading and every exact consumer
-operation. All five success criteria hold on the same lock-selected dependency
-cohort. A structurally valid but foreign identity, a wrong result or refusal,
-a changed charge sequence, or an unavailable producer fails the test.
+The emitted producer identities used by strict-reader controls survive IR
+reading; retained-context controls use genuine checked identities from that
+same lock-selected producer. All five success criteria hold on the same
+lock-selected dependency cohort. A structurally valid but foreign identity, a
+wrong result or refusal, a changed charge sequence, or an unavailable producer
+fails the test.
 
 ## Traceability
 
-TC-096 binds this integration procedure to the implementation. The intended
-test module is `tests/producer_origin_identity.rs`; its symbols and trace tags
-are completed with the implementation and recorded against the moved RT rows.
+TC-096 binds this integration procedure to the implementation. The test modules
+are `tests/producer_origin_identity.rs` and
+`tests/producer_origin_unit_identity.rs`; their symbols and trace tags are
+completed with the implementation and recorded against the moved RT rows.
