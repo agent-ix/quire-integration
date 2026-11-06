@@ -146,9 +146,15 @@ pub fn evaluate(
         function.body
     };
     let mut meter = Meter::new(limits);
-    let evaluation =
-        qsl_eval::value::evaluate_closed(&original.package, node, function.slots, &mut meter)
-            .expect("original closed body evaluates");
+    let evaluation = qsl_eval::value::evaluate_closed_with_frame(
+        &original.package,
+        node,
+        function.slots,
+        Vec::new(),
+        function.formed_units,
+        &mut meter,
+    )
+    .expect("original closed body evaluates");
     (evaluation, meter)
 }
 
@@ -342,10 +348,12 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
         driver.push_str("{\n");
         for (index, operand) in operands.into_iter().enumerate() {
             let mut input_meter = Meter::new(self::limits(1024, 1024));
-            let input = qsl_eval::value::evaluate_closed(
+            let input = qsl_eval::value::evaluate_closed_with_frame(
                 &authority.package,
                 operand,
                 function.slots,
+                Vec::new(),
+                function.formed_units,
                 &mut input_meter,
             )
             .expect("authentic literal operand");
