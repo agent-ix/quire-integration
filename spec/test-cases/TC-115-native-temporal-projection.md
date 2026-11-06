@@ -18,7 +18,7 @@ constructors; it copies no producer output or owner schema.
 
 ## Test Procedure
 
-Run `temporal_mapping_binding` and `temporal_projection`. Check owner admission
+Run `temporal_mapping_binding`, `temporal_projection` and `temporal_join`. Check owner admission
 membership independently from semantic equality; native row population, explicit
 false, duplicate and changed bindings; future/past target selection and independent
 closure axes; origin history and fixed sampling; exact subject/profile names;
@@ -29,5 +29,8 @@ and one-short component limits with no partial success.
 
 Each IT-022 criterion has an executed value assertion or the exact preserved
 owner refusal. Unreachable supported owner combinations remain documented
-upstream work. This test does not substitute projection evidence for join or
-strict correspondence-reader coverage.
+upstream work. Projection evidence does not substitute for join qualification. The strict
+projection and join readers require complete canonical expected-value controls;
+join tests use genuine explicitly assessed owner reports, independently of the
+non-evaluating bridge. Exact corrected-pair success remains pending the named
+owner admission capability and is not claimed by an authority-refusal test.

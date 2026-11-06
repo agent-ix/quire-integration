@@ -140,3 +140,24 @@ bridge preserves a typed authority refusal until the owner supplies that
 capability. The supported fixed-sample unit domain remains FR-350's authored
 domain; the TL request owner's current nanosecond-only past restriction is an
 upstream limitation rather than a narrower integration contract.
+
+## Result joining and strict join reading
+
+`join_tl` consumes original native reports and actual owner-admitted mapped TL
+results. It re-reads the native report with the original checked subject,
+request and caller-owned `NativeJoinBudget`, and the mapped result through the
+non-evaluating mapped-result reader against its retained original source result.
+It does not call the TL report reader that executes assessment again. Missing
+results and refused owner reads enter the authored decision-table predicates;
+they do not become substitute values. Every predicate is evaluated independently,
+the first matching row selects the decision, and each matching non-final cause
+is retained once in table order. Only equal-final agreement carries a Boolean.
+
+The join retains complete native, mapped and correspondence byte values and any
+supplied prior join bytes. Its strict reader reconstructs the expected join from
+original owner values and compares the complete canonical record. Support visits,
+causes, work and bytes use independent caller counters. Corrected success remains
+blocked on the original owners' full direct-predecessor admission capability;
+this does not waive FR-350-AC-5. Rows unreachable through sealed owner producers
+must have concrete owner evidence and must not be reported as tested by direct
+construction of a fake result.
