@@ -216,7 +216,20 @@ fn projection_limits_admit_at_the_computed_count_and_refuse_one_below() {
             ),
             (TlProjectionLimit::Work, projection_work(&case, &projection)),
         ];
-        for (limit, n) in counts {
+        for (limit, mut n) in counts {
+            // The request document records the lowered owner ceilings, so the
+            // record's length depends on the byte setting itself: iterate to
+            // the setting that is its own count.
+            if limit == TlProjectionLimit::Bytes {
+                loop {
+                    let at = case.project(set(limit, n)).expect("n admits");
+                    let next = projection_bytes(&case, &at);
+                    if next == n {
+                        break;
+                    }
+                    n = next;
+                }
+            }
             let admitted = case.project(set(limit, n)).expect("n admits");
             let usage = admitted.usage();
             let reported = match limit {

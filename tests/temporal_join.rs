@@ -11,16 +11,13 @@ use ix_trace_rs::trace;
 use owners::*;
 use projection_support::{with_case, with_case_scopes};
 use qsl_eval::temporal::evidence::{ObligationKey, Relation, Settlement, Truth};
-use qsl_package::{checked_views::Closure, NativeJoinBudget};
+use qsl_package::checked_views::Closure;
 use quire_exact::Meter;
 use quire_integration::temporal::{
     join_tl, project_tl, read_tl_join, ExpectedTlJoin, NativeProjectionInput, TlJoinCause,
     TlJoinDecision, TlJoinError, TlLimits, TlProjectionLimit, ValidatedTlProjection,
 };
-use quire_mltl::{
-    contract_ir,
-    report::{self, AssessmentExecution, ResultRelationInput},
-};
+use quire_mltl::report::{self, AssessmentExecution, ResultRelationInput};
 use quire_observation::authority::OpenClosed;
 use quire_spec_language::temporal::{self as native, CheckedSubject, Report, ReportOutcome};
 use serde_json::{json, Value};

@@ -272,11 +272,10 @@ pub(crate) fn with_case_watermark(
         TlLimits::default(),
     )
     .expect("original integration bridge definition");
-    let f = observation::Fixture::new(
-        OBSERVATION_SAMPLE
-            .with(std::cell::Cell::get)
-            .unwrap_or(sample),
-    );
+    let observed_sample = OBSERVATION_SAMPLE
+        .with(std::cell::Cell::get)
+        .unwrap_or(sample);
+    let f = observation::Fixture::new(observed_sample);
     let context = f.context(1, None);
     let owner_limits = Limits::owner_max();
     let selection = f.selection(None);
@@ -305,7 +304,7 @@ pub(crate) fn with_case_watermark(
     )
     .expect("clock reader");
     let boundary = || {
-        if sample {
+        if observed_sample {
             a::TemporalBoundary::FixedSample {
                 lower: 0,
                 upper_inclusive: 0,
