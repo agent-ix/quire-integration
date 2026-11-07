@@ -25,8 +25,9 @@ use quire_observation::authority::{
 use quire_spec_language::temporal::ValuationCause;
 
 use super::{
-    Budget, NativeProjectionInput, TlMissingPremise as Missing, TlProjectionError as Error,
-    TlProjectionLimit, TlProjectionPremise as Premise, TlProjectionSelection,
+    positions, Budget, NativeProjectionInput, TlMissingPremise as Missing,
+    TlProjectionError as Error, TlProjectionLimit, TlProjectionPremise as Premise,
+    TlProjectionSelection,
 };
 
 /// Values established by the binding steps and consumed by construction.
@@ -157,23 +158,18 @@ pub(super) fn check<'subject, 'input>(
         Some(ProgressCompleteness::Incomplete) | None => None,
     };
     budget.charge(bundle.payload().records().len(), None)?;
-    let mut records = BTreeMap::new();
-    for fact in bundle.payload().records() {
-        if let EmbeddedPayloadRef::Observation(record) = fact.payload() {
-            if records
-                .insert(record.observation_identity(), record)
-                .is_some()
-            {
-                return Err(Error::NativePremise(Premise::Observation));
+    let records = positions::unique_identities(bundle.payload().records().filter_map(|fact| {
+        match fact.payload() {
+            EmbeddedPayloadRef::Observation(record) => {
+                Some((record.observation_identity(), record))
             }
+            _ => None,
         }
-    }
+    }))?;
     budget.charge(
         native.request.positions.len(),
         Some(TlProjectionLimit::Positions),
     )?;
-    let mut anchor_stamp = None;
-    let mut anchor_matches = 0_usize;
     for position in &native.request.positions {
         let record = records
             .get(position.observation.identity.as_str())
@@ -191,45 +187,25 @@ pub(super) fn check<'subject, 'input>(
             target,
             selection,
         )?;
-        if position.observation.identity == opaque_anchor {
-            anchor_matches += 1;
-            anchor_stamp = Some(position.position);
-        }
     }
-    let anchor_stamp = match (anchor_matches, anchor_stamp) {
-        (0, _) | (_, None) => return Err(Error::Incomplete(Missing::Anchor)),
-        (1, Some(stamp)) => stamp,
-        _ => return Err(Error::NativePremise(Premise::Anchor)),
-    };
+    let identified: Vec<(&str, u64)> = native
+        .request
+        .positions
+        .iter()
+        .map(|position| (position.observation.identity.as_str(), position.position))
+        .collect();
+    let anchor_stamp = positions::anchor_stamp(&identified, opaque_anchor)?;
 
     // Step 7: positions.
     let (start, end) = range(selection.clock)?;
-    let mut ordered = BTreeMap::new();
-    for (index, position) in native.request.positions.iter().enumerate() {
-        if position.position < start
-            || position.position >= end
-            || ordered.insert(position.position, index).is_some()
-        {
-            return Err(Error::NativePremise(Premise::Position));
-        }
-    }
-    let length = u64::try_from(native.request.positions.len()).unwrap_or(u64::MAX);
-    if end.checked_sub(start) != Some(length) {
-        return Err(Error::Incomplete(Missing::Position));
-    }
-    let mut positions = Vec::with_capacity(ordered.len());
-    for (offset, (stamp, index)) in ordered.into_iter().enumerate() {
-        if stamp.checked_sub(start) != u64::try_from(offset).ok() {
-            return Err(Error::Incomplete(Missing::Position));
-        }
-        positions.push(index);
-    }
+    let stamps: Vec<u64> = identified.iter().map(|(_, stamp)| *stamp).collect();
+    let positions = positions::order_by_stamp(&stamps, start, end)?;
     if target == Target::OriginCompleteHistory
         && (start != 0 || native.request.authoritative_origin != Some(true))
     {
         return Err(Error::Incomplete(Missing::History));
     }
-    let anchor = anchor_stamp - start;
+    let anchor = positions::tl_anchor(anchor_stamp, start);
 
     // Step 8: progress, closure and completeness.
     let closed = |state| match state {

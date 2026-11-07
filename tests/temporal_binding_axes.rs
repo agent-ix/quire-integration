@@ -885,6 +885,109 @@ fn package_and_view_inputs_change_their_members() {
     );
     contains(
         &members("holds(true)", true, Closure::Complete, OpenClosed::Closed),
-        &["clock", "observation", "clockView", "subjectProfile"],
+        &[
+            "clock",
+            "observation",
+            "clockView",
+            "subjectProfile",
+            "lock",
+        ],
+    );
+}
+
+/// A valuation row, a progress view and a capture each change exactly the members
+/// that record them.
+#[trace("IT-022-SC-10", "FR-350-AC-3", "FR-350-AC-11")]
+#[test]
+fn valuation_rows_progress_views_and_captures_change_their_members() {
+    use qsl_package::checked_views::Closure;
+    use quire_observation::authority::OpenClosed;
+    use quire_spec_language::temporal::ValuationEvidence;
+    projection_support::with_case("holds(true) and holds(false)", false, |case| {
+        let base = case.project(TlLimits::default()).expect("projection");
+        let before = expected_members(&case, &base);
+        let mut rows = case.native.valuations.rows().to_vec();
+        rows[0].value = !rows[0].value;
+        let evidence = ValuationEvidence::admit(
+            case.subject,
+            &projection_support::trace_for(&case),
+            case.native.instance,
+            &case.native.observation.revision,
+            rows,
+        )
+        .expect("flipped row admits");
+        let changed = projection_support::Case {
+            native: NativeProjectionInput {
+                valuations: &evidence,
+                ..case.native
+            },
+            ..case
+        };
+        let projection = changed.project(TlLimits::default()).expect("projection");
+        let after = expected_members(&changed, &projection);
+        assert_eq!(expected::canonical(&after), projection.bytes());
+        let differing = expected::differing(&before, &after);
+        assert!(
+            differing.iter().any(|name| name == "valuations"),
+            "{differing:?}"
+        );
+        assert!(
+            differing.iter().any(|name| name == "input"),
+            "{differing:?}"
+        );
+        let error = read_tl_projection(
+            base.bytes(),
+            ExpectedTlProjection {
+                package: changed.package,
+                subject: changed.subject,
+                classification: changed.classification,
+                surrounding: changed.surrounding,
+                native: changed.native,
+                selection: changed.selection,
+            },
+            TlLimits::default(),
+        )
+        .expect_err("original bytes mismatch");
+        assert_eq!(error.code(), TlProjectionCode::CorrespondenceMismatch);
+    });
+    let progress = |watermark: u64| {
+        let mut out = None;
+        projection_support::with_case_watermark(
+            "holds(true)",
+            false,
+            Closure::Complete,
+            OpenClosed::Closed,
+            watermark,
+            |case| {
+                let projection = case.project(TlLimits::default()).expect("projection");
+                out = Some(expected_members(&case, &projection));
+            },
+        );
+        out.expect("members")
+    };
+    let differing = expected::differing(&progress(1), &progress(2));
+    for name in ["decisionProgress", "surroundingProgress", "native"] {
+        assert!(
+            differing.iter().any(|d| d == name),
+            "{name} in {differing:?}"
+        );
+    }
+    let captured = |value: &'static [u8]| {
+        let mut out = None;
+        fixture::with_source(
+            &fixture::declarations("capture saved: Int[0, 10] = 1; holds(saved = 1)"),
+            "Due",
+            &[value],
+            |case| {
+                let projection = case.project(TlLimits::default()).expect("projection");
+                out = Some(expected_members(&case, &projection));
+            },
+        );
+        out.expect("members")
+    };
+    let differing = expected::differing(&captured(b"1"), &captured(b"2"));
+    assert!(
+        differing.iter().any(|name| name == "captures"),
+        "{differing:?}"
     );
 }

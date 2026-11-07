@@ -239,3 +239,24 @@ pub(super) fn encode(
     budget.bytes(bytes.len())?;
     Ok(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_integer_ir_value_encodes_as_decimal_strings() {
+        let value = ir(&serde_json::json!({"a": [1, -2], "b": {"c": 3}})).unwrap();
+        assert_eq!(
+            value,
+            serde_json::json!({"a": ["1", "-2"], "b": {"c": "3"}})
+        );
+    }
+
+    #[test]
+    fn a_non_integer_number_is_an_encoding_refusal() {
+        let error = ir(&serde_json::json!({"a": 1.5})).unwrap_err();
+        assert!(matches!(error, Error::NonIntegerNumber), "{error:?}");
+        assert_eq!(error.code(), crate::temporal::TlProjectionCode::Encoding);
+    }
+}

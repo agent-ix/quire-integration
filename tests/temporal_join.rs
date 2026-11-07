@@ -1499,3 +1499,147 @@ fn each_lineage_condition_reaches_conflict_in_its_own_case() {
         });
     });
 }
+
+/// Every pair of FR-350 rows R1 to R6 that genuine owner results can satisfy
+/// together returns the first decision and both causes once, in row order.
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
+#[test]
+fn reachable_row_pairs_return_the_first_decision_and_both_causes() {
+    use qsl_eval::temporal::evidence::ExecutionDisposition;
+    with_case("holds(true)", false, |case| {
+        let mut foreign = None;
+        with_case("not holds(true)", false, |other| {
+            let projection = other
+                .project(TlLimits::default())
+                .expect("other projection");
+            foreign = Some(evaluate_mapped(&projection));
+        });
+        let foreign = foreign.expect("genuine result for another request");
+        let pair = |projection: &ValidatedTlProjection<'_>,
+                    native: Option<&Report>,
+                    mapped: Option<&quire_mltl::contract_ir::ValidatedMappedResult>,
+                    decision: TlJoinDecision,
+                    causes: &[TlJoinCause],
+                    name: &str| {
+            let joined = join_tl(
+                projection,
+                native,
+                mapped,
+                None,
+                TlLimits::default(),
+                &mut native_budget(),
+            )
+            .unwrap_or_else(|error| panic!("{name}: {error:?}"));
+            assert_eq!(joined.decision(), decision, "{name}");
+            assert_eq!(joined.causes(), causes, "{name}");
+            assert_eq!(joined.value(), None, "{name}");
+        };
+        use TlJoinCause::{
+            ResultFailed as R2, ResultIncomplete as R5, ResultRefused as R1,
+            ResultUnavailable as R3,
+        };
+        // R1 + R3: a foreign TL result and no native report.
+        let base = case.project(TlLimits::default()).expect("projection");
+        pair(
+            &base,
+            None,
+            Some(&foreign),
+            TlJoinDecision::Refused,
+            &[R1, R3],
+            "R1+R3",
+        );
+        // R1 + R5: a foreign TL result and an incomplete native report.
+        let mut limited = case.native.request.clone();
+        limited.limits.valuations = 0;
+        let limited_projection = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &limited,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect("limited projection");
+        let incomplete = evaluate_native(&limited_projection);
+        assert_eq!(incomplete.outcome(), ReportOutcome::Limit);
+        pair(
+            &limited_projection,
+            Some(&incomplete),
+            Some(&foreign),
+            TlJoinDecision::Refused,
+            &[R1, R5],
+            "R1+R5",
+        );
+        // R3 + R5: no TL result and an incomplete native report.
+        pair(
+            &limited_projection,
+            Some(&incomplete),
+            None,
+            TlJoinDecision::Unavailable,
+            &[R3, R5],
+            "R3+R5",
+        );
+        // R2 + R1, R2 + R3 and R2 + R5 over a failed assessment execution.
+        let mut failed = case.native.request.clone();
+        failed.execution = ExecutionDisposition::Failed;
+        let failed_projection = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &failed,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect("failed projection");
+        let failed_native = evaluate_native(&failed_projection);
+        let failed_mapped = evaluate_mapped(&failed_projection);
+        pair(
+            &failed_projection,
+            Some(&failed_native),
+            Some(&foreign),
+            TlJoinDecision::Refused,
+            &[R1, R2],
+            "R1+R2",
+        );
+        pair(
+            &failed_projection,
+            None,
+            Some(&failed_mapped),
+            TlJoinDecision::Failed,
+            &[R2, R3],
+            "R2+R3",
+        );
+        let mut failed_limited = failed.clone();
+        failed_limited.limits.valuations = 0;
+        let failed_limited_projection = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &failed_limited,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect("failed limited projection");
+        let failed_incomplete = evaluate_native(&failed_limited_projection);
+        pair(
+            &failed_limited_projection,
+            Some(&failed_incomplete),
+            None,
+            TlJoinDecision::Failed,
+            &[R2, R3, R5],
+            "R2+R3+R5",
+        );
+    });
+}

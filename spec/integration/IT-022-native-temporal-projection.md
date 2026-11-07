@@ -331,3 +331,18 @@ decision input. Each is exercised by the scenarios named.
   `ExactNumber`) carry the typed tl-syntax or tl-mltl constructor or reader
   refusal and map to `tl-projection-owner`; `NonIntegerNumber` and
   `Canonical` map to `tl-projection-encoding` (IT-022-SC-16).
+
+## Checks verified at unit level
+
+QObs's capture selection (quire-observation `src/authority/capture.rs:206-251`)
+covers every qualified record at one anchor, and a bundle holds each role once
+(`src/authority/bundle.rs:1294-1324`). A genuine bundle therefore carries a
+single stamp and cannot hold one observation identity twice. The bridge's
+stamp ordering, repeated stamp, gap and range-length checks, the several-anchor
+match, the duplicate bundle observation identity, the numeric anchor offset and
+the unique source-map entry are defensive for owner input. They are pure
+functions over typed identities and stamps (`projection/positions.rs`), verified
+by unit tests there rather than through a bundle. The refusals that need an
+input no QSL source or QObs producer yields today (`subject-name`,
+`tl-projection-encoding` for a non-integer IR number) are verified at the
+function that produces them.

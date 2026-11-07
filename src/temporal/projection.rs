@@ -23,6 +23,7 @@ use super::{
 
 mod native;
 mod owners;
+mod positions;
 mod record;
 
 pub(in crate::temporal) use record::hex;
@@ -640,19 +641,14 @@ fn project_with<'a>(
         &mut budget,
     )?;
     budget.charge(package.source_map().len(), None)?;
-    let mut matching = package.source_map().iter().filter(|entry| {
-        entry.node_id == native.occurrence.node
-            && entry.role == native.occurrence.role
-            && entry.ordinal == native.occurrence.ordinal
-    });
-    let source = match (matching.next(), matching.next()) {
-        (Some(entry), None) => entry,
-        _ => {
-            return Err(TlProjectionError::NativePremise(
-                TlProjectionPremise::Source,
-            ))
-        }
-    };
+    let source = positions::exactly_one(
+        package.source_map().iter().filter(|entry| {
+            entry.node_id == native.occurrence.node
+                && entry.role == native.occurrence.role
+                && entry.ordinal == native.occurrence.ordinal
+        }),
+        TlProjectionError::NativePremise(TlProjectionPremise::Source),
+    )?;
     check_intervals(subject, &mut budget)?;
     let built = owners::construct(
         package,
@@ -754,4 +750,39 @@ pub(in crate::temporal) fn lowered_owner_limits(
     max_bytes: u64,
 ) -> OwnerLimits {
     owners::limits(original, max_bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_refusal_maps_to_its_fr_350_code() {
+        let cases = [
+            (
+                TlProjectionError::NativePremise(TlProjectionPremise::SubjectName),
+                TlProjectionCode::NativePremise,
+            ),
+            (
+                TlProjectionError::NativePremise(TlProjectionPremise::Source),
+                TlProjectionCode::NativePremise,
+            ),
+            (
+                TlProjectionError::Incomplete(TlMissingPremise::History),
+                TlProjectionCode::Incomplete,
+            ),
+            (
+                TlProjectionError::NonIntegerNumber,
+                TlProjectionCode::Encoding,
+            ),
+            (
+                TlProjectionError::Correspondence,
+                TlProjectionCode::CorrespondenceMismatch,
+            ),
+        ];
+        for (error, code) in cases {
+            assert_eq!(error.code(), code, "{error:?}");
+        }
+        assert_eq!(TlProjectionCode::all().len(), 11);
+    }
 }
