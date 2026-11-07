@@ -4,43 +4,15 @@
 mod support;
 
 use ix_trace_rs::trace;
-use qsl_eval::temporal::{
-    evidence::{
-        CompletenessRecord, EvidencePosition, EvidenceRef, EvidenceRequest, ExecutionDisposition,
-        ExecutionOrigin, Payload, Relation, SemanticTriggerIdentity, TemporalEvidenceLimits,
-        TraceBinding, TriggerEvidence,
-    },
-    ClockCover, ProgressClosure, ProgressCompleteness,
-};
-use qsl_package::checked_views::{
-    mapping_support, temporal_subject, Classification, Closure, TemporalSubjectView,
-};
-use qsl_semantics::{
-    check::{CheckRefusal, CheckedGraph, PackageDeclarations},
-    model::{
-        accounting::ModelNormalizationLimits,
-        intake::{admit_unit, package_input},
-    },
-};
-use quire_contract_ir::{
-    read_checked_package, CheckedNodeId, CheckedNodeKind, CheckedPackageDispatchResult,
-    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, ClockConfiguration,
-    ClockExactNumber, TemporalForm,
-};
+use qsl_eval::temporal::ProgressClosure;
+use qsl_package::checked_views::{mapping_support, temporal_subject, Closure};
 use quire_integration::temporal::{
-    project_tl, read_observation_revision, MappingBindingRefusal, NativeProjectionInput,
-    ObservationAdmissionLimits, TlInput, TlLimits, TlMissingPremise, TlProjectionError,
-    TlProjectionLimit, TlProjectionPremise, TlProjectionSelection, ValidatedTlProjection,
-    TL_CORRESPONDENCE_PROFILE,
+    project_tl, MappingBindingRefusal, NativeProjectionInput, TlInput, TlLimits, TlMissingPremise,
+    TlProjectionError, TlProjectionLimit, TlProjectionPremise, TL_CORRESPONDENCE_PROFILE,
 };
-use quire_mltl::request::{ObservationInputs, TemporalLane};
-use quire_observation::authority::{self as a, bundle, Limits, OpenClosed};
-use quire_semantic_value::checking::CheckingLimits;
-use quire_spec_language::temporal::{
-    self as native, ObservationRef, ValuationEvidence, ValuationInstance, ValuationRow,
-};
-use std::collections::BTreeMap;
-use tl_mltl::wire::OwnerLimits;
+use quire_mltl::request::TemporalLane;
+use quire_observation::authority::OpenClosed;
+use quire_spec_language::temporal::{self as native, ValuationEvidence, ValuationInstance};
 use tl_syntax::PropositionId;
 
 #[path = "support/temporal_projection.rs"]

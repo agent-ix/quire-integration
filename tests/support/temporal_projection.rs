@@ -29,12 +29,10 @@ use quire_contract_ir::{
     ClockExactNumber, TemporalForm,
 };
 use quire_integration::temporal::{
-    project_tl, read_observation_revision, MappingBindingRefusal, NativeProjectionInput,
-    ObservationAdmissionLimits, TlInput, TlLimits, TlMissingPremise, TlProjectionError,
-    TlProjectionLimit, TlProjectionPremise, TlProjectionSelection, ValidatedTlProjection,
-    TL_CORRESPONDENCE_PROFILE,
+    project_tl, read_observation_revision, NativeProjectionInput, ObservationAdmissionLimits,
+    TlLimits, TlProjectionError, TlProjectionSelection, ValidatedTlProjection,
 };
-use quire_mltl::request::{ObservationInputs, TemporalLane};
+use quire_mltl::request::ObservationInputs;
 use quire_observation::authority::{self as a, bundle, Limits, OpenClosed};
 use quire_semantic_value::checking::CheckingLimits;
 use quire_spec_language::temporal::{
@@ -42,7 +40,6 @@ use quire_spec_language::temporal::{
 };
 use std::collections::BTreeMap;
 use tl_mltl::wire::OwnerLimits;
-use tl_syntax::PropositionId;
 
 /// Parse and check original source without bypassing native temporal admission.
 pub(crate) fn checked_formula(
