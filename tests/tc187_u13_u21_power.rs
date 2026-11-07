@@ -1,6 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Public TC-187 integer-power values and charged refusal boundaries.
 
+#[path = "support/family_function_selection.rs"]
+mod family_function_selection;
+#[path = "support/generated_oracle.rs"]
+mod generated_oracle;
+#[path = "support/oracle_observation.rs"]
+mod oracle_observation;
+#[allow(
+    dead_code,
+    reason = "shared quantity support also serves other independent vector cases"
+)]
+#[path = "support/tc187_p9_source.rs"]
+mod source;
+
 use std::collections::BTreeMap;
 
 use ix_trace_rs::trace;
@@ -9,6 +22,7 @@ use qsl_package::CheckedPackage;
 use qsl_semantics::check::PackageDeclarations;
 use qsl_semantics::model::intake::SelectedModels;
 use qsl_semantics::model::object_environment::ObjectEnvironment;
+use quire_contract_ir::{CheckedNodeId, CheckedPackageV2, CheckedTerm};
 use quire_eval::FamilyOutcome;
 use quire_exact::{
     ChargePoint, Incomplete, Integer, LimitKind, Meter, Outcome, ScalarLimits, Undefined, Value,
@@ -243,4 +257,24 @@ fn public_u21_zero_powers_observe_value_undefined_and_first_read_denial() {
         }
     );
     assert!(meter.admitted_charges().is_empty());
+}
+
+/// Trace: TC-106, IT-019-SC-04, QSpec-TC-187 U13 and U21.
+#[trace("TC-106", "IT-019-SC-04", "QSpec-TC-187")]
+#[test]
+fn public_u13_huge_and_u21_zero_power_match_generated_native_oracles() {
+    bind_vector("U13", U13_INPUTS, U13_EXPECTED);
+    bind_vector("U21", U21_INPUTS, U21_EXPECTED);
+    let u13 = source::original(
+        "function huge_power using v(): Boolean pure { 2 m ^ 18446744073709551616 = 2 m ^ 18446744073709551616 }",
+    );
+    assert_eq!(
+        source::generation(&u13, &[("huge_power", true, limits(64, 5, 1))], &[], &[]),
+        1
+    );
+    let u21 = source::original("function zero_power using v(): Boolean pure { 0 m ^ 0 = 0 m ^ 0 }");
+    assert_eq!(
+        source::generation(&u21, &[("zero_power", true, limits(1, 4, 1))], &[], &[],),
+        1
+    );
 }

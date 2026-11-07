@@ -47,7 +47,11 @@ fn admit(source: &str) -> Admitted {
     .check(CheckingLimits::default())
     .expect("the source checks");
     let qsl = CheckedPackage::link(graph);
-    let emission = emit_checked(&qsl).expect("the real checked source emits");
+    let emission = emit_checked(
+        &qsl,
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("the real checked source emits");
     assert!(
         emission.omitted().is_empty(),
         "no selected claim is omitted"
@@ -144,9 +148,15 @@ fn generated_boolean_negation_matches_the_actual_qsl_body() {
         .function_by_identity(identity)
         .expect("the admitted function body");
     let mut qsl_meter = quire_exact::Meter::new(limits());
-    let qsl =
-        qsl_eval::value::evaluate_closed(&admitted.qsl, body.body, body.slots, &mut qsl_meter)
-            .expect("the actual closed QSL body evaluates");
+    let qsl = qsl_eval::value::evaluate_closed_with_frame(
+        &admitted.qsl,
+        body.body,
+        body.slots,
+        Vec::new(),
+        body.formed_units,
+        &mut qsl_meter,
+    )
+    .expect("the actual closed QSL body evaluates");
     let quire_eval::FamilyOutcome::Evaluated(qsl_outcome) = qsl.outcome else {
         panic!("the actual QSL body must reach its value family");
     };
@@ -430,10 +440,12 @@ fn generated_boolean_truth_tables_preserve_typed_values_and_ordered_accounting()
                     let mut allowance = limits();
                     allowance.work_units = work;
                     let mut meter = quire_exact::Meter::new(allowance);
-                    let result = qsl_eval::value::evaluate_closed(
+                    let result = qsl_eval::value::evaluate_closed_with_frame(
                         &admitted.qsl,
                         function.body,
                         function.slots,
+                        Vec::new(),
+                        function.formed_units,
                         &mut meter,
                     )
                     .expect("genuine closed Boolean body");

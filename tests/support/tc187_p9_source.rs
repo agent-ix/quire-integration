@@ -183,8 +183,11 @@ pub fn generation_with(
     carried_refusals: &[&str],
 ) -> usize {
     use quire_contract_codegen::{ClaimDisposition, ExactScalarRefusal, OperationProvenance};
-    let emission =
-        qsl_package::emit_checked(&original.package).expect("original quantity source emits");
+    let emission = qsl_package::emit_checked(
+        &original.package,
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("original quantity source emits");
     assert!(emission.omitted().is_empty(), "{:?}", emission.omitted());
     let mut evidence = CheckedPackageEvidence::new();
     evidence.support_feature("quire.value.complete/v1");

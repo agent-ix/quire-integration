@@ -183,7 +183,11 @@ fn emitted(
     let graph = assembled
         .check(CheckingLimits::default())
         .expect("namespace checking");
-    let emission = emit_checked(&CheckedPackage::link(graph)).expect("native checked emission");
+    let emission = emit_checked(
+        &CheckedPackage::link(graph),
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("native checked emission");
     assert!(emission.omitted().is_empty());
     let bytes = emission.package().bytes();
     let wire: Value = serde_json::from_slice(bytes).expect("emitted JSON");

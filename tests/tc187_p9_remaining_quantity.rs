@@ -109,11 +109,13 @@ fn original_quantity_boundaries_preserve_composed_units_and_adverse_stops() {
                 ("reversedOrder", false, limits(15, 2, 2, 9, 1)),
                 ("celsiusEqual", false, limits(15, 2, 2, 9, 1)),
                 ("product", true, limits(20, 2, 2, 11, 1)),
+                ("product", true, limits(13, 2, 2, 11, 1)),
+                ("product", true, limits(19, 2, 2, 11, 1)),
             ],
             &[],
             &[]
         ),
-        6
+        8
     );
 }
 
