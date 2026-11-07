@@ -25,12 +25,41 @@ use quire_contract_ir::{
 use quire_eval::FamilyOutcome;
 use quire_exact::{Integer, LimitKind, Meter, Outcome, Rational, Value};
 
+#[derive(Clone, Copy)]
+enum Expected {
+    Rational(i64, i64),
+    Boolean(bool),
+}
+
+/// One authored input vector; Integer operands carry a unit denominator.
+struct Case {
+    arguments: &'static [(i64, i64)],
+    expected: Expected,
+}
+
 struct Row {
     name: &'static str,
     expression: &'static str,
     parameters: &'static str,
-    arguments: &'static [(i64, i64)],
-    expected: (i64, i64),
+    result: &'static str,
+    integer_operands: bool,
+    cases: &'static [Case],
+}
+
+const RATIONAL_RESULT: &str = "Rational[-200,200;1,200]";
+
+const fn rational(arguments: &'static [(i64, i64)], numerator: i64, denominator: i64) -> Case {
+    Case {
+        arguments,
+        expected: Expected::Rational(numerator, denominator),
+    }
+}
+
+const fn boolean(arguments: &'static [(i64, i64)], expected: bool) -> Case {
+    Case {
+        arguments,
+        expected: Expected::Boolean(expected),
+    }
 }
 
 const ROWS: &[Row] = &[
@@ -38,29 +67,120 @@ const ROWS: &[Row] = &[
         name: "radd",
         expression: "left + right",
         parameters: "left: Rational[-9,9;1,9], right: Rational[-9,9;1,9]",
-        arguments: &[(1, 2), (1, 3)],
-        expected: (5, 6),
+        result: RATIONAL_RESULT,
+        integer_operands: false,
+        cases: &[
+            rational(&[(1, 2), (1, 3)], 5, 6),
+            rational(&[(9, 1), (9, 1)], 18, 1),
+            rational(&[(-9, 1), (-9, 1)], -18, 1),
+        ],
     },
     Row {
         name: "rsub",
         expression: "left - right",
         parameters: "left: Rational[-9,9;1,9], right: Rational[-9,9;1,9]",
-        arguments: &[(4, 3), (7, 2)],
-        expected: (-13, 6),
+        result: RATIONAL_RESULT,
+        integer_operands: false,
+        cases: &[
+            rational(&[(4, 3), (7, 2)], -13, 6),
+            rational(&[(9, 1), (-9, 1)], 18, 1),
+        ],
     },
     Row {
         name: "rmul",
         expression: "left * right",
         parameters: "left: Rational[-9,9;1,9], right: Rational[-9,9;1,9]",
-        arguments: &[(2, 3), (3, 4)],
-        expected: (1, 2),
+        result: RATIONAL_RESULT,
+        integer_operands: false,
+        cases: &[
+            rational(&[(2, 3), (3, 4)], 1, 2),
+            rational(&[(9, 1), (9, 1)], 81, 1),
+            rational(&[(-9, 1), (9, 1)], -81, 1),
+        ],
     },
     Row {
         name: "rneg",
         expression: "-left",
         parameters: "left: Rational[-9,9;1,9]",
-        arguments: &[(7, 3)],
-        expected: (-7, 3),
+        result: RATIONAL_RESULT,
+        integer_operands: false,
+        cases: &[
+            rational(&[(7, 3)], -7, 3),
+            rational(&[(-9, 1)], 9, 1),
+        ],
+    },
+    Row {
+        name: "rdiv",
+        expression: "left / right",
+        parameters: "left: Rational[-9,9;1,9], right: Rational[1,9;1,9]",
+        result: RATIONAL_RESULT,
+        integer_operands: false,
+        cases: &[
+            rational(&[(1, 2), (3, 4)], 2, 3),
+            rational(&[(-9, 1), (1, 9)], -81, 1),
+            rational(&[(9, 1), (9, 1)], 1, 1),
+        ],
+    },
+    Row {
+        name: "idiv",
+        expression: "left / right",
+        parameters: "left: Int[-9,9], right: Int[1,9]",
+        result: RATIONAL_RESULT,
+        integer_operands: true,
+        cases: &[
+            rational(&[(7, 1), (2, 1)], 7, 2),
+            rational(&[(-9, 1), (9, 1)], -1, 1),
+            rational(&[(9, 1), (1, 1)], 9, 1),
+        ],
+    },
+    Row {
+        name: "rless",
+        expression: "left < right",
+        parameters: "left: Rational[-9,9;1,9], right: Rational[-9,9;1,9]",
+        result: "Boolean",
+        integer_operands: false,
+        cases: &[
+            boolean(&[(1, 3), (1, 2)], true),
+            boolean(&[(1, 2), (1, 2)], false),
+            boolean(&[(1, 2), (1, 3)], false),
+        ],
+    },
+    Row {
+        name: "rlessOrEqual",
+        expression: "left <= right",
+        parameters: "left: Rational[-9,9;1,9], right: Rational[-9,9;1,9]",
+        result: "Boolean",
+        integer_operands: false,
+        cases: &[
+            boolean(&[(1, 3), (1, 2)], true),
+            boolean(&[(1, 2), (1, 2)], true),
+            boolean(&[(1, 2), (1, 3)], false),
+        ],
+    },
+    Row {
+        name: "rgreater",
+        expression: "left > right",
+        parameters: "left: Rational[-9,9;1,9], right: Rational[-9,9;1,9]",
+        result: "Boolean",
+        integer_operands: false,
+        cases: &[
+            boolean(&[(1, 3), (1, 2)], false),
+            boolean(&[(1, 2), (1, 2)], false),
+            boolean(&[(1, 2), (1, 3)], true),
+        ],
+    },
+    Row {
+        name: "rgreaterOrEqual",
+        expression: "left >= right",
+        parameters: "left: Rational[-9,9;1,9], right: Rational[-9,9;1,9]",
+        result: "Boolean",
+        integer_operands: false,
+        cases: &[
+            boolean(&[(1, 3), (1, 2)], false),
+            boolean(&[(1, 2), (1, 2)], true),
+            boolean(&[(1, 2), (1, 3)], true),
+            boolean(&[(9, 1), (-9, 1)], true),
+        ],
     },
 ];
 
@@ -72,8 +192,8 @@ fn original_rational_arithmetic_agrees_with_generated_native_observations() {
     );
     for row in ROWS {
         source.push_str(&format!(
-            "function {} using v({}): Rational[-200,200;1,200] pure {{ {} }}\n",
-            row.name, row.parameters, row.expression
+            "function {} using v({}): {} pure {{ {} }}\n",
+            row.name, row.parameters, row.result, row.expression
         ));
     }
     let producer = family_checked_source::checked(&source);
@@ -114,11 +234,12 @@ fn original_rational_arithmetic_agrees_with_generated_native_observations() {
         r#"
 mod oracle_observation;
 use quire_exact::{Integer,Meter,Outcome,Rational,ScalarLimits,Value};
-fn lift(outcome: Outcome<Rational>)->Outcome<Value> { match outcome { Outcome::Completed(v)=>Outcome::Completed(Value::Rational(v)), Outcome::Undefined(v)=>Outcome::Undefined(v), Outcome::Refused(v)=>Outcome::Refused(v), Outcome::Incomplete(v)=>Outcome::Incomplete(v) } }
+fn lift<T>(outcome: Outcome<T>, value: impl FnOnce(T)->Value)->Outcome<Value> { match outcome { Outcome::Completed(v)=>Outcome::Completed(value(v)), Outcome::Undefined(v)=>Outcome::Undefined(v), Outcome::Refused(v)=>Outcome::Refused(v), Outcome::Incomplete(v)=>Outcome::Incomplete(v) } }
 #[test]
 fn observe() {
 "#,
     );
+    let mut labels = Vec::new();
     for (index, row) in ROWS.iter().enumerate() {
         let claims = output
             .claim_map
@@ -133,90 +254,120 @@ fn observe() {
         let ClaimDisposition::Generated(generated) = &claim.result else {
             panic!("{} generates: {:?}", row.name, claim.result);
         };
-        assert!(matches!(
-            items[index].operation,
-            ExactScalarOperation::RationalArithmetic { .. }
-        ));
+        assert!(
+            matches!(
+                (&items[index].operation, row.cases[0].expected),
+                (
+                    ExactScalarOperation::RationalArithmetic { .. },
+                    Expected::Rational(..)
+                ) | (ExactScalarOperation::Ordering { .. }, Expected::Boolean(_))
+            ),
+            "{} selected operation: {:?}",
+            row.name,
+            items[index].operation
+        );
         let graph = authority.graph();
         let function = graph
             .function_by_identity(graph.function_identity(row.name).expect("source identity"))
             .expect("checked body");
-        for work in [1024, 0, 1] {
-            let mut meter = Meter::new(family_scalar_limits::limits(work));
-            let evaluation = qsl_eval::value::evaluate_closed_with_frame(
-                &authority,
-                function.body,
-                function.slots,
-                row.arguments
+        for case in row.cases {
+            for work in [1024, 0, 1] {
+                let mut meter = Meter::new(family_scalar_limits::limits(work));
+                let evaluation = qsl_eval::value::evaluate_closed_with_frame(
+                    &authority,
+                    function.body,
+                    function.slots,
+                    case.arguments
+                        .iter()
+                        .map(|(numerator, denominator)| {
+                            if row.integer_operands {
+                                Value::Integer(Integer::from(*numerator))
+                            } else {
+                                Value::Rational(
+                                    Rational::new(
+                                        Integer::from(*numerator),
+                                        Integer::from(*denominator),
+                                    )
+                                    .expect("authored rational input"),
+                                )
+                            }
+                        })
+                        .collect(),
+                    function.formed_units,
+                    &mut meter,
+                )
+                .expect("checked Rational body evaluation");
+                let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
+                    panic!("Rational value family");
+                };
+                if work == 1024 {
+                    let required = match case.expected {
+                        Expected::Rational(numerator, denominator) => Value::Rational(
+                            Rational::new(Integer::from(numerator), Integer::from(denominator))
+                                .expect("authored expected rational"),
+                        ),
+                        Expected::Boolean(value) => Value::Boolean(value),
+                    };
+                    assert!(
+                        matches!(&outcome, Outcome::Completed(actual) if format!("{actual:?}") == format!("{required:?}")),
+                        "{} required result: {outcome:?}",
+                        row.name
+                    );
+                    assert!(evaluation.location.is_none());
+                } else if work == 0 {
+                    assert!(
+                        matches!(&outcome, Outcome::Incomplete(stop) if stop.limit_kind == LimitKind::WorkUnits && stop.limit == 0 && stop.consumed == 0),
+                        "{} work-zero: {outcome:?}",
+                        row.name
+                    );
+                    assert!(evaluation.location.is_some());
+                } else if matches!(&outcome, Outcome::Incomplete(_)) {
+                    assert!(evaluation.location.is_some());
+                }
+                assert!(evaluation.losses.is_empty());
+                let losses = evaluation
+                    .losses
+                    .into_iter()
+                    .map(|loss| loss.loss)
+                    .collect::<Vec<_>>();
+                expected.push(oracle_observation::snapshot(&outcome, &losses, &meter));
+                labels.push(format!("{} {:?} at work {work}", row.name, case.arguments));
+                let arguments = case
+                    .arguments
                     .iter()
                     .map(|(numerator, denominator)| {
-                        Value::Rational(
-                            Rational::new(Integer::from(*numerator), Integer::from(*denominator))
-                                .expect("authored rational input"),
-                        )
+                        if row.integer_operands {
+                            format!("&Integer::from({numerator}_i64)")
+                        } else {
+                            format!("&Rational::new(Integer::from({numerator}_i64),Integer::from({denominator}_i64)).expect(\"authored rational input\")")
+                        }
                     })
-                    .collect(),
-                function.formed_units,
-                &mut meter,
-            )
-            .expect("checked Rational body evaluation");
-            let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
-                panic!("Rational value family");
-            };
-            if work == 1024 {
-                assert!(
-                    matches!(&outcome, Outcome::Completed(Value::Rational(actual)) if actual == &Rational::new(Integer::from(row.expected.0), Integer::from(row.expected.1)).expect("authored expected rational")),
-                    "{} required result: {outcome:?}",
-                    row.name
-                );
-                assert!(evaluation.location.is_none());
-            } else if work == 0 {
-                assert!(
-                    matches!(&outcome, Outcome::Incomplete(stop) if stop.limit_kind == LimitKind::WorkUnits && stop.limit == 0 && stop.consumed == 0),
-                    "{} work-zero: {outcome:?}",
-                    row.name
-                );
-                assert!(evaluation.location.is_some());
-            } else if matches!(&outcome, Outcome::Incomplete(_)) {
-                assert!(evaluation.location.is_some());
-            }
-            assert!(evaluation.losses.is_empty());
-            let losses = evaluation
-                .losses
-                .into_iter()
-                .map(|loss| loss.loss)
-                .collect::<Vec<_>>();
-            expected.push(oracle_observation::snapshot(&outcome, &losses, &meter));
-            let arguments = row
-                .arguments
-                .iter()
-                .map(|(numerator, denominator)| {
-                    format!("&Rational::new(Integer::from({numerator}_i64),Integer::from({denominator}_i64)).expect(\"authored rational input\")")
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            driver.push_str(&format!(
-                r#"
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let lift = match case.expected {
+                    Expected::Rational(..) => "Value::Rational",
+                    Expected::Boolean(_) => "Value::Boolean",
+                };
+                driver.push_str(&format!(
+                    r#"
 {{ let mut meter=Meter::new({:?});
 let actual=quire_exact_scalar_oracles::{}({}, &mut meter).expect("Rational operand admission");
-let actual=lift(actual);
+let actual=lift(actual,{});
 let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new();
 println!("IT019_OBSERVATION {{}}",oracle_observation::snapshot(&actual,&losses,&meter)); }}
 "#,
-                family_scalar_limits::limits(work),
-                generated.symbol,
-                arguments
-            ));
+                    family_scalar_limits::limits(work),
+                    generated.symbol,
+                    arguments,
+                    lift
+                ));
+            }
         }
     }
     driver.push_str("}\n");
     let actual = generated_oracle::execute(&output.artifacts, &driver);
     assert_eq!(actual.len(), expected.len());
-    for ((row, work), (actual, expected)) in ROWS
-        .iter()
-        .flat_map(|row| [1024, 0, 1].into_iter().map(move |work| (row, work)))
-        .zip(actual.iter().zip(&expected))
-    {
-        assert_eq!(actual, expected, "{} at work {work}", row.name);
+    for ((label, actual), expected) in labels.iter().zip(&actual).zip(&expected) {
+        assert_eq!(actual, expected, "{label}");
     }
 }

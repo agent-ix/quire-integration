@@ -83,6 +83,20 @@ const ROWS: &[Row] = &[
         expected: ResultKind::Boolean(false),
     },
     Row {
+        name: "lessOrEqual",
+        expression: "left <= right",
+        parameters: "left: Int[-9,9], right: Int[-9,9]",
+        arguments: &[4, 7],
+        expected: ResultKind::Boolean(true),
+    },
+    Row {
+        name: "greaterOrEqual",
+        expression: "left >= right",
+        parameters: "left: Int[-9,9], right: Int[-9,9]",
+        arguments: &[4, 7],
+        expected: ResultKind::Boolean(false),
+    },
+    Row {
         name: "equal",
         expression: "left = right",
         parameters: "left: Int[-9,9], right: Int[-9,9]",
@@ -100,8 +114,49 @@ const ROWS: &[Row] = &[
 
 fn input_cases(row: &Row) -> Vec<(&[i64], ResultKind)> {
     let mut cases = vec![(row.arguments, row.expected)];
-    if row.name == "multiplication" {
-        cases.push((&[4, 7], ResultKind::Integer(28)));
+    match row.name {
+        "addition" => {
+            cases.push((&[9, 9], ResultKind::Integer(18)));
+            cases.push((&[-9, -9], ResultKind::Integer(-18)));
+        }
+        "subtraction" => {
+            cases.push((&[9, -9], ResultKind::Integer(18)));
+            cases.push((&[-9, 9], ResultKind::Integer(-18)));
+        }
+        "multiplication" => {
+            cases.push((&[4, 7], ResultKind::Integer(28)));
+            cases.push((&[9, 9], ResultKind::Integer(81)));
+            cases.push((&[-9, 9], ResultKind::Integer(-81)));
+        }
+        "negation" => {
+            cases.push((&[-9], ResultKind::Integer(9)));
+            cases.push((&[9], ResultKind::Integer(-9)));
+        }
+        "less" => {
+            cases.push((&[7, 7], ResultKind::Boolean(false)));
+            cases.push((&[9, -9], ResultKind::Boolean(false)));
+        }
+        "greater" => {
+            cases.push((&[7, 7], ResultKind::Boolean(false)));
+            cases.push((&[9, -9], ResultKind::Boolean(true)));
+        }
+        "lessOrEqual" => {
+            cases.push((&[7, 7], ResultKind::Boolean(true)));
+            cases.push((&[7, 4], ResultKind::Boolean(false)));
+            cases.push((&[-9, -9], ResultKind::Boolean(true)));
+            cases.push((&[9, -9], ResultKind::Boolean(false)));
+        }
+        "greaterOrEqual" => {
+            cases.push((&[7, 7], ResultKind::Boolean(true)));
+            cases.push((&[7, 4], ResultKind::Boolean(true)));
+            cases.push((&[9, 9], ResultKind::Boolean(true)));
+            cases.push((&[-9, 9], ResultKind::Boolean(false)));
+        }
+        "equal" | "unequal" => {
+            cases.push((&[9, 9], ResultKind::Boolean(row.name == "equal")));
+            cases.push((&[-9, 9], ResultKind::Boolean(row.name == "unequal")));
+        }
+        other => panic!("unexpected Integer row {other}"),
     }
     cases
 }
