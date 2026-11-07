@@ -60,3 +60,9 @@ Round 2, verified at 279faba.
 | FND | outcome | reason |
 | --- | --- | --- |
 | FND-003 | still-open | new this round; insert a blank line after the TC-115 table and rewrap the two IT-022 lines |
+
+Round 3, verified at d5168a2.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-003 | fixed | Blank line added after the TC-115 table; IT-022 SC-02 and SC-13 rewrapped; the two remaining long lines are TC-115 table rows, which cannot wrap |
