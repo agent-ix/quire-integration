@@ -1462,14 +1462,16 @@ fn with_progress_correction(
             );
             let report = evaluate_native_with_prior(&corrected, Some(prior));
             assert_eq!(report.outcome(), ReportOutcome::Evaluated);
-            let original_input = qsl_eval::temporal::ResultIdentity::input_identity_from_bytes(
-                prior.result_identity(),
-            )
-            .unwrap();
-            let corrected_input = qsl_eval::temporal::ResultIdentity::input_identity_from_bytes(
-                report.result_identity(),
-            )
-            .unwrap();
+            let original_input =
+                qsl_eval::temporal::evidence::ResultIdentity::input_identity_from_bytes(
+                    prior.result_identity(),
+                )
+                .unwrap();
+            let corrected_input =
+                qsl_eval::temporal::evidence::ResultIdentity::input_identity_from_bytes(
+                    report.result_identity(),
+                )
+                .unwrap();
             assert_ne!(
                 original_input, corrected_input,
                 "real admitted progress changes owner input identity"
