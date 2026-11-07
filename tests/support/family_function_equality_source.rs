@@ -16,6 +16,7 @@ pub const SOURCE: &str = concat!(
     "tuple Pair(Boolean, Boolean);\n",
     "record Flag { flag: Boolean; }\n",
     "union Choice { First, Second }\n",
+    "union PayloadChoice { First(Integer), Second(Integer) }\n",
     "function boolEqual using v(left: Boolean, right: Boolean): Boolean pure { left = right }\n",
     "function boolNotEqual using v(left: Boolean, right: Boolean): Boolean pure { left != right }\n",
     "function intEqual using v(left: Int[0,9], right: Int[0,9]): Boolean pure { left = right }\n",
@@ -26,6 +27,8 @@ pub const SOURCE: &str = concat!(
     "function flagNotEqual using v(left: Flag, right: Flag): Boolean pure { left != right }\n",
     "function choiceEqual using v(left: Choice, right: Choice): Boolean pure { left = right }\n",
     "function choiceNotEqual using v(left: Choice, right: Choice): Boolean pure { left != right }\n",
+    "function payloadChoiceEqual using v(left: PayloadChoice, right: PayloadChoice): Boolean pure { left = right }\n",
+    "function payloadChoiceNotEqual using v(left: PayloadChoice, right: PayloadChoice): Boolean pure { left != right }\n",
     "function exerciseBoolEqual using v(x: Boolean, y: Boolean): Boolean pure { boolEqual(x,y) }\n",
     "function exerciseBoolNotEqual using v(x: Boolean, y: Boolean): Boolean pure { boolNotEqual(x,y) }\n",
     "function exerciseIntEqual using v(x: Int[0,9], y: Int[0,9]): Boolean pure { intEqual(x,y) }\n",
@@ -36,6 +39,8 @@ pub const SOURCE: &str = concat!(
     "function exerciseFlagNotEqual using v(x: Flag, y: Flag): Boolean pure { flagNotEqual(x,y) }\n",
     "function exerciseChoiceEqual using v(x: Choice, y: Choice): Boolean pure { choiceEqual(x,y) }\n",
     "function exerciseChoiceNotEqual using v(x: Choice, y: Choice): Boolean pure { choiceNotEqual(x,y) }\n",
+    "function exercisePayloadChoiceEqual using v(x: PayloadChoice, y: PayloadChoice): Boolean pure { payloadChoiceEqual(x,y) }\n",
+    "function exercisePayloadChoiceNotEqual using v(x: PayloadChoice, y: PayloadChoice): Boolean pure { payloadChoiceNotEqual(x,y) }\n",
     "function negate using v(left: Int[0,9], right: Int[0,9]): Integer pure { -left }\n",
     "function exerciseNegate using v(x: Int[0,9], y: Int[0,9]): Integer pure { negate(x,y) }\n",
     "function makePairA using v(): Pair pure { Pair(true,false) }\n",
@@ -44,6 +49,9 @@ pub const SOURCE: &str = concat!(
     "function makeFlagB using v(): Flag pure { Flag { flag: false } }\n",
     "function makeChoiceA using v(): Choice pure { Choice::First }\n",
     "function makeChoiceB using v(): Choice pure { Choice::Second }\n",
+    "function makePayloadChoiceA using v(): PayloadChoice pure { PayloadChoice::First(1) }\n",
+    "function makePayloadChoiceB using v(): PayloadChoice pure { PayloadChoice::First(2) }\n",
+    "function makePayloadChoiceC using v(): PayloadChoice pure { PayloadChoice::Second(1) }\n",
 
 );
 
@@ -75,7 +83,7 @@ pub fn acquire(bytes: &[u8]) -> (CheckedClosureCompilation, CheckedPackageV2) {
 }
 
 /// Selected equality declarations in original source order.
-pub const NAMES: [&str; 10] = [
+pub const NAMES: [&str; 12] = [
     "boolEqual",
     "boolNotEqual",
     "intEqual",
@@ -86,9 +94,11 @@ pub const NAMES: [&str; 10] = [
     "flagNotEqual",
     "choiceEqual",
     "choiceNotEqual",
+    "payloadChoiceEqual",
+    "payloadChoiceNotEqual",
 ];
 /// Distinct original call occurrences for each selected equality declaration.
-pub const EXERCISES: [&str; 10] = [
+pub const EXERCISES: [&str; 12] = [
     "exerciseBoolEqual",
     "exerciseBoolNotEqual",
     "exerciseIntEqual",
@@ -99,4 +109,6 @@ pub const EXERCISES: [&str; 10] = [
     "exerciseFlagNotEqual",
     "exerciseChoiceEqual",
     "exerciseChoiceNotEqual",
+    "exercisePayloadChoiceEqual",
+    "exercisePayloadChoiceNotEqual",
 ];

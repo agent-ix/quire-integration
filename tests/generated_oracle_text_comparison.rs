@@ -104,6 +104,23 @@ const ROWS: &[Row] = &[
     },
 ];
 
+fn input_cases(row: &Row) -> Vec<(&'static str, &'static str, Expected)> {
+    let boundary = match row.name {
+        "equal" => ("", "", Expected::Fixed(true)),
+        "unequal" => ("abcdefghijklmnop", "", Expected::Fixed(true)),
+        "less" => ("", "abcdefghijklmnop", Expected::Fixed(true)),
+        "greater" => ("abcdefghijklmnop", "", Expected::Fixed(true)),
+        "less_or_equal" => (
+            "abcdefghijklmnop",
+            "abcdefghijklmnop",
+            Expected::Fixed(true),
+        ),
+        "greater_or_equal" => ("", "", Expected::Fixed(true)),
+        _ => panic!("unselected text comparison row"),
+    };
+    vec![(row.left, row.right, row.expected), boundary]
+}
+
 fn text(value: &str, profile: TextProfile) -> Text {
     admit_text(
         &TextPayload::from_utf8(value.as_bytes()).expect("authored UTF-8"),
@@ -220,71 +237,85 @@ fn observe() {
             .graph()
             .function_by_identity(identity)
             .expect("actual checked body");
-        let left = text(row.left, case.profile);
-        let right = text(row.right, case.profile);
-        for work in [1024, 0, 1] {
-            let mut meter = Meter::new(family_scalar_limits::limits(work));
-            let evaluation = qsl_eval::value::evaluate_closed_with_frame(
-                &authority,
-                function.body,
-                function.slots,
-                vec![Value::Text(left.clone()), Value::Text(right.clone())],
-                function.formed_units,
-                &mut meter,
-            )
-            .expect("public checked body evaluation");
-            let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
-                panic!("selected text value family");
-            };
-            if work == 1024 {
-                assert!(
-                    matches!(&outcome, Outcome::Completed(Value::Boolean(value))
-                        if *value == row.expected.value(case.profile)),
-                    "{} required typed result: {outcome:?}",
-                    case.name
-                );
-                assert!(evaluation.location.is_none());
-            } else if work == 0 {
-                assert!(
-                    matches!(&outcome, Outcome::Incomplete(stop)
+        for (left_input, right_input, expected_input) in input_cases(row) {
+            let left = text(left_input, case.profile);
+            let right = text(right_input, case.profile);
+            for work in [1024, 0, 1] {
+                let mut meter = Meter::new(family_scalar_limits::limits(work));
+                let evaluation = qsl_eval::value::evaluate_closed_with_frame(
+                    &authority,
+                    function.body,
+                    function.slots,
+                    vec![Value::Text(left.clone()), Value::Text(right.clone())],
+                    function.formed_units,
+                    &mut meter,
+                )
+                .expect("public checked body evaluation");
+                let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
+                    panic!("selected text value family");
+                };
+                if work == 1024 {
+                    assert!(
+                        matches!(&outcome, Outcome::Completed(Value::Boolean(value))
+                        if *value == expected_input.value(case.profile)),
+                        "{} required typed result: {outcome:?}",
+                        case.name
+                    );
+                    assert!(evaluation.location.is_none());
+                } else if work == 0 {
+                    assert!(
+                        matches!(&outcome, Outcome::Incomplete(stop)
                         if stop.limit_kind == LimitKind::WorkUnits
                             && stop.limit == 0
                             && stop.consumed == 0),
-                    "{} required work-zero stop: {outcome:?}",
-                    case.name
+                        "{} required work-zero stop: {outcome:?}",
+                        case.name
+                    );
+                    assert!(evaluation.location.is_some());
+                } else if matches!(&outcome, Outcome::Incomplete(_)) {
+                    assert!(evaluation.location.is_some());
+                }
+                assert!(
+                    evaluation.losses.is_empty(),
+                    "{}: {:?}",
+                    case.name,
+                    evaluation.losses
                 );
-                assert!(evaluation.location.is_some());
-            } else if matches!(&outcome, Outcome::Incomplete(_)) {
-                assert!(evaluation.location.is_some());
-            }
-            assert!(
-                evaluation.losses.is_empty(),
-                "{}: {:?}",
-                case.name,
-                evaluation.losses
-            );
-            let losses = evaluation
-                .losses
-                .into_iter()
-                .map(|loss| loss.loss)
-                .collect::<Vec<_>>();
-            expected.push(oracle_observation::snapshot(&outcome, &losses, &meter));
-            driver.push_str(&format!(r#"
+                let losses = evaluation
+                    .losses
+                    .into_iter()
+                    .map(|loss| loss.loss)
+                    .collect::<Vec<_>>();
+                expected.push(oracle_observation::snapshot(&outcome, &losses, &meter));
+                driver.push_str(&format!(r#"
 {{ let left=text({:?},TextProfile::{:?}); let right=text({:?},TextProfile::{:?}); let mut meter=Meter::new({:?});
 let actual=quire_exact_scalar_oracles::{}(&left,&right,&mut meter).expect("original text operand admission");
 let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new();
 println!("IT019_OBSERVATION {{}}",oracle_observation::snapshot(&lift(actual),&losses,&meter)); }}
-"#, row.left, case.profile, row.right, case.profile, family_scalar_limits::limits(work), generated.symbol));
+"#, left_input, case.profile, right_input, case.profile, family_scalar_limits::limits(work), generated.symbol));
+            }
         }
     }
     driver.push_str("}\n");
     let actual = generated_oracle::execute(&output.artifacts, &driver);
     assert_eq!(actual.len(), expected.len());
-    for ((case, work), (actual, expected)) in cases
+    for ((case, left, right, work), (actual, expected)) in cases
         .iter()
-        .flat_map(|case| [1024, 0, 1].into_iter().map(move |work| (case, work)))
+        .flat_map(|case| {
+            input_cases(case.row)
+                .into_iter()
+                .flat_map(move |(left, right, _)| {
+                    [1024, 0, 1]
+                        .into_iter()
+                        .map(move |work| (case, left, right, work))
+                })
+        })
         .zip(actual.iter().zip(&expected))
     {
-        assert_eq!(actual, expected, "{} at work {work}", case.name);
+        assert_eq!(
+            actual, expected,
+            "{} ({left:?}, {right:?}) at work {work}",
+            case.name
+        );
     }
 }

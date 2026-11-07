@@ -42,13 +42,14 @@ receives only its own measured credit; full family completion remains Planned.
    FunctionCall. Stops retain the source body origin, WorkUnits allowance,
    consumed work and next charge 1 for FunctionCall. EqualityPlanForm's next
    charge is 2 for primitives and nullary union values, 6 for the Boolean pair
-   tuple and 4 for the single-field Boolean record. Every other counter is zero.
+   tuple and 4 for the single-field Boolean record and nonempty Integer-payload
+   union. Every other counter is zero.
 4. Compare actual argument arity and kind refusals, including combined invalid
    count/kind precedence, with zero charges and counters. For Integer inputs
    require the actual Int[0,9] source bound to refuse Integer 10. Independently
    check and admit a changed valid source, require its original owner refusal
    before charges, then execute the original healthy symbols.
-5. Keep deeper nominal closures, alternate union payloads and per-form
+5. Keep deeper nominal closures and per-form
    operational boundaries Planned under IR-842 until their own actual source
    cohorts and complete observations exist. Whole-function nominal rows use
    FR-485 sessions and have no dependency on operation-only binding support.
@@ -68,13 +69,15 @@ receives only its own measured credit; full family completion remains Planned.
    OperandTypeMismatch at position 0, expected Boolean and found original Integer,
    with a healthy generated sibling and no execution credit for the refusal.
 
-7. Add original tuple Pair(Boolean, Boolean), record Flag { flag: Boolean; }
-   and union Choice { First, Second } declarations with Equal/NotEqual functions
+7. Add original tuple Pair(Boolean, Boolean), record Flag { flag: Boolean; },
+   nullary union Choice { First, Second }, and nonempty union
+   PayloadChoice { First(Integer), Second(Integer) } declarations with Equal/NotEqual functions
    and separate exercise calls. Obtain authentic argument Values by running
    independently selected closed source constructor functions through public
    FR-485 sessions. These completed Values are external inputs to fresh whole
    equality calls; constructor meters are never reused or subtracted. Require
-   explicit equal/different Boolean answers and the same full whole-call
+   explicit equal/different Boolean answers, including equal payloads,
+   changed payloads in one member and changed members, and the same full whole-call
    observations. Actual nominal parameter descriptors come from the emitted
    parameter nodes. No fabricated owner key, TypeEnvironment or copied renderer
    assembly is permitted.
@@ -89,7 +92,7 @@ receives only its own measured credit; full family completion remains Planned.
 ## Expected Results
 
 `generated_oracle_family_function_equality::primitive_and_nominal_function_equality_matches_fresh_qsl_sessions`
-passes 78 whole-call comparisons, 32 input refusals and ten changed-owner
+passes 96 whole-call comparisons, 38 input refusals and twelve changed-owner
 refusals. Each work stop and completed Boolean has an independent required
 shape, and both sides compare full typed outcome, location, located loss,
 ordered admitted charges and every counter. The original QSL constructors
@@ -124,6 +127,8 @@ execute against the refreshed branch-main dependency cohort.
 | FR-021 CompositeEquality NotEqual / Flag{flag:Boolean} | Passed | Same and different authentic source records, three allowances |
 | FR-021 CompositeEquality Equal / Choice{First,Second} | Passed | Same and different nullary source union values, three allowances |
 | FR-021 CompositeEquality NotEqual / Choice{First,Second} | Passed | Same and different nullary source union values, three allowances |
+| FR-021 CompositeEquality Equal / PayloadChoice{First(Integer),Second(Integer)} | Passed | Original payload constructors; same payload, changed payload and changed member; three allowances and complete whole-call comparison |
+| FR-021 CompositeEquality NotEqual / PayloadChoice{First(Integer),Second(Integer)} | Passed | The same original payload cohort and complete whole-call comparison |
 | FR-021 Scalar Negate | Passed (nonexecuted) | Actual unary source body returns UnsupportedOperator; healthy nominal sibling generates |
 | FR-021 equality result descriptor | Passed (nonexecuted) | SignatureMismatch and healthy sibling |
 | FR-021 equality parameter descriptor | Passed (nonexecuted) | SignatureMismatch and healthy sibling |
@@ -137,10 +142,10 @@ execute against the refreshed branch-main dependency cohort.
 | FR-018 NotEqual / closed Boolean literals | Passed | Four truth pairs and three operation allowances |
 | FR-018 Equal / closed Integer literals | Passed | Three original inline-literal pairs and three allowances; complete native operation comparisons with independent answers and exact stops |
 | FR-018 NotEqual / closed Integer literals | Passed | Three original inline-literal pairs and three allowances; complete native operation comparisons with independent answers and exact stops |
-| FR-018 parameterized Integer operations | Planned | IR-842: original function-body local bindings are unavailable to public evaluate_closed; QSL-1736 tracks that function-stage need. Original protocol-slot frames have a separate public entry, exercised by TC-105 |
-| FR-018 constructed nominal/collection operations | Planned | IR-842; QSL-1739 tracks remaining operation-ledger support: direct closed function-body constructors add child charges; remaining rows need their own matching original protocol-stage or other public operation cohort. TC-105 establishes one genuine tuple protocol-slot route without subtraction |
-| FR-018 options, recursive leaves, conversion-target combinations and remaining refusal boundaries | Planned | IR-842: each original-source admission, generator descriptor and complete public operation observation remains to be authored; no blanket constructor claim applies to contextual absent literals |
-| FR-021 deeper nominal shapes, union payloads and remaining per-form boundaries | Planned | IR-842: author additional actual source declarations/constructors, derive admitted nominal inputs and execute their public whole-call cohorts; no missing QSL operation ledger blocks these sessions |
+| FR-018 parameterized Integer operations | Planned | QSL-1736 has published function-body bindings; IR-1381 owns the source-backed operation comparison in its separate PR |
+| FR-018 constructed nominal/collection operations | Planned | QSL-1739 has published the operation ledger; IR-1381 owns the remaining original-source comparisons in its separate PR. Direct closed constructor-body charges cannot be subtracted |
+| FR-018 options, recursive leaves, conversion-target combinations and remaining refusal boundaries | Planned | IR-1381 owns each original-source admission, descriptor and complete operation observation; contextual absent literals receive no blanket constructor claim |
+| FR-021 deeper nominal shapes and remaining per-form boundaries | Planned | IR-842: additional actual source declarations/constructors, admitted nominal inputs and whole-call cohorts remain to execute |
 
 Full FR-018, FR-021 and IT-019-SC-05 remain Planned while their owner-derived
 inventories contain unexecuted rows. Typed nonexecuted generation dispositions

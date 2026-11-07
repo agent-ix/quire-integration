@@ -387,7 +387,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
     );
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
-        ["SC05 function equality: 78 envelopes, 32 input refusals, 10 owner refusals"]
+        ["SC05 function equality: 96 envelopes, 38 input refusals, 12 owner refusals"]
     );
 }
 

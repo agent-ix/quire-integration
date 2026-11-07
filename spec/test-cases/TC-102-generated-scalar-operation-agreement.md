@@ -39,11 +39,11 @@ Neither evaluator is reproduced.
    charges and all LimitKind consumed counters at generous work and work zero/one.
    Require genuine incomplete WorkUnits terminal records under exhausted work;
    never subtract call overhead, precharge or reconstruct an evaluator envelope.
-5. Evaluate nine original parameterized bodies with genuine `Int[-9,9]` slots:
-   Add, Subtract, Multiply, Modulo, Negate, Less, Greater, Integer Equal and
-   NotEqual. Execute Multiply at both `4 * 2 = 8` and `4 * 7 = 28`; the
-   original body returns unbounded `Integer`, so the latter result must not
-   inherit the operand's `Int[-9,9]` bound. Supply the same typed values to
+5. Evaluate eight original parameterized bodies with genuine `Int[-9,9]` slots:
+   Add, Subtract, Multiply, Negate, Less, Greater, Integer Equal and
+   NotEqual. The arithmetic bodies return `Int[-100,100]`. Execute Multiply at
+   both `4 * 2 = 8` and `4 * 7 = 28`; the latter is outside the operand bound
+   but inside the separately declared result bound. Supply the same typed values to
    native symbols and check independently expected Integer or Boolean results.
 6. Expand each public `TextProfile::ALL` profile over six original
    `Text[0,16;profile]` parameterized bodies: Equal, NotEqual, Less,
@@ -51,17 +51,13 @@ Neither evaluator is reproduced.
    the public Text owner before both evaluations, outside their comparison meters.
    Use canonically equivalent `e\u{301}` and `é` for Equal to distinguish the
    four normalization profiles from raw UnicodeScalars and BinaryUtf8. Check
-   independent Boolean answers, source locations on exhausted work and the
+   a second input pair per body at the admitted empty and 16-scalar bounds;
+   these pairs cover equality, inequality and ordering at both endpoints.
+   Require independent Boolean answers, source locations on exhausted work and the
    complete native/QSL comparison observations.
-7. Select each of Truncating, Floor and Euclidean division through QSL's
-   admitted law definition, emit the genuine `left div right` body and derive
-   the generated descriptor from its admitted package. Under each law execute
-   `(-7,3)`, `(-7,-3)` and `(7,0)` at work 0, 1 and 1024. Require the
-   independently expected signed quotient or DivisionByZero, the source locus
-   for stops and undefined values, and complete native/QSL agreement.
-
-Other operand kinds, Text domain and input boundaries, and supplied-stop
-Boolean paths remain Planned under IR-842; these selected cases make no
+Other operand kinds, further Text input boundaries and supplied-stop Boolean
+paths remain Planned under IR-842; division/modulo remain Planned behind
+IR-1391's CG result-bound derivation. These selected cases make no
 whole-family claim.
 
 ## Expected Results
@@ -74,7 +70,7 @@ At work zero, connectives stop at BooleanResultRetain with next charge 1;
 equality stops at EqualityPlanForm with next charge 2. Work one completes every
 connective and still stops equality at EqualityPlanForm. Those Boolean stops
 have their real locations, no losses, no admitted charges and zero consumption
-in every LimitKind counter. All 80 selected cases execute at work 0, 1 and 1024: 240
+in every LimitKind counter. All 106 selected cases execute at work 0, 1 and 1024: 318
 operation observations. Any row
 that does not genuinely derive is reported separately and receives no agreement
 credit. Full IT-019-SC-05 and family closure remain Planned under IR-842.

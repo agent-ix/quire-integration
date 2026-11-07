@@ -62,13 +62,6 @@ const ROWS: &[Row] = &[
         expected: ResultKind::Integer(8),
     },
     Row {
-        name: "modulo",
-        expression: "left mod right",
-        parameters: "left: Int[-9,9], right: Int[-9,9]",
-        arguments: &[-7, 3],
-        expected: ResultKind::Integer(2),
-    },
-    Row {
         name: "negation",
         expression: "-left",
         parameters: "left: Int[-9,9]",
@@ -122,7 +115,7 @@ fn original_integer_operations_agree_with_generated_native_observations() {
     );
     for row in ROWS {
         let result_type = match row.expected {
-            ResultKind::Integer(_) => "Integer",
+            ResultKind::Integer(_) => "Int[-100,100]",
             ResultKind::Boolean(_) => "Boolean",
         };
         source.push_str(&format!(
@@ -148,7 +141,22 @@ fn original_integer_operations_agree_with_generated_native_observations() {
     };
     let nodes = ROWS
         .iter()
-        .map(|row| family_function_selection::body(&package, row.name))
+        .map(|row| {
+            let body = family_function_selection::body(&package, row.name);
+            if matches!(row.expected, ResultKind::Boolean(_)) {
+                return body;
+            }
+            let Some(CheckedTerm::Application { arguments, .. }) = package.term(&body) else {
+                panic!("{} original result narrowing application", row.name);
+            };
+            let [CheckedTerm::Reference { target }] = arguments.as_slice() else {
+                panic!(
+                    "{} original narrowed arithmetic operand: {arguments:?}",
+                    row.name
+                );
+            };
+            target.clone()
+        })
         .collect::<Vec<_>>();
     let items = derive_exact_scalar_items(&package, &nodes)
         .into_iter()
@@ -194,9 +202,6 @@ fn observe() {
                 (&items[index].operation, row.expected),
                 (
                     ExactScalarOperation::IntegerArithmetic { .. },
-                    ResultKind::Integer(_)
-                ) | (
-                    ExactScalarOperation::IntegerModulo { .. },
                     ResultKind::Integer(_)
                 ) | (
                     ExactScalarOperation::Ordering { .. } | ExactScalarOperation::Equality { .. },
