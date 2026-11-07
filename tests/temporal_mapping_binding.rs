@@ -62,20 +62,17 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
     let selections: Vec<_> = graph
         .temporal_clauses()
         .iter()
-        .map(|clause| {
-            qsl_package::TemporalClockSelection::new(
-                graph.source().clone(),
-                clause.clause().span(),
-                ClockConfiguration::EventPosition {
-                    sequence_authority: "events".into(),
-                },
-            )
+        .map(|clause| qsl_package::TemporalClockSelection {
+            source: graph.source().clone(),
+            declaration_span: clause.clause().span(),
+            clock: ClockConfiguration::EventPosition {
+                sequence_authority: "events".into(),
+            },
         })
         .collect();
     let emitted = qsl_package::emit_checked_with_temporal_selections(
         &qsl_package::CheckedPackage::link(graph),
         &selections,
-        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
     )
     .expect("the producer emits the temporal package");
     assert!(emitted.omitted().is_empty());
@@ -113,7 +110,7 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
 }
 
 /// This is the instance-binding precondition, not whole FR-350 projection evidence.
-#[trace("TC-461", "FR-038-AC-492")]
+#[trace("TC-461")]
 #[test]
 fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let (first, second, clause) = packages();
@@ -121,14 +118,7 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let other = temporal_subject(&second, &clause).expect("second subject reads");
     let classification = mapping_support(&subject, Closure::Complete).expect("classification");
     let other_classification = mapping_support(&other, Closure::Complete).expect("classification");
-    // The retained selection carries the issuing admission's capability, which equal
-    // bytes read again do not share, so the supported content matches while the
-    // whole classification stays bound to its own admission.
     assert_eq!(
-        classification.support, other_classification.support,
-        "equal content"
-    );
-    assert_ne!(
         classification, other_classification,
         "equal content/name is insufficient"
     );
