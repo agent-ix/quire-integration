@@ -247,3 +247,54 @@ fn quantity_comparison_operators_over_the_unit_grid_match_generated_native_oracl
         names.len() * 5
     );
 }
+
+/// Every public quantity arithmetic operator over the declared unit grid.
+#[trace(
+    "TC-106",
+    "IT-019-SC-04",
+    "QSpec-TC-187",
+    "QSpec-FR-142",
+    "QSpec-FR-142-AC-6"
+)]
+#[test]
+fn quantity_arithmetic_operators_over_the_unit_grid_match_generated_native_oracles() {
+    let extra = format!("{EXTRA} unit inch : Distance = rational(127, 5000) * m;");
+    let mut expressions = Vec::new();
+    for unit in ["m", "cm", "inch", "kg", "s"] {
+        for operator in ["+", "-"] {
+            expressions.push(format!("5 {unit} {operator} 3 {unit}"));
+            expressions.push(format!("3 {unit} {operator} 5 {unit}"));
+        }
+    }
+    for (left, right) in [("m", "s"), ("cm", "inch"), ("m", "m"), ("kg", "s"), ("cm", "cm")] {
+        for operator in ["*", "/"] {
+            expressions.push(format!("6 {left} {operator} 4 {right}"));
+            expressions.push(format!("1 {left} {operator} 3 {right}"));
+        }
+    }
+    for unit in ["m", "cm", "kg"] {
+        for exponent in [0, 1, 2, 3, -1, -2] {
+            expressions.push(format!("2 {unit} ^ {exponent}"));
+        }
+    }
+    let mut functions = String::new();
+    let mut names = Vec::new();
+    for (index, expression) in expressions.iter().enumerate() {
+        let name = format!("arithmetic_{index}");
+        functions.push_str(&format!(
+            "function {name} using v(): Boolean pure {{ ({expression}) = ({expression}) }}\n"
+        ));
+        names.push(name);
+    }
+    let original = source::original_with(&extra, &functions);
+    let mut cases = Vec::new();
+    for name in &names {
+        for l in [roomy(1024), roomy(0), roomy(1), roomy(3), roomy(5)] {
+            cases.push((name.as_str(), true, l));
+        }
+    }
+    assert_eq!(
+        source::generation(&original, &cases, &[], &[]),
+        names.len() * 5
+    );
+}
