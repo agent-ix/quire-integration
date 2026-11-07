@@ -80,33 +80,36 @@ fn packages(formula: &str, profile: &str) -> (CheckedPackageV2, CheckedPackageV2
         .temporal_clauses()
         .iter()
         .filter(|_| !profile.contains("infinite-trace"))
-        .map(|clause| qsl_package::TemporalClockSelection {
-            source: graph.source().clone(),
-            declaration_span: clause.clause().span(),
-            clock: if profile.contains("fixed-sample") {
-                ClockConfiguration::FixedSample {
-                    epoch: ClockExactNumber::Integer {
-                        decimal: "0".into(),
-                    },
-                    period: ClockExactNumber::Integer {
-                        decimal: "1".into(),
-                    },
-                    unit: "tick".into(),
-                }
-            } else if profile.contains("timestamped-event") {
-                ClockConfiguration::TimestampedEvent {
-                    timestamp_unit: "tick".into(),
-                }
-            } else {
-                ClockConfiguration::EventPosition {
-                    sequence_authority: "events".into(),
-                }
-            },
+        .map(|clause| {
+            qsl_package::TemporalClockSelection::new(
+                graph.source().clone(),
+                clause.clause().span(),
+                if profile.contains("fixed-sample") {
+                    ClockConfiguration::FixedSample {
+                        epoch: ClockExactNumber::Integer {
+                            decimal: "0".into(),
+                        },
+                        period: ClockExactNumber::Integer {
+                            decimal: "1".into(),
+                        },
+                        unit: "tick".into(),
+                    }
+                } else if profile.contains("timestamped-event") {
+                    ClockConfiguration::TimestampedEvent {
+                        timestamp_unit: "tick".into(),
+                    }
+                } else {
+                    ClockConfiguration::EventPosition {
+                        sequence_authority: "events".into(),
+                    }
+                },
+            )
         })
         .collect();
     let emitted = qsl_package::emit_checked_with_temporal_selections(
         &qsl_package::CheckedPackage::link(graph),
         &selections,
+        qsl_package::EmitLimits::new(16 * 1024 * 1024),
     )
     .expect("the producer emits the temporal package");
     assert!(emitted.omitted().is_empty());

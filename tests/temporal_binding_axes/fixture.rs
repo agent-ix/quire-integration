@@ -67,17 +67,20 @@ pub(super) fn package(declarations: &str) -> CheckedPackageV2 {
     let clocks = graph
         .temporal_clauses()
         .iter()
-        .map(|declaration| qsl_package::TemporalClockSelection {
-            source: graph.source().clone(),
-            declaration_span: declaration.clause().span(),
-            clock: ClockConfiguration::EventPosition {
-                sequence_authority: "events".into(),
-            },
+        .map(|declaration| {
+            qsl_package::TemporalClockSelection::new(
+                graph.source().clone(),
+                declaration.clause().span(),
+                ClockConfiguration::EventPosition {
+                    sequence_authority: "events".into(),
+                },
+            )
         })
         .collect::<Vec<_>>();
     let emitted = qsl_package::emit_checked_with_temporal_selections(
         &qsl_package::CheckedPackage::link(graph),
         &clocks,
+        qsl_package::EmitLimits::new(16 * 1024 * 1024),
     )
     .expect("actual native emitter");
     assert!(emitted.omitted().is_empty());

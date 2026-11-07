@@ -62,17 +62,20 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
     let selections: Vec<_> = graph
         .temporal_clauses()
         .iter()
-        .map(|clause| qsl_package::TemporalClockSelection {
-            source: graph.source().clone(),
-            declaration_span: clause.clause().span(),
-            clock: ClockConfiguration::EventPosition {
-                sequence_authority: "events".into(),
-            },
+        .map(|clause| {
+            qsl_package::TemporalClockSelection::new(
+                graph.source().clone(),
+                clause.clause().span(),
+                ClockConfiguration::EventPosition {
+                    sequence_authority: "events".into(),
+                },
+            )
         })
         .collect();
     let emitted = qsl_package::emit_checked_with_temporal_selections(
         &qsl_package::CheckedPackage::link(graph),
         &selections,
+        qsl_package::EmitLimits::new(16 * 1024 * 1024),
     )
     .expect("the producer emits the temporal package");
     assert!(emitted.omitted().is_empty());

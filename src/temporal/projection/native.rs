@@ -96,9 +96,12 @@ pub(super) fn check<'subject, 'input>(
     {
         return Err(Error::NativePremise(Premise::Occurrence));
     }
-    if native.request.control.as_ref().is_some_and(|control| {
-        !subject.requirements().contains(&control)
-    }) {
+    if native
+        .request
+        .control
+        .as_ref()
+        .is_some_and(|control| !subject.requirements().contains(&control))
+    {
         return Err(Error::NativePremise(Premise::Control));
     }
     let name = subject
