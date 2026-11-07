@@ -94,7 +94,7 @@ pub(super) fn package(declarations: &str) -> CheckedPackageV2 {
         evidence.support_feature(feature.as_str().expect("feature identity"));
     }
     evidence
-        .insert_domain_package_document("acme/orders", &model)
+        .insert_domain_package_document("acme/orders", model.as_slice())
         .expect("reader model evidence");
     match read_checked_package(bytes, CheckedPackageReadLimits::bounded(), &evidence) {
         CheckedPackageDispatchResult::AdmittedV2(package) => *package,

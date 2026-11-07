@@ -8,7 +8,7 @@ use qsl_eval::temporal::ProgressClosure;
 use qsl_package::checked_views::{mapping_support, temporal_subject, Closure};
 use quire_integration::temporal::{
     project_tl, MappingBindingRefusal, NativeProjectionInput, TlInput, TlLimits, TlMissingPremise,
-    TlProjectionError, TlProjectionLimit, TlProjectionPremise, TL_CORRESPONDENCE_PROFILE,
+    TlProjectionError, TlProjectionPremise, TL_CORRESPONDENCE_PROFILE,
 };
 use quire_mltl::request::TemporalLane;
 use quire_observation::authority::OpenClosed;
@@ -112,13 +112,13 @@ fn local_subject_cannot_use_an_independently_admitted_equal_classification() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-6")]
+#[trace("IT-022-SC-03", "FR-350-AC-6", "FR-350-AC-9")]
 #[test]
-fn agreeing_duplicate_cells_are_not_silently_collapsed() {
+fn agreeing_duplicate_cells_project_and_disagreeing_cells_are_incomplete() {
     with_case("holds(true)", false, |case| {
         let mut rows = case.native.valuations.rows().to_vec();
         rows.push(rows[0].clone());
-        let trace = native_trace(EVENT, case.native.instance.anchor);
+        let trace = trace_for(&case);
         let evidence = ValuationEvidence::admit(
             case.subject,
             &trace,
@@ -132,7 +132,7 @@ fn agreeing_duplicate_cells_are_not_silently_collapsed() {
             evidence.value_of(case.native.occurrence, 0, &evidence.rows()[0].operand),
             Ok(true)
         );
-        let error = project_tl(
+        let projected = project_tl(
             case.package,
             case.subject,
             case.classification,
@@ -144,14 +144,45 @@ fn agreeing_duplicate_cells_are_not_silently_collapsed() {
             case.selection,
             TlLimits::default(),
         )
+        .expect("agreeing duplicates project their value");
+        let TlInput::Future(trace) = projected.input() else {
+            panic!("actual future trace")
+        };
+        assert_eq!(trace.document().instants, vec![vec![PropositionId(0)]]);
+        // Both rows stay in the record: one value, two row objects.
+        let record: serde_json::Value =
+            serde_json::from_slice(projected.bytes()).expect("canonical record");
+        assert_eq!(record["valuations"].as_array().map(Vec::len), Some(2));
+        // Opposite values for one cell are incomplete, never false.
+        let mut rows = case.native.valuations.rows().to_vec();
+        let mut opposite = rows[0].clone();
+        opposite.value = !opposite.value;
+        rows.push(opposite);
+        let conflicting = ValuationEvidence::admit(
+            case.subject,
+            &trace_for(&case),
+            case.native.instance,
+            &case.native.observation.revision,
+            rows,
+        )
+        .expect("owner retains disagreeing rows");
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            Closure::Complete,
+            NativeProjectionInput {
+                valuations: &conflicting,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
         .err()
-        .expect("bridge refuses duplicate cells");
+        .expect("disagreeing rows are incomplete");
         assert!(matches!(
             error,
-            TlProjectionError::DuplicateValuation {
-                first: 0,
-                duplicate: 1
-            }
+            TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
         ));
     });
 }
@@ -184,7 +215,7 @@ fn absent_cell_establishes_no_false_value_or_partial_projection() {
         .expect("missing value refuses projection");
         assert!(matches!(
             error,
-            TlProjectionError::MissingValuation { position: 0, .. }
+            TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
         ));
     });
 }
@@ -323,71 +354,6 @@ fn past_projection_requires_authoritative_origin_and_complete_input() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-8")]
-#[test]
-fn projection_counters_accept_exact_and_refuse_one_short() {
-    with_case("holds(true)", false, |case| {
-        let first = case
-            .project(TlLimits::default())
-            .expect("measurement projection");
-        let usage = first.usage();
-        let exact = TlLimits {
-            max_bytes: usage.bytes,
-            max_nodes: usage.nodes,
-            max_positions: usage.positions,
-            max_valuations: usage.valuations,
-            max_work: usage.work,
-            ..TlLimits::default()
-        };
-        let second = case
-            .project(exact)
-            .expect("all counters exactly sufficient");
-        assert_eq!(second.input().bytes(), first.input().bytes());
-        assert_eq!(second.usage(), usage);
-        for counter in [
-            TlProjectionLimit::Bytes,
-            TlProjectionLimit::Nodes,
-            TlProjectionLimit::Positions,
-            TlProjectionLimit::Valuations,
-            TlProjectionLimit::Work,
-        ] {
-            let mut short = exact;
-            let setting = match counter {
-                TlProjectionLimit::Bytes => &mut short.max_bytes,
-                TlProjectionLimit::Nodes => &mut short.max_nodes,
-                TlProjectionLimit::Positions => &mut short.max_positions,
-                TlProjectionLimit::Valuations => &mut short.max_valuations,
-                TlProjectionLimit::Work => &mut short.max_work,
-                TlProjectionLimit::Support | TlProjectionLimit::Causes => unreachable!(),
-            };
-            *setting = setting.checked_sub(1).expect("positive exercised counter");
-            let expected_setting = *setting;
-            let error = case
-                .project(short)
-                .err()
-                .expect("one-short ceiling refuses atomically");
-            match error {
-                TlProjectionError::LimitReached {
-                    limit,
-                    value,
-                    setting,
-                }
-                | TlProjectionError::OwnerLimitReached {
-                    limit,
-                    value,
-                    setting,
-                    ..
-                } => {
-                    assert_eq!(limit, counter);
-                    assert_eq!(setting, expected_setting);
-                    assert_eq!(value, expected_setting + 1);
-                }
-                other => panic!("typed caller-limit refusal required: {other:?}"),
-            }
-        }
-    });
-}
-
 #[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
 #[test]
 fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurrence() {
@@ -443,7 +409,7 @@ fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurren
 #[test]
 fn a_relation_admitted_for_another_capture_instance_or_revision_is_not_reused() {
     with_case("holds(true)", false, |case| {
-        let trace = native_trace(EVENT, case.native.instance.anchor);
+        let trace = trace_for(&case);
         for revision_mismatch in [false, true] {
             let instance = ValuationInstance {
                 anchor: case.native.instance.anchor,

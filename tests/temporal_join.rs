@@ -842,7 +842,7 @@ fn wrong_genuine_native_and_mapped_results_do_not_authorize_the_expected_join() 
 
 #[trace("TC-461", "FR-350-AC-5")]
 #[test]
-fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_authority() {
+fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
     with_case("holds(true)", false, |case| {
         let original_projection = case
             .project(TlLimits::default())
@@ -1005,17 +1005,20 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
                 );
                 assert_eq!(mixed.decision(), TlJoinDecision::Conflict);
                 assert_eq!(mixed.value(), None);
-                assert!(matches!(
-                    join_tl(
-                        &corrected_projection,
-                        Some(&corrected_native),
-                        Some(&corrected_mapped),
-                        Some(&prior),
-                        TlLimits::default(),
-                        &mut native_budget()
-                    ),
-                    Err(TlJoinError::PredecessorAuthority { native_encoding_usage: Some(encoding), native_predecessor_usage: Some(usage) }) if usage.work > 0 && usage.storage > 0 && encoding.work > 0 && encoding.storage > 0
-                ));
+                let corrected = join_tl(
+                    &corrected_projection,
+                    Some(&corrected_native),
+                    Some(&corrected_mapped),
+                    Some(&prior),
+                    TlLimits::default(),
+                    &mut native_budget(),
+                )
+                .expect("a correction over both direct predecessors joins");
+                assert_eq!(corrected.decision(), TlJoinDecision::EqualFinal);
+                assert!(corrected.causes().is_empty());
+                assert!(corrected
+                    .native_predecessor_usage()
+                    .is_some_and(|usage| usage.work > 0 && usage.storage > 0));
                 let wrong = join_tl(
                     &corrected_projection,
                     Some(&corrected_native),
@@ -1029,7 +1032,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
                 assert_eq!(wrong.value(), None);
                 assert!(!wrong.native_admitted());
                 assert!(matches!(
-                    wrong.owner_refusals().native_predecessor(),
+                    wrong.owner_refusals().native(),
                     Some(native::ReportRefusal::InvalidPredecessor)
                 ));
                 let wire: Value = serde_json::from_slice(wrong.bytes()).unwrap();
@@ -1059,7 +1062,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
                         TlLimits::default(),
                         &mut native_budget()
                     ),
-                    Err(TlJoinError::PredecessorAuthority { .. })
+                    Err(TlJoinError::ExpectedMismatch)
                 ));
                 assert_eq!(prior.bytes(), saved_prior);
                 assert_eq!(original_native.to_owner_bytes(), saved_native);
@@ -1338,10 +1341,6 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                         refused_native.owner_refusals().native(),
                         Some(native::ReportRefusal::BindingMismatch(_))
                     ));
-                    assert!(refused_native
-                        .owner_refusals()
-                        .native_predecessor()
-                        .is_none());
                     assert!(!refused_native.native_admitted());
                     let reread = read_tl_join(
                         refused_native.bytes(),

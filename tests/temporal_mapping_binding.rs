@@ -113,7 +113,7 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
 }
 
 /// This is the instance-binding precondition, not whole FR-350 projection evidence.
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-01", "FR-350-AC-2")]
 #[test]
 fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let (first, second, clause) = packages();
@@ -143,7 +143,7 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     );
     assert_eq!(
         validate_mapping_binding(&second, &subject, &classification, Closure::Complete),
-        Err(MappingBindingRefusal::ForeignClassification)
+        Err(MappingBindingRefusal::ForeignSubject)
     );
     assert_eq!(
         validate_mapping_binding(&first, &subject, &other_classification, Closure::Complete),

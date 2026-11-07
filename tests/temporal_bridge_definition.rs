@@ -3,14 +3,21 @@
 
 use ix_trace_rs::trace;
 use quire_integration::temporal::{
-    read_tl_bridge_definition, TlBridgeDefinitionRefusal as Refusal, TL_BRIDGE_DEFINITION,
+    read_tl_bridge_definition, TlBridgeDefinitionError as Refusal, TlLimits, TL_BRIDGE_DEFINITION,
 };
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6", "FR-350-AC-8")]
+fn limits(max_bytes: u64) -> TlLimits {
+    TlLimits {
+        max_bytes,
+        ..TlLimits::default()
+    }
+}
+
+#[trace("IT-022-SC-09", "FR-350-AC-3", "FR-350-AC-11")]
 #[test]
 fn authored_definition_selects_exact_members_and_canonical_bytes() {
     let exact = u64::try_from(TL_BRIDGE_DEFINITION.len()).unwrap();
-    let admitted = read_tl_bridge_definition(TL_BRIDGE_DEFINITION, exact).unwrap();
+    let admitted = read_tl_bridge_definition(TL_BRIDGE_DEFINITION, limits(exact)).unwrap();
     assert_eq!(admitted.authority(), "agent-ix/quire-integration");
     assert_eq!(admitted.identity(), "native-temporal-correspondence/v1");
     assert_eq!(
@@ -19,9 +26,13 @@ fn authored_definition_selects_exact_members_and_canonical_bytes() {
     );
     assert_eq!(admitted.version(), 1);
     assert_eq!(admitted.bytes(), TL_BRIDGE_DEFINITION);
+    assert_eq!(admitted.usage().bytes, exact);
     assert_eq!(
-        read_tl_bridge_definition(TL_BRIDGE_DEFINITION, exact - 1),
-        Err(Refusal::Bytes)
+        read_tl_bridge_definition(TL_BRIDGE_DEFINITION, limits(exact - 1)),
+        Err(Refusal::LimitReached {
+            value: exact,
+            setting: exact - 1
+        })
     );
     for (field, replacement, expected) in [
         (
@@ -45,7 +56,7 @@ fn authored_definition_selects_exact_members_and_canonical_bytes() {
         changed[field] = replacement;
         let bytes = quire_canonical::to_vec(&changed, quire_canonical::Limits::new(1024)).unwrap();
         assert_eq!(
-            read_tl_bridge_definition(&bytes, 1024),
+            read_tl_bridge_definition(&bytes, limits(1024)),
             Err(expected),
             "{field}"
         );
@@ -53,7 +64,7 @@ fn authored_definition_selects_exact_members_and_canonical_bytes() {
     let mut trailing = TL_BRIDGE_DEFINITION.to_vec();
     trailing.push(b' ');
     assert_eq!(
-        read_tl_bridge_definition(&trailing, 1024),
+        read_tl_bridge_definition(&trailing, limits(1024)),
         Err(Refusal::Canonical)
     );
     let duplicate = [
@@ -62,13 +73,13 @@ fn authored_definition_selects_exact_members_and_canonical_bytes() {
     ]
     .concat();
     assert_eq!(
-        read_tl_bridge_definition(&duplicate, 1024),
+        read_tl_bridge_definition(&duplicate, limits(1024)),
         Err(Refusal::Shape)
     );
     let mut value: serde_json::Value = serde_json::from_slice(TL_BRIDGE_DEFINITION).unwrap();
     value.as_object_mut().unwrap().remove("identity");
     assert_eq!(
-        read_tl_bridge_definition(&serde_json::to_vec(&value).unwrap(), 1024),
+        read_tl_bridge_definition(&serde_json::to_vec(&value).unwrap(), limits(1024)),
         Err(Refusal::Shape)
     );
     value
@@ -76,7 +87,7 @@ fn authored_definition_selects_exact_members_and_canonical_bytes() {
         .unwrap()
         .insert("unknown".to_owned(), true.into());
     assert_eq!(
-        read_tl_bridge_definition(&serde_json::to_vec(&value).unwrap(), 1024),
+        read_tl_bridge_definition(&serde_json::to_vec(&value).unwrap(), limits(1024)),
         Err(Refusal::Shape)
     );
 }

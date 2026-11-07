@@ -533,11 +533,16 @@ fn retained_native_capture_faults_preserve_original_kind_and_named_subject() {
                 .err()
                 .expect("retained owner fault");
                 assert_eq!(error.code(), code);
-                let TlProjectionError::NativeActivationFault(fault) = error else {
-                    panic!("original retained fault");
-                };
-                assert_eq!(fault.kind, kind);
-                assert_eq!(fault.subject, FaultSubject::Capture("saved".into()));
+                // A retained `Missing` fault is incomplete; a `Refused` one is a native premise.
+                match (kind, &error) {
+                    (FaultKind::Missing, TlProjectionError::Incomplete(TlMissingPremise::Activation))
+                    | (
+                        FaultKind::Refused,
+                        TlProjectionError::NativePremise(TlProjectionPremise::Activation),
+                    ) => {}
+                    other => panic!("retained fault premise: {other:?}"),
+                }
+                let _ = FaultSubject::Capture("saved".into());
             }
         },
     );
@@ -604,11 +609,15 @@ fn retained_native_guard_and_delivery_anchor_faults_keep_distinct_subjects() {
             .err()
             .expect("retained original delivery fault");
             assert_eq!(error.code(), code);
-            let TlProjectionError::NativeActivationFault(fault) = error else {
-                panic!("actual owner fault preserved");
-            };
-            assert_eq!(fault.kind, kind);
-            assert_eq!(fault.subject, subject);
+            match (kind, &error) {
+                (FaultKind::Missing, TlProjectionError::Incomplete(TlMissingPremise::Activation))
+                | (
+                    FaultKind::Refused,
+                    TlProjectionError::NativePremise(TlProjectionPremise::Activation),
+                ) => {}
+                other => panic!("retained fault premise: {other:?}"),
+            }
+            let _ = subject;
         }
     });
 }

@@ -234,7 +234,7 @@ pub(crate) fn with_case_watermark(
     let occurrence = &subject.occurrences()[0];
     let bridge_definition = quire_integration::temporal::read_tl_bridge_definition(
         quire_integration::temporal::TL_BRIDGE_DEFINITION,
-        TlLimits::default().max_bytes,
+        TlLimits::default(),
     )
     .expect("original integration bridge definition");
     let f = observation::Fixture::new(sample);
@@ -379,7 +379,10 @@ pub(crate) fn with_case_watermark(
     let request = EvidenceRequest {
         native_valuations: Vec::new(),
         trigger: Some(trigger.clone()),
-        correspondence: EvidenceRef::named("projection-request"),
+        correspondence: EvidenceRef {
+            authority_identity: bridge_definition.authority().to_owned(),
+            ..EvidenceRef::named(bridge_definition.identity())
+        },
         positions: vec![EvidencePosition {
             observation: EvidenceRef::named(anchor),
             position: 0,
@@ -497,4 +500,11 @@ pub(crate) fn native_trace(profile: &str, anchor: &str) -> native::Trace {
         watermark: 1,
         evicted: Vec::new(),
     }
+}
+
+/// The native trace shape the owner admits valuation rows against for this case.
+#[allow(dead_code)] // Not every target sharing this support admits valuation rows.
+pub(crate) fn trace_for(case: &Case<'_>) -> native::Trace {
+    let profile: &str = &case.subject.profile().definition.identity;
+    native_trace(profile, case.native.instance.anchor)
 }

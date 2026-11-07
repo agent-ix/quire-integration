@@ -34,11 +34,11 @@ pub fn validate_mapping_binding(
     classification: &Classification,
     surrounding: Closure,
 ) -> Result<(), MappingBindingRefusal> {
-    if !package.retains(classification.selection().admission_binding()) {
-        return Err(MappingBindingRefusal::ForeignClassification);
-    }
     if !subject.belongs_to(package) {
         return Err(MappingBindingRefusal::ForeignSubject);
+    }
+    if !classification.belongs_to(package) {
+        return Err(MappingBindingRefusal::ForeignClassification);
     }
     let expected =
         mapping_support(subject, surrounding).map_err(MappingBindingRefusal::Classification)?;
