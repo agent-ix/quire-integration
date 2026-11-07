@@ -133,11 +133,11 @@ constructor nor reader invokes an evaluator.
 ## Remaining owner prerequisites
 
 Full FR-350 qualification is pending the IR-1377 dependency cohort and IR-1378
-native input correction. A corrected join also needs a public, non-evaluating
-owner operation that authenticates the full actual native and TL direct
-predecessor values; identities alone cannot discharge that requirement. The
-bridge preserves a typed authority refusal until the owner supplies that
-capability. The supported fixed-sample unit domain remains FR-350's authored
+native input correction. The native full-predecessor operations supplied by QSL-1795 are consumed as
+original owner APIs. The TL result owner still needs a public, non-evaluating
+operation that authenticates its complete actual direct predecessor; identities
+alone cannot discharge that requirement. The bridge preserves a typed TL-side
+authority refusal until that owner supplies the capability. The supported fixed-sample unit domain remains FR-350's authored
 domain; the TL request owner's current nanosecond-only past restriction is an
 upstream limitation rather than a narrower integration contract.
 
@@ -157,7 +157,7 @@ The join retains complete native, mapped and correspondence byte values and any
 supplied prior join bytes. Its strict reader reconstructs the expected join from
 original owner values and compares the complete canonical record. Support visits,
 causes, work and bytes use independent caller counters. Corrected success remains
-blocked on the original owners' full direct-predecessor admission capability;
+blocked on the TL owner's full direct-predecessor admission capability;
 this does not waive FR-350-AC-5. Rows unreachable through sealed owner producers
 must have concrete owner evidence and must not be reported as tested by direct
 construction of a fake result.
@@ -209,3 +209,40 @@ native owner's complete subject (`Guard`, `Anchor` or named `Capture`) and kind.
 `Missing` remains incomplete and `Refused` remains refused; neither is replaced
 with a generic missing-capture result. Regressions obtain those retained faults
 through genuine native evaluation before calling the non-evaluating bridge.
+
+
+## Native full-predecessor admission
+
+Projection selection carries the caller's actual finite native
+`ReportPredecessorLimits` separately from the seven bridge counters and TL owner
+limits. The native domain counts byte inspections/copies and temporary ownership;
+these are not silently recast as FR-358 IR work or bridge item visits. Each native
+owner operation receives its original finite operation ceilings. The join retains
+the actual bounded-writer and successful predecessor-validator usage receipts;
+the native strict reader remains independently bounded by its supplied owner
+limits and its existing shared IR budget, without claiming an unavailable reader
+usage receipt.
+
+The join writes native values only through `Report::to_owner_bytes_bounded`.
+For a correction it obtains the actual prior `Report` from the supplied previous
+join only when that join's native source was strictly admitted in its exact
+context. It calls `validate_predecessor` on that full owner value and supplies it
+to `CheckedSubject::with_predecessor` before strict native reading. Embedded
+predecessor bytes are retained by the owner and may be inspected, but the bridge
+never reads them a second time to manufacture the expected prior authority.
+
+A genuinely missing or full-value-mismatched direct predecessor selects correction
+conflict, retains the original mismatch refusal when present, marks the native
+source unadmitted and carries no Boolean. A native owner `PredecessorLimit` remains
+its original typed work/storage denial with limit and actual charge; it is an
+atomic limit-reached result, not a predecessor mismatch. An unrelated strict
+native reader refusal continues to enter the refused decision row. The canonical
+join records whether native strict admission succeeded.
+
+A native correction that passes full validation can still stop at the honest
+TL-side predecessor authority refusal. That refusal retains the actual successful
+native validator receipt; it does not claim complete cross-owner correction
+acceptance. Tests use real evaluated and precharged-Meter native reports sharing
+one result identity to prove complete-prior substitution fails both validation
+and strict reading, together with wrong-prior join/reader contexts, exact and
+one-short native owner limits and preservation of an already charged IR budget.

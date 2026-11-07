@@ -44,6 +44,13 @@ fn scalar_limits() -> ScalarLimits {
 
 /// Evaluation is explicit fixture preparation, never hidden inside join or read.
 fn evaluate_native(projection: &ValidatedTlProjection<'_>) -> Report {
+    evaluate_native_with_prior(projection, None)
+}
+
+fn evaluate_native_with_prior(
+    projection: &ValidatedTlProjection<'_>,
+    prior: Option<&Report>,
+) -> Report {
     let input = projection.native();
     let subject = CheckedSubject::new(
         projection.package(),
@@ -52,6 +59,11 @@ fn evaluate_native(projection: &ValidatedTlProjection<'_>) -> Report {
         input.request,
     )
     .expect("actual native checked subject");
+    let subject = if let Some(prior) = prior {
+        subject.with_predecessor(prior, projection.selection().native_report_limits)
+    } else {
+        subject
+    };
     native::evaluate_v2(
         &subject,
         input.observation,
@@ -885,11 +897,102 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
             TlLimits::default(),
         )
         .expect("correction retains actual native owner inputs");
-        let corrected_native = evaluate_native(&corrected_projection);
+        let corrected_native =
+            evaluate_native_with_prior(&corrected_projection, Some(&original_native));
+        let native_limits = corrected_projection.selection().native_report_limits;
+        let (_, encoded_usage) = original_native
+            .to_owner_bytes_bounded(native_limits)
+            .unwrap();
+        assert!(encoded_usage.work > 0 && encoded_usage.storage > 0);
+        let validation_usage = corrected_native
+            .validate_predecessor(&original_native, native_limits)
+            .unwrap();
+        assert!(validation_usage.work > 0 && validation_usage.storage > 0);
+        assert_eq!(
+            corrected_native.predecessor_owner_bytes(),
+            Some(saved_native.as_slice())
+        );
+        let subject = CheckedSubject::new(
+            corrected_projection.package(),
+            corrected_projection.native().occurrence,
+            corrected_projection.native().valuations,
+            corrected_projection.native().request,
+        )
+        .unwrap()
+        .with_predecessor(&original_native, native_limits);
+        let checked = Report::from_owner_bytes(
+            &corrected_native.to_owner_bytes(),
+            &subject,
+            corrected_projection.native().observation,
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(
+            checked.predecessor_owner_bytes(),
+            Some(saved_native.as_slice())
+        );
         assert_eq!(
             corrected_native.predecessor(),
             Some(original_native.result_identity())
         );
+        let mut exhausted = Meter::new(scalar_limits());
+        let ceiling = exhausted.limits().work_units;
+        exhausted
+            .charge(
+                quire_exact::Charge::new(quire_exact::ChargePoint::TemporalVisit)
+                    .work(quire_exact::Integer::from(ceiling)),
+            )
+            .unwrap();
+        let original_subject = CheckedSubject::new(
+            original_projection.package(),
+            original_projection.native().occurrence,
+            original_projection.native().valuations,
+            original_projection.native().request,
+        )
+        .unwrap();
+        let different_prior = native::evaluate_v2(
+            &original_subject,
+            original_projection.native().observation,
+            &mut exhausted,
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(different_prior.outcome(), ReportOutcome::Meter);
+        assert_eq!(
+            different_prior.result_identity(),
+            original_native.result_identity()
+        );
+        assert_ne!(different_prior.to_owner_bytes(), saved_native);
+        assert!(matches!(
+            corrected_native.validate_predecessor(&different_prior, native_limits),
+            Err(native::ReportRefusal::InvalidPredecessor)
+        ));
+        let wrong_subject = CheckedSubject::new(
+            corrected_projection.package(),
+            corrected_projection.native().occurrence,
+            corrected_projection.native().valuations,
+            corrected_projection.native().request,
+        )
+        .unwrap()
+        .with_predecessor(&different_prior, native_limits);
+        assert!(matches!(
+            Report::from_owner_bytes(
+                &corrected_native.to_owner_bytes(),
+                &wrong_subject,
+                corrected_projection.native().observation,
+                &mut native_budget()
+            ),
+            Err(native::ReportRefusal::InvalidPredecessor)
+        ));
+        let wrong_prior_join = join_tl(
+            &original_projection,
+            Some(&different_prior),
+            Some(&original_mapped),
+            None,
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .unwrap();
         let limits = corrected_projection.selection().owner_limits;
         let corrected_source = evaluate_tl(
             &corrected_projection,
@@ -932,7 +1035,52 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
                 TlLimits::default(),
                 &mut native_budget()
             ),
-            Err(TlJoinError::PredecessorAuthority)
+            Err(TlJoinError::PredecessorAuthority { native_encoding_usage: Some(encoding), native_predecessor_usage: Some(usage) }) if usage.work > 0 && usage.storage > 0 && encoding.work > 0 && encoding.storage > 0
+        ));
+        let wrong = join_tl(
+            &corrected_projection,
+            Some(&corrected_native),
+            Some(&corrected_mapped),
+            Some(&wrong_prior_join),
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(wrong.decision(), TlJoinDecision::Conflict);
+        assert_eq!(wrong.value(), None);
+        assert!(!wrong.native_admitted());
+        assert!(matches!(
+            wrong.owner_refusals().native_predecessor(),
+            Some(native::ReportRefusal::InvalidPredecessor)
+        ));
+        let wire: Value = serde_json::from_slice(wrong.bytes()).unwrap();
+        assert_eq!(wire["nativeAdmitted"], false);
+        let reread_wrong = read_tl_join(
+            wrong.bytes(),
+            ExpectedTlJoin {
+                projection: &corrected_projection,
+                native: Some(&corrected_native),
+                mapped: Some(&corrected_mapped),
+                previous: Some(&wrong_prior_join),
+            },
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(reread_wrong.bytes(), wrong.bytes());
+        assert!(matches!(
+            read_tl_join(
+                wrong.bytes(),
+                ExpectedTlJoin {
+                    projection: &corrected_projection,
+                    native: Some(&corrected_native),
+                    mapped: Some(&corrected_mapped),
+                    previous: Some(&prior)
+                },
+                TlLimits::default(),
+                &mut native_budget()
+            ),
+            Err(TlJoinError::PredecessorAuthority { .. })
         ));
         assert_eq!(prior.bytes(), saved_prior);
         assert_eq!(original_native.to_owner_bytes(), saved_native);
@@ -997,5 +1145,112 @@ fn native_failed_execution_precedes_equal_boolean_and_retains_all_causes() {
         .expect("strict failed join read");
         assert_eq!(read.bytes(), joined.bytes());
         assert_eq!(read.decision(), TlJoinDecision::Failed);
+    });
+}
+
+#[trace("TC-461", "FR-350-AC-6", "FR-350-AC-8")]
+#[test]
+fn native_report_owner_limits_are_explicit_and_preserve_the_existing_ir_budget() {
+    use native::{ReportPredecessorLimits, ReportPredecessorResource, ReportRefusal};
+    with_case("holds(true)", false, |case| {
+        let projection = case.project(TlLimits::default()).unwrap();
+        let report = evaluate_native(&projection);
+        let mapped = evaluate_mapped(&projection);
+        let (bytes, usage) = report
+            .to_owner_bytes_bounded(case.selection.native_report_limits)
+            .unwrap();
+        assert_eq!(bytes, report.to_owner_bytes());
+        assert!(usage.work > 0 && usage.storage > 0);
+        for (limits, refused_resource) in [
+            (
+                ReportPredecessorLimits::new(usage.work, usage.storage),
+                None,
+            ),
+            (
+                ReportPredecessorLimits::new(usage.work - 1, usage.storage),
+                Some(ReportPredecessorResource::Work),
+            ),
+            (
+                ReportPredecessorLimits::new(usage.work, usage.storage - 1),
+                Some(ReportPredecessorResource::Storage),
+            ),
+        ] {
+            let mut selection = case.selection;
+            selection.native_report_limits = limits;
+            let bounded = project_tl(
+                case.package,
+                case.subject,
+                case.classification,
+                case.surrounding,
+                case.native,
+                selection,
+                TlLimits::default(),
+            )
+            .unwrap();
+            let mut shared = native_budget();
+            case.package
+                .project_exact_type(
+                    &case.native.valuations.rows()[0].operand,
+                    &quire_contract_ir::SelectedExactIdentities::empty(),
+                    &mut shared,
+                )
+                .unwrap();
+            let before = shared.consumed();
+            assert!(before.work > 0);
+            let result = join_tl(
+                &bounded,
+                Some(&report),
+                Some(&mapped),
+                None,
+                TlLimits::default(),
+                &mut shared,
+            );
+            assert_eq!(shared.consumed(), before);
+            if let Some(expected) = refused_resource {
+                let error = result.unwrap_err();
+                assert_eq!(
+                    error.code(),
+                    quire_integration::temporal::TlJoinCode::LimitReached
+                );
+                let TlJoinError::NativeReport(ReportRefusal::PredecessorLimit {
+                    resource,
+                    limit,
+                    actual,
+                }) = error
+                else {
+                    panic!("original bounded native report-owner denial");
+                };
+                assert_eq!(resource, expected);
+                assert_eq!(
+                    limit,
+                    match resource {
+                        ReportPredecessorResource::Work => limits.work,
+                        ReportPredecessorResource::Storage => limits.storage,
+                    }
+                );
+                assert!(actual > u128::from(limit));
+            } else {
+                let joined = result.unwrap();
+                assert_eq!(joined.native_encoding_usage(), Some(usage));
+                assert_eq!(joined.native_predecessor_usage(), None);
+                assert!(joined.native_admitted());
+                assert_eq!(joined.decision(), TlJoinDecision::EqualFinal);
+                let reread = read_tl_join(
+                    joined.bytes(),
+                    ExpectedTlJoin {
+                        projection: &bounded,
+                        native: Some(&report),
+                        mapped: Some(&mapped),
+                        previous: None,
+                    },
+                    TlLimits::default(),
+                    &mut shared,
+                )
+                .unwrap();
+                assert_eq!(reread.native_encoding_usage(), Some(usage));
+                assert_eq!(reread.bytes(), joined.bytes());
+                assert_eq!(shared.consumed(), before);
+            }
+        }
     });
 }

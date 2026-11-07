@@ -14,6 +14,7 @@ struct JoinWire<'a> {
     version: &'static str,
     correspondence: &'a [u8],
     native: Option<&'a [u8]>,
+    native_admitted: bool,
     mapped: Option<&'a [u8]>,
     previous: Option<&'a [u8]>,
     decision: &'static str,
@@ -26,6 +27,7 @@ struct JoinWire<'a> {
 pub(super) fn encode(
     projection: &ValidatedTlProjection<'_>,
     native: Option<&[u8]>,
+    native_admitted: bool,
     mapped: Option<&ValidatedMappedResult>,
     previous: Option<&ValidatedTlJoin<'_>>,
     decision: TlJoinDecision,
@@ -37,6 +39,7 @@ pub(super) fn encode(
         version: VERSION,
         correspondence: projection.bytes(),
         native,
+        native_admitted,
         mapped: mapped.map(ValidatedMappedResult::bytes),
         previous: previous.map(ValidatedTlJoin::bytes),
         decision: decision.as_str(),

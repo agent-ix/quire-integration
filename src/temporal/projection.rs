@@ -46,6 +46,8 @@ pub struct NativeProjectionInput<'a> {
 /// Independently selected genuine observation and TL owner inputs.
 #[derive(Clone, Copy)]
 pub struct TlProjectionSelection<'a> {
+    /// Original finite limits of each native report-owner operation, separate from bridge/IR counters.
+    pub native_report_limits: quire_spec_language::temporal::ReportPredecessorLimits,
     /// Actual strict admission to the original integration-owned bridge definition.
     pub bridge_definition: &'a super::ValidatedTlBridgeDefinition,
     /// The actual admitted observation revision, including the complete bundle.

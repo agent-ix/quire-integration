@@ -32,6 +32,7 @@ pub(super) fn rows(
     mapped: Option<&ValidatedMappedResult>,
     missing_result: bool,
     refusals: &TlJoinOwnerRefusals,
+    predecessor_conflict: bool,
     previous: Option<&ValidatedTlJoin<'_>>,
     budget: &mut Budget,
 ) -> Result<Compared, TlJoinError> {
@@ -87,7 +88,7 @@ pub(super) fn rows(
     });
     let mut equal_final = None;
     let mut equal_pending = false;
-    let mut mismatch = false;
+    let mut mismatch = predecessor_conflict;
     if let (Some(native), Some(mapped)) = (native, mapped) {
         let result = mapped.source();
         let original_native = native.predecessor().is_none();
@@ -100,7 +101,10 @@ pub(super) fn rows(
             } else {
                 // The current owner exposes only a predecessor identity. A label
                 // cannot authenticate the complete prior result value.
-                return Err(TlJoinError::PredecessorAuthority);
+                return Err(TlJoinError::PredecessorAuthority {
+                    native_encoding_usage: budget.native_encoding_usage,
+                    native_predecessor_usage: budget.native_predecessor_usage,
+                });
             }
         }
         let support_equal = support_equal(projection, native, result.decision_support(), budget)?;

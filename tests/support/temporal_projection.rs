@@ -421,6 +421,10 @@ pub(crate) fn with_case_scopes(
             observation: &revision,
         },
         selection: TlProjectionSelection {
+            native_report_limits: quire_spec_language::temporal::ReportPredecessorLimits::new(
+                1 << 30,
+                1 << 30,
+            ),
             bridge_definition: &bridge_definition,
             observation: &observation,
             clock: &clock,
