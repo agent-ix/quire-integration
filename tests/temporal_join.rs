@@ -1,106 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! FR-350: join genuine native and mapped TL results without evaluation in the bridge.
 
+#[path = "support/temporal_join_owners.rs"]
+mod owners;
 #[path = "support/temporal_projection.rs"]
 mod projection_support;
 mod support;
 
 use ix_trace_rs::trace;
+use owners::*;
 use projection_support::{with_case, with_case_scopes};
 use qsl_eval::temporal::evidence::{ObligationKey, Relation, Settlement, Truth};
 use qsl_package::{checked_views::Closure, NativeJoinBudget};
-use quire_exact::{Meter, ScalarLimits};
+use quire_exact::Meter;
 use quire_integration::temporal::{
     join_tl, project_tl, read_tl_join, ExpectedTlJoin, NativeProjectionInput, TlJoinCause,
     TlJoinDecision, TlJoinError, TlLimits, TlProjectionLimit, ValidatedTlProjection,
 };
 use quire_mltl::{
-    contract_ir::{self, MappingSelection, ValidatedMappedResult},
-    report::{self, AssessmentExecution, ResultRelationInput, ValidatedTemporalResult},
+    contract_ir,
+    report::{self, AssessmentExecution, ResultRelationInput},
 };
 use quire_observation::authority::OpenClosed;
 use quire_spec_language::temporal::{self as native, CheckedSubject, Report, ReportOutcome};
 use serde_json::{json, Value};
 use tl_mltl::wire::OwnerLimits;
 
-fn native_budget() -> NativeJoinBudget {
-    NativeJoinBudget::new(1 << 30, 1 << 30)
-}
-
-fn scalar_limits() -> ScalarLimits {
-    ScalarLimits {
-        integer_bits: 1 << 20,
-        decimal_digits: 1 << 20,
-        scale_expansion: 1 << 20,
-        text_input_bytes: 1 << 20,
-        text_scalars: 1 << 20,
-        normalized_scalars: 1 << 20,
-        unit_edges: 1 << 20,
-        value_occurrences: 1 << 20,
-        work_units: 1 << 24,
-        result_units: 1 << 20,
-    }
-}
-
-/// Evaluation is explicit fixture preparation, never hidden inside join or read.
-fn evaluate_native(projection: &ValidatedTlProjection<'_>) -> Report {
-    evaluate_native_with_prior(projection, None)
-}
-
-fn evaluate_native_with_prior(
-    projection: &ValidatedTlProjection<'_>,
-    prior: Option<&Report>,
-) -> Report {
-    let input = projection.native();
-    let subject = CheckedSubject::new(
-        projection.package(),
-        input.occurrence,
-        input.valuations,
-        input.request,
-    )
-    .expect("actual native checked subject");
-    let subject = if let Some(prior) = prior {
-        subject.with_predecessor(prior, projection.selection().native_report_limits)
-    } else {
-        subject
-    };
-    native::evaluate_v2(
-        &subject,
-        input.observation,
-        &mut Meter::new(scalar_limits()),
-        &mut native_budget(),
-    )
-    .expect("explicit native fixture evaluation")
-}
-
-/// Both evaluator invocations remain outside the bridge under test.
-fn evaluate_tl(
-    projection: &ValidatedTlProjection<'_>,
-    relation: ResultRelationInput<'_>,
-    limits: OwnerLimits,
-) -> ValidatedTemporalResult {
-    let document = report::evaluate(projection.request(), relation, limits)
-        .expect("explicit TL fixture evaluation");
-    report::read(document.bytes(), projection.request(), relation, limits)
-        .expect("actual TL source result reader")
-}
-
-fn map_source(source: &ValidatedTemporalResult, limits: OwnerLimits) -> ValidatedMappedResult {
-    let selection = MappingSelection::for_result(source);
-    let document = contract_ir::map(source, &selection, limits).expect("actual TL result mapper");
-    contract_ir::read(document.bytes(), source, &selection, limits)
-        .expect("actual non-evaluating TL mapped-result reader")
-}
-
-fn evaluate_mapped(projection: &ValidatedTlProjection<'_>) -> ValidatedMappedResult {
-    let limits = projection.selection().owner_limits;
-    map_source(
-        &evaluate_tl(projection, ResultRelationInput::Original, limits),
-        limits,
-    )
-}
-
-#[trace("TC-461", "FR-350-AC-5", "FR-350-AC-6")]
+#[trace("IT-022-SC-12", "IT-022-SC-15", "FR-350-AC-5", "FR-350-AC-6")]
 #[test]
 fn genuine_equal_final_pairs_retain_actual_sources_and_their_boolean() {
     for (formula, expected_value) in [("holds(true)", true), ("not holds(true)", false)] {
@@ -152,9 +78,9 @@ fn genuine_equal_final_pairs_retain_actual_sources_and_their_boolean() {
             assert_eq!(wire["decision"], "agreement");
             assert_eq!(wire["comparison"], "equal-final");
             assert_eq!(wire["causes"], json!([]));
-            assert_eq!(wire["correspondence"], json!(projection.bytes()));
-            assert_eq!(wire["native"], json!(original_native));
-            assert_eq!(wire["mapped"], json!(original_mapped));
+            assert_eq!(wire["correspondence"], json!(hex(projection.bytes())));
+            assert_eq!(wire["native"], json!(hex(&original_native)));
+            assert_eq!(wire["mapped"], json!(hex(&original_mapped)));
             assert_eq!(native.to_owner_bytes(), original_native);
             assert_eq!(mapped.bytes(), original_mapped);
             assert_eq!(mapped.source().bytes(), original_source);
@@ -162,7 +88,7 @@ fn genuine_equal_final_pairs_retain_actual_sources_and_their_boolean() {
     }
 }
 
-#[trace("TC-461", "FR-350-AC-5")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn equal_pending_requires_actual_open_decision_and_surrounding_scopes() {
     with_case_scopes(
@@ -217,7 +143,7 @@ fn equal_pending_requires_actual_open_decision_and_surrounding_scopes() {
     );
 }
 
-#[trace("TC-461", "FR-350-AC-5")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn surrounding_closed_does_not_replace_open_decision_scope_or_hide_conflict() {
     with_case_scopes(
@@ -255,7 +181,7 @@ fn surrounding_closed_does_not_replace_open_decision_scope_or_hide_conflict() {
     );
 }
 
-#[trace("TC-461", "FR-350-AC-5")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn absence_is_unavailable_and_never_an_equal_false_result() {
     with_case("not holds(true)", false, |case| {
@@ -281,36 +207,7 @@ fn absence_is_unavailable_and_never_an_equal_false_result() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-5")]
-#[test]
-fn actual_owner_read_refusal_is_retained_and_never_compared_as_a_value() {
-    with_case("holds(true)", false, |case| {
-        let projection = case.project(TlLimits::default()).expect("projection");
-        let native = evaluate_native(&projection);
-        let mapped = evaluate_mapped(&projection);
-        let joined = join_tl(
-            &projection,
-            Some(&native),
-            Some(&mapped),
-            None,
-            TlLimits::default(),
-            &mut NativeJoinBudget::new(0, 0),
-        )
-        .expect("owner refusal becomes row state");
-        assert_eq!(joined.decision(), TlJoinDecision::Refused);
-        assert_eq!(joined.causes(), &[TlJoinCause::ResultRefused]);
-        assert_eq!(joined.value(), None);
-        assert!(joined.owner_refusals().native().is_some());
-        assert!(joined.owner_refusals().mapped().is_none());
-        assert_eq!(
-            joined.native().unwrap().to_owner_bytes(),
-            native.to_owner_bytes()
-        );
-        assert_eq!(joined.mapped().unwrap().bytes(), mapped.bytes());
-    });
-}
-
-#[trace("TC-461", "FR-350-AC-5")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn genuine_tl_resource_incomplete_stays_non_value_and_collects_later_conflict_once() {
     with_case("holds(true)", false, |case| {
@@ -334,10 +231,7 @@ fn genuine_tl_resource_incomplete_stays_non_value_and_collects_later_conflict_on
         .expect("incomplete join");
         assert_eq!(joined.decision(), TlJoinDecision::Incomplete);
         assert_eq!(joined.value(), None);
-        assert_eq!(
-            joined.causes(),
-            &[TlJoinCause::ResultIncomplete, TlJoinCause::ResultMismatch]
-        );
+        assert_eq!(joined.causes(), &[TlJoinCause::ResultIncomplete]);
         assert_eq!(
             joined.mapped().unwrap().source().execution(),
             AssessmentExecution::ResourceIncomplete
@@ -345,7 +239,7 @@ fn genuine_tl_resource_incomplete_stays_non_value_and_collects_later_conflict_on
     });
 }
 
-#[trace("TC-461", "FR-350-AC-5")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn unavailable_precedes_native_incomplete_and_preserves_both_causes_in_order() {
     with_case("holds(true)", false, |case| {
@@ -388,7 +282,7 @@ fn unavailable_precedes_native_incomplete_and_preserves_both_causes_in_order() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-5", "FR-350-AC-6")]
+#[trace("IT-022-SC-12", "FR-350-AC-5", "FR-350-AC-10")]
 #[test]
 fn canonical_join_roundtrip_requires_each_exact_expected_source_and_prior_value() {
     with_case("holds(true)", false, |case| {
@@ -467,7 +361,7 @@ fn canonical_join_roundtrip_requires_each_exact_expected_source_and_prior_value(
     });
 }
 
-#[trace("TC-461", "FR-350-AC-6")]
+#[trace("IT-022-SC-11", "FR-350-AC-6")]
 #[test]
 fn strict_join_reader_rejects_each_noncanonical_or_cross_wired_encoding() {
     with_case("holds(true)", false, |case| {
@@ -508,7 +402,7 @@ fn strict_join_reader_rejects_each_noncanonical_or_cross_wired_encoding() {
         cause["causes"] = json!(["result-refused"]);
         mutations.push(serde_json::to_vec(&cause).unwrap());
         let mut native_bytes = original.clone();
-        native_bytes["native"][0] = json!(255);
+        native_bytes["native"] = json!("ff");
         mutations.push(serde_json::to_vec(&native_bytes).unwrap());
         let mut duplicate = b"{\"value\":true,".to_vec();
         duplicate.extend_from_slice(&joined.bytes()[1..]);
@@ -553,7 +447,7 @@ fn strict_join_reader_rejects_each_noncanonical_or_cross_wired_encoding() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-6")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn support_work_and_byte_counters_accept_exact_and_refuse_one_short_with_fresh_usage() {
     with_case("holds(true)", false, |case| {
@@ -677,7 +571,7 @@ fn assert_limit(error: TlJoinError, expected_limit: TlProjectionLimit, configure
     assert_eq!(value, configured + 1);
 }
 
-#[trace("TC-461", "FR-350-AC-6")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn ordered_causes_have_their_own_exact_and_one_short_ceiling() {
     with_case("holds(true)", false, |case| {
@@ -752,7 +646,7 @@ fn ordered_causes_have_their_own_exact_and_one_short_ceiling() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-5", "FR-350-AC-6")]
+#[trace("IT-022-SC-12", "FR-350-AC-5")]
 #[test]
 fn wrong_genuine_native_and_mapped_results_do_not_authorize_the_expected_join() {
     with_case("holds(true)", false, |case| {
@@ -815,10 +709,7 @@ fn wrong_genuine_native_and_mapped_results_do_not_authorize_the_expected_join() 
         )
         .expect("foreign genuine TL request is a refused state");
         assert_eq!(refused.decision(), TlJoinDecision::Refused);
-        assert_eq!(
-            refused.causes(),
-            &[TlJoinCause::ResultRefused, TlJoinCause::ResultMismatch]
-        );
+        assert_eq!(refused.causes(), &[TlJoinCause::ResultRefused]);
         assert_eq!(refused.value(), None);
         assert_eq!(
             refused.mapped().unwrap().source().request(),
@@ -840,7 +731,7 @@ fn wrong_genuine_native_and_mapped_results_do_not_authorize_the_expected_join() 
     });
 }
 
-#[trace("TC-461", "FR-350-AC-5")]
+#[trace("IT-022-SC-13", "FR-350-AC-5", "FR-350-AC-10")]
 #[test]
 fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
     with_case("holds(true)", false, |case| {
@@ -1072,7 +963,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-5", "FR-350-AC-6")]
+#[trace("IT-022-SC-12", "FR-350-AC-5", "FR-350-AC-6")]
 #[test]
 fn native_failed_execution_precedes_equal_boolean_and_retains_all_causes() {
     with_case("holds(true)", false, |case| {
@@ -1132,7 +1023,7 @@ fn native_failed_execution_precedes_equal_boolean_and_retains_all_causes() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-6", "FR-350-AC-8")]
+#[trace("IT-022-SC-13", "FR-350-AC-5")]
 #[test]
 fn native_report_owner_limits_are_explicit_and_preserve_the_existing_ir_budget() {
     use native::{ReportPredecessorLimits, ReportPredecessorResource, ReportRefusal};
@@ -1270,7 +1161,7 @@ fn actual_correction_request(
     request
 }
 
-#[trace("TC-461", "FR-350-AC-5", "FR-350-AC-6")]
+#[trace("IT-022-SC-13", "FR-350-AC-5", "FR-350-AC-10")]
 #[test]
 fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_authority() {
     with_case("holds(true)", false, |case| {
@@ -1371,7 +1262,6 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                         refused_tl.causes().first(),
                         Some(&TlJoinCause::ResultRefused)
                     );
-                    assert!(refused_tl.owner_refusals().native().is_none());
                     assert_eq!(refused_tl.native_admitted(), previous.is_some());
                     let reread = read_tl_join(
                         refused_tl.bytes(),

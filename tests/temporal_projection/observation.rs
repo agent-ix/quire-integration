@@ -120,8 +120,8 @@ impl Fixture {
                 membership_complete: true,
                 closure_identity: Some(id("closure")),
                 closure_digest: Some(Digest::new([2; 32])),
-                kind: ScopeKind::Window {
-                    window_identity: id("window"),
+                kind: ScopeKind::Snapshot {
+                    snapshot_identity: id("snapshot"),
                 },
                 range: if sample {
                     ClockRange::FixedSample {
@@ -162,7 +162,7 @@ impl Fixture {
             definition_digest: Digest::new([3; 32]),
         };
         let subject = SubjectSelection {
-            scope_identity: id("window"),
+            scope_identity: id("snapshot"),
             population_identity: qualified.scope().population_identity.clone(),
         };
         let mut fixture = Self {

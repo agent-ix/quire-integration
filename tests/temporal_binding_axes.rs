@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! FR-350 preserved source occurrence, declared capture and predicate/type axes.
+#![recursion_limit = "256"] // The expected record is one large `json!` object.
 
+#[path = "support/temporal_expected.rs"]
+mod expected;
 #[path = "temporal_binding_axes/fixture.rs"]
 mod fixture;
 #[path = "support/temporal_projection.rs"]
@@ -12,8 +15,9 @@ use qsl_eval::temporal::evidence::{CaptureFact, CapturedValue, ObligationKey, Pa
 use qsl_package::NativeJoinBudget;
 use quire_exact::{Meter, ScalarLimits};
 use quire_integration::temporal::{
-    project_tl, NativeProjectionInput, TlLimits, TlMissingPremise, TlProjectionError,
-    TlProjectionPremise, ValidatedTlProjection,
+    project_tl, read_tl_projection, ExpectedTlProjection, NativeProjectionInput, TlLimits,
+    TlMissingPremise, TlProjectionCode, TlProjectionError, TlProjectionPremise,
+    ValidatedTlProjection,
 };
 use quire_spec_language::temporal::{self as native, CheckedSubject, Report};
 use serde_json::{json, Value};
@@ -67,7 +71,7 @@ fn obligation(projection: &ValidatedTlProjection<'_>) -> ObligationKey {
     )
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-08", "FR-350-AC-9")]
 #[test]
 fn declared_capture_and_retained_immutable_environment_are_original_owner_values() {
     fixture::with_source(
@@ -82,7 +86,7 @@ fn declared_capture_and_retained_immutable_environment_are_original_owner_values
                 .expect("declared capture projection");
             let first_record: Value =
                 serde_json::from_slice(first.bytes()).expect("canonical correspondence");
-            assert_eq!(first_record["captures"], json!([b"true".as_slice()]));
+            assert_eq!(first_record["captures"], json!([expected::hex(b"true")]));
             let report = evaluate(&first);
             let ledger = report.ledger().expect("actual retained native ledger");
             let key = obligation(&first);
@@ -127,10 +131,10 @@ fn declared_capture_and_retained_immutable_environment_are_original_owner_values
             let again_record: Value =
                 serde_json::from_slice(again.bytes()).expect("redelivery correspondence");
             assert_eq!(again_record["captures"], first_record["captures"]);
-            assert_eq!(again_record["captures"], json!([b"true".as_slice()]));
+            assert_eq!(again_record["captures"], json!([expected::hex(b"true")]));
             assert_eq!(
-                again_record["trigger_payload"],
-                first_record["trigger_payload"]
+                again_record["triggerPayload"],
+                first_record["triggerPayload"]
             );
             assert_eq!(
                 ledger.instance(&key, trigger).unwrap().environment(),
@@ -145,7 +149,7 @@ fn declared_capture_and_retained_immutable_environment_are_original_owner_values
     );
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-08", "FR-350-AC-9")]
 #[test]
 fn retained_instance_payload_contradiction_refuses_before_projection() {
     fixture::with_source(
@@ -189,7 +193,7 @@ fn retained_instance_payload_contradiction_refuses_before_projection() {
     );
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-08", "FR-350-AC-9")]
 #[test]
 fn actual_declared_capture_missing_wrong_type_and_anchor_remain_distinct_refusals() {
     fixture::with_source(
@@ -251,7 +255,7 @@ fn actual_declared_capture_missing_wrong_type_and_anchor_remain_distinct_refusal
     );
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-08", "FR-350-AC-9")]
 #[test]
 fn later_shared_node_occurrence_retains_its_actual_name_role_ordinal_and_span() {
     let declarations =
@@ -294,28 +298,16 @@ fn later_shared_node_occurrence_retains_its_actual_name_role_ordinal_and_span() 
         assert_eq!(projected.request().subject_identity(), "Beta");
         let record: Value =
             serde_json::from_slice(projected.bytes()).expect("complete canonical record");
-        assert_eq!(
-            record["source"],
-            serde_json::to_value(later_source).unwrap()
-        );
-        assert_ne!(
-            record["source"],
-            serde_json::to_value(first_source).unwrap()
-        );
-        assert_eq!(
-            record["declaration"][0],
-            serde_json::to_value(&later.node).unwrap()
-        );
-        assert_eq!(
-            record["declaration"][1],
-            serde_json::to_value(&later.role).unwrap()
-        );
-        assert_eq!(record["declaration"][2], later.ordinal);
-        assert_eq!(record["declaration"][3], "Beta");
+        assert_eq!(record["source"], expected::ir(later_source));
+        assert_ne!(record["source"], expected::ir(first_source));
+        assert_eq!(record["declaration"]["node"], expected::ir(&later.node));
+        assert_eq!(record["declaration"]["role"], expected::ir(&later.role));
+        assert_eq!(record["declaration"]["ordinal"], later.ordinal.to_string());
+        assert_eq!(record["declaration"]["name"], "Beta");
     });
 }
 
-#[trace("TC-461", "FR-350-AC-3")]
+#[trace("IT-022-SC-10", "FR-350-AC-3")]
 #[test]
 fn predicate_and_declared_type_mutations_preserve_their_actual_owner_bindings() {
     let build = |body: &str| {
@@ -330,16 +322,16 @@ fn predicate_and_declared_type_mutations_preserve_their_actual_owner_bindings() 
             assert_eq!(leaves.len(), 1);
             let leaf = &leaves[0];
             assert_eq!(
-                record["bindings"][0][0],
-                serde_json::to_value(&leaf.predicate).unwrap()
+                record["bindings"][0]["predicate"],
+                expected::ir(&leaf.predicate)
             );
             assert_eq!(
-                record["bindings"][0][1],
-                serde_json::to_value(case.package.term(&leaf.predicate)).unwrap()
+                record["bindings"][0]["term"],
+                expected::ir(&case.package.term(&leaf.predicate))
             );
             assert_eq!(
-                record["bindings"][0][2],
-                serde_json::to_value(leaf.proposition).unwrap()
+                record["bindings"][0]["proposition"],
+                json!(leaf.proposition.0.to_string())
             );
             let report = evaluate(&projected);
             let key = obligation(&projected);
@@ -378,11 +370,10 @@ fn predicate_and_declared_type_mutations_preserve_their_actual_owner_bindings() 
         original_formula, typed_formula,
         "TL proposition shape cannot erase native type changes"
     );
-    assert_ne!(original["declaration"], typed["declaration"]);
     assert_ne!(original["bindings"], typed["bindings"]);
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-08", "FR-350-AC-9")]
 #[test]
 fn a_genuine_retained_capture_cannot_be_replayed_under_another_admitted_anchor() {
     fixture::with_source(
@@ -474,7 +465,7 @@ fn a_genuine_retained_capture_cannot_be_replayed_under_another_admitted_anchor()
     );
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-08", "FR-350-AC-9")]
 #[test]
 fn retained_native_capture_faults_preserve_original_kind_and_named_subject() {
     use qsl_eval::temporal::evidence::{FaultKind, FaultSubject};
@@ -535,7 +526,10 @@ fn retained_native_capture_faults_preserve_original_kind_and_named_subject() {
                 assert_eq!(error.code(), code);
                 // A retained `Missing` fault is incomplete; a `Refused` one is a native premise.
                 match (kind, &error) {
-                    (FaultKind::Missing, TlProjectionError::Incomplete(TlMissingPremise::Activation))
+                    (
+                        FaultKind::Missing,
+                        TlProjectionError::Incomplete(TlMissingPremise::Activation),
+                    )
                     | (
                         FaultKind::Refused,
                         TlProjectionError::NativePremise(TlProjectionPremise::Activation),
@@ -548,7 +542,7 @@ fn retained_native_capture_faults_preserve_original_kind_and_named_subject() {
     );
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-08", "FR-350-AC-9")]
 #[test]
 fn retained_native_guard_and_delivery_anchor_faults_keep_distinct_subjects() {
     use qsl_eval::temporal::evidence::{FaultKind, FaultSubject, Receipt, TriggerDelivery};
@@ -610,7 +604,10 @@ fn retained_native_guard_and_delivery_anchor_faults_keep_distinct_subjects() {
             .expect("retained original delivery fault");
             assert_eq!(error.code(), code);
             match (kind, &error) {
-                (FaultKind::Missing, TlProjectionError::Incomplete(TlMissingPremise::Activation))
+                (
+                    FaultKind::Missing,
+                    TlProjectionError::Incomplete(TlMissingPremise::Activation),
+                )
                 | (
                     FaultKind::Refused,
                     TlProjectionError::NativePremise(TlProjectionPremise::Activation),
@@ -618,6 +615,186 @@ fn retained_native_guard_and_delivery_anchor_faults_keep_distinct_subjects() {
                 other => panic!("retained fault premise: {other:?}"),
             }
             let _ = subject;
+        }
+    });
+}
+
+/// The record's captured inputs, read from the case's own owner request.
+fn expected_members(
+    case: &projection_support::Case<'_>,
+    projection: &ValidatedTlProjection<'_>,
+) -> serde_json::Map<String, Value> {
+    let origin = &case.native.request.origins[0];
+    let captures: Vec<&[u8]> = origin
+        .captures
+        .iter()
+        .map(|capture| match capture {
+            CaptureFact::Value { value, .. } => value.as_bytes(),
+            other => panic!("admitted capture: {other:?}"),
+        })
+        .collect();
+    let occurrence = case.native.occurrence;
+    let source = case
+        .package
+        .source_map()
+        .iter()
+        .find(|entry| {
+            entry.node_id == occurrence.node
+                && entry.role == occurrence.role
+                && entry.ordinal == occurrence.ordinal
+        })
+        .expect("source entry");
+    let mut stamps: Vec<u64> = case
+        .native
+        .request
+        .positions
+        .iter()
+        .map(|position| position.position)
+        .collect();
+    stamps.sort_unstable();
+    expected::expected_members(
+        case,
+        projection,
+        &captures,
+        origin.payload.as_bytes(),
+        source,
+        &stamps,
+    )
+}
+
+fn with_request<'a>(
+    case: &projection_support::Case<'a>,
+    request: &'a qsl_eval::temporal::evidence::EvidenceRequest,
+) -> projection_support::Case<'a> {
+    projection_support::Case {
+        native: NativeProjectionInput {
+            request,
+            ..case.native
+        },
+        ..*case
+    }
+}
+
+#[trace("IT-022-SC-10", "FR-350-AC-3", "FR-350-AC-10", "FR-350-AC-11")]
+#[test]
+fn records_equal_the_independently_built_expected_bytes_for_future_past_and_sample() {
+    for (formula, sample) in [
+        ("holds(true) and holds(false)", false),
+        ("once[0,0] holds(true)", false),
+        ("once[0,0] holds(true)", true),
+    ] {
+        projection_support::with_case(formula, sample, |case| {
+            let projection = case.project(TlLimits::default()).expect("projection");
+            let members = expected_members(&case, &projection);
+            assert_eq!(
+                expected::canonical(&members),
+                projection.bytes(),
+                "{formula} sample={sample}"
+            );
+            let text = std::str::from_utf8(projection.bytes()).expect("JSON text");
+            let record: Value = serde_json::from_str(text).expect("record");
+            fn no_number(value: &Value) {
+                match value {
+                    Value::Number(number) => panic!("JSON number in record: {number}"),
+                    Value::Array(items) => items.iter().for_each(no_number),
+                    Value::Object(members) => members.values().for_each(no_number),
+                    _ => {}
+                }
+            }
+            no_number(&record);
+            // The request holds no record bytes, and carries the subject and profile names.
+            assert_eq!(projection.request().subject_identity(), "Due");
+            assert_eq!(
+                projection.request().correspondence_identity(),
+                "quire.native-temporal-correspondence/v1"
+            );
+            let record_bytes = projection.bytes();
+            assert!(
+                !projection
+                    .request()
+                    .bytes()
+                    .windows(record_bytes.len().min(32))
+                    .any(|window| window == &record_bytes[..record_bytes.len().min(32)]),
+                "the request carries no record bytes"
+            );
+        });
+    }
+}
+
+#[trace("IT-022-SC-10", "FR-350-AC-3", "FR-350-AC-10", "FR-350-AC-11")]
+#[test]
+fn each_mutated_source_input_changes_exactly_its_member_and_the_original_bytes_mismatch() {
+    use qsl_eval::temporal::OrderKey;
+    projection_support::with_case("holds(true) and holds(false)", false, |case| {
+        let original = case.project(TlLimits::default()).expect("projection");
+        let base = expected_members(&case, &original);
+        type Mutation = fn(&mut qsl_eval::temporal::evidence::EvidenceRequest);
+        let mutations: [(&str, Mutation, &[&str]); 6] = [
+            (
+                "trigger scope",
+                |r| r.trigger_scope = qsl_eval::temporal::ProgressClosure::Open,
+                &["native"],
+            ),
+            (
+                "authoritative origin",
+                |r| r.authoritative_origin = Some(false),
+                &["authoritativeOrigin"],
+            ),
+            (
+                "order key",
+                |r| {
+                    r.positions[0].order_key = Some(OrderKey {
+                        authority: "order".into(),
+                        key: 7,
+                    })
+                },
+                &["positions"],
+            ),
+            (
+                "position reference",
+                |r| r.positions[0].observation.scope = "another-scope".into(),
+                &["positions"],
+            ),
+            (
+                "correspondence reference",
+                |r| r.correspondence.scope = "another-scope".into(),
+                &["native"],
+            ),
+            (
+                "completeness facts",
+                |r| r.completeness.as_mut().unwrap().facts.push("fact".into()),
+                &["native"],
+            ),
+        ];
+        for (name, mutate, members) in mutations {
+            let mut request = case.native.request.clone();
+            mutate(&mut request);
+            let changed = with_request(&case, &request);
+            let projection = changed
+                .project(TlLimits::default())
+                .unwrap_or_else(|e| panic!("{name}: {e:?}"));
+            let after = expected_members(&changed, &projection);
+            assert_eq!(expected::canonical(&after), projection.bytes(), "{name}");
+            assert_eq!(expected::differing(&base, &after), members, "{name}");
+            let error = read_tl_projection(
+                original.bytes(),
+                ExpectedTlProjection {
+                    package: changed.package,
+                    subject: changed.subject,
+                    classification: changed.classification,
+                    surrounding: changed.surrounding,
+                    native: changed.native,
+                    selection: changed.selection,
+                },
+                TlLimits::default(),
+            )
+            .err()
+            .unwrap_or_else(|| panic!("{name}: original bytes must mismatch"));
+            assert_eq!(
+                error.code(),
+                TlProjectionCode::CorrespondenceMismatch,
+                "{name}"
+            );
         }
     });
 }

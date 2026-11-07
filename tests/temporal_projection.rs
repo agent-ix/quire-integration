@@ -19,7 +19,7 @@ use tl_syntax::PropositionId;
 mod projection_support;
 use projection_support::*;
 
-#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-3")]
+#[trace("IT-022-SC-04", "FR-350-AC-1", "FR-350-AC-9")]
 #[test]
 fn opaque_observation_anchor_projects_actual_future_values_and_owner_request() {
     with_case("holds(true) and holds(false)", false, |case| {
@@ -49,7 +49,7 @@ fn opaque_observation_anchor_projects_actual_future_values_and_owner_request() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-4")]
+#[trace("IT-022-SC-04", "IT-022-SC-06", "FR-350-AC-1", "FR-350-AC-4")]
 #[test]
 fn genuine_origin_complete_past_history_retains_values_and_clock() {
     for sample in [false, true] {
@@ -85,7 +85,7 @@ fn genuine_origin_complete_past_history_retains_values_and_clock() {
     }
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-16", "FR-350-AC-2")]
 #[test]
 fn local_subject_cannot_use_an_independently_admitted_equal_classification() {
     with_case("holds(true)", false, |case| {
@@ -187,7 +187,7 @@ fn agreeing_duplicate_cells_project_and_disagreeing_cells_are_incomplete() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-6")]
+#[trace("IT-022-SC-03", "FR-350-AC-6", "FR-350-AC-9")]
 #[test]
 fn absent_cell_establishes_no_false_value_or_partial_projection() {
     with_case("holds(true)", false, |case| {
@@ -220,7 +220,7 @@ fn absent_cell_establishes_no_false_value_or_partial_projection() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-07", "FR-350-AC-9")]
 #[test]
 fn independent_native_premises_refuse_without_owner_outputs() {
     with_case("holds(true)", false, |case| {
@@ -307,7 +307,7 @@ fn independent_native_premises_refuse_without_owner_outputs() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-1")]
+#[trace("IT-022-SC-04", "FR-350-AC-1")]
 #[test]
 fn past_projection_requires_authoritative_origin_and_complete_input() {
     with_case("once[0,0] holds(true)", false, |case| {
@@ -354,7 +354,7 @@ fn past_projection_requires_authoritative_origin_and_complete_input() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-02", "FR-350-AC-9")]
 #[test]
 fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurrence() {
     with_case("holds(true)", false, |case| {
@@ -405,7 +405,7 @@ fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurren
     });
 }
 
-#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[trace("IT-022-SC-03", "FR-350-AC-6", "FR-350-AC-9")]
 #[test]
 fn a_relation_admitted_for_another_capture_instance_or_revision_is_not_reused() {
     with_case("holds(true)", false, |case| {
@@ -461,7 +461,7 @@ fn a_relation_admitted_for_another_capture_instance_or_revision_is_not_reused() 
     });
 }
 
-#[trace("TC-461", "FR-350-AC-6")]
+#[trace("IT-022-SC-02", "FR-350-AC-9")]
 #[test]
 fn missing_semantic_instance_and_position_are_incomplete_not_successful_values() {
     with_case("holds(true)", false, |case| {
@@ -503,12 +503,12 @@ fn missing_semantic_instance_and_position_are_incomplete_not_successful_values()
         .expect("no selected position");
         assert!(matches!(
             error,
-            TlProjectionError::Incomplete(TlMissingPremise::Position)
+            TlProjectionError::Incomplete(TlMissingPremise::Anchor)
         ));
     });
 }
 
-#[trace("TC-461", "FR-350-AC-6")]
+#[trace("IT-022-SC-11", "FR-350-AC-6")]
 #[test]
 fn projection_reader_requires_complete_canonical_expected_value() {
     with_case("holds(true)", false, |case| {
@@ -561,7 +561,7 @@ fn projection_reader_requires_complete_canonical_expected_value() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-2")]
+#[trace("IT-022-SC-05", "FR-350-AC-2")]
 #[test]
 fn actual_unsupported_classes_retain_every_owner_dimension_without_projection() {
     with_case("holds(true)", false, |case| {
@@ -593,7 +593,7 @@ fn actual_unsupported_classes_retain_every_owner_dimension_without_projection() 
     });
 }
 
-#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-4")]
+#[trace("IT-022-SC-04", "FR-350-AC-1")]
 #[test]
 fn each_supported_past_operator_is_owner_admitted_under_both_profiles() {
     for sample in [false, true] {
@@ -623,7 +623,7 @@ fn each_supported_past_operator_is_owner_admitted_under_both_profiles() {
     }
 }
 
-#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-3")]
+#[trace("IT-022-SC-04", "FR-350-AC-1")]
 #[test]
 fn each_bounded_future_operator_preserves_independent_surrounding_target() {
     for sample in [false, true] {
@@ -664,4 +664,312 @@ fn each_bounded_future_operator_preserves_independent_surrounding_target() {
             }
         }
     }
+}
+
+type Mutation = fn(&mut qsl_eval::temporal::evidence::EvidenceRequest);
+
+fn premise(p: TlProjectionPremise) -> impl Fn(&TlProjectionError) -> bool {
+    move |error| matches!(error, TlProjectionError::NativePremise(actual) if *actual == p)
+}
+
+fn missing(m: TlMissingPremise) -> impl Fn(&TlProjectionError) -> bool {
+    move |error| matches!(error, TlProjectionError::Incomplete(actual) if *actual == m)
+}
+
+/// Each request-level failure returns exactly the code and premise its binding step assigns.
+#[trace(
+    "IT-022-SC-02",
+    "IT-022-SC-07",
+    "IT-022-SC-16",
+    "FR-350-AC-6",
+    "FR-350-AC-9"
+)]
+#[test]
+fn each_request_failure_returns_its_assigned_code_and_premise() {
+    use qsl_eval::temporal::{evidence::TriggerEvidence, ClockCover};
+    type Check = Box<dyn Fn(&TlProjectionError) -> bool>;
+    with_case("holds(true)", false, |case| {
+        let cases: Vec<(&str, Mutation, Check)> = vec![
+            (
+                "occurrence of another ordinal",
+                |r| r.occurrence.as_mut().unwrap().ordinal += 1,
+                Box::new(premise(TlProjectionPremise::Occurrence)),
+            ),
+            (
+                "wrong binding",
+                |r| r.binding.clock_name = "another-clock".into(),
+                Box::new(|e| matches!(e, TlProjectionError::NativeClock(_))),
+            ),
+            (
+                "counter cover",
+                |r| r.cover = ClockCover::Counter { uncertainty: 1 },
+                Box::new(premise(TlProjectionPremise::ClockCover)),
+            ),
+            (
+                "correspondence identity",
+                |r| r.correspondence.identity = "another".into(),
+                Box::new(premise(TlProjectionPremise::CorrespondenceReference)),
+            ),
+            (
+                "correspondence authority",
+                |r| r.correspondence.authority_identity = "another".into(),
+                Box::new(premise(TlProjectionPremise::CorrespondenceReference)),
+            ),
+            (
+                "absent anchor",
+                |r| r.anchor = None,
+                Box::new(missing(TlMissingPremise::Anchor)),
+            ),
+            (
+                "anchor unequal to the instance",
+                |r| r.anchor = Some("another-anchor".into()),
+                Box::new(premise(TlProjectionPremise::Anchor)),
+            ),
+            (
+                "unadmitted trigger",
+                |r| r.trigger_evidence = TriggerEvidence::Missing,
+                Box::new(missing(TlMissingPremise::Instance)),
+            ),
+            (
+                "absent trigger",
+                |r| r.trigger = None,
+                Box::new(missing(TlMissingPremise::Instance)),
+            ),
+            (
+                "no origin for the trigger",
+                |r| r.origins.clear(),
+                Box::new(missing(TlMissingPremise::Instance)),
+            ),
+            (
+                "position of an unknown observation",
+                |r| r.positions[0].observation.identity = "unknown-observation".into(),
+                Box::new(missing(TlMissingPremise::Observation)),
+            ),
+            (
+                "absent decision closure",
+                |r| r.decision_closure = None,
+                Box::new(missing(TlMissingPremise::CompleteInput)),
+            ),
+            (
+                "differing decision closure",
+                |r| r.decision_closure = Some(ProgressClosure::Open),
+                Box::new(premise(TlProjectionPremise::DecisionClosure)),
+            ),
+            (
+                "differing surrounding closure",
+                |r| r.surrounding_closure = Some(ProgressClosure::Open),
+                Box::new(premise(TlProjectionPremise::SurroundingClosure)),
+            ),
+            (
+                "absent surrounding closure",
+                |r| r.surrounding_closure = None,
+                Box::new(premise(TlProjectionPremise::SurroundingClosure)),
+            ),
+            (
+                "absent progress",
+                |r| r.decision_progress = None,
+                Box::new(premise(TlProjectionPremise::Progress)),
+            ),
+            (
+                "differing surrounding progress",
+                |r| r.surrounding_progress = Some(99),
+                Box::new(premise(TlProjectionPremise::Progress)),
+            ),
+            (
+                "absent completeness",
+                |r| r.completeness = None,
+                Box::new(missing(TlMissingPremise::CompleteInput)),
+            ),
+            (
+                "incomplete completeness",
+                |r| {
+                    r.completeness.as_mut().unwrap().state =
+                        qsl_eval::temporal::ProgressCompleteness::Incomplete
+                },
+                Box::new(missing(TlMissingPremise::CompleteInput)),
+            ),
+        ];
+        for (name, mutate, check) in cases {
+            let mut request = case.native.request.clone();
+            mutate(&mut request);
+            let error = project_tl(
+                case.package,
+                case.subject,
+                case.classification,
+                case.surrounding,
+                NativeProjectionInput {
+                    request: &request,
+                    ..case.native
+                },
+                case.selection,
+                TlLimits::default(),
+            )
+            .err()
+            .unwrap_or_else(|| panic!("{name}: must refuse"));
+            assert!(check(&error), "{name}: {error:?}");
+        }
+        // The instance fields are separate inputs.
+        let empty_instance = ValuationInstance {
+            capture_instance: "",
+            ..case.native.instance
+        };
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                instance: empty_instance,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .err()
+        .expect("empty capture instance");
+        assert!(premise(TlProjectionPremise::Anchor)(&error), "{error:?}");
+        // A control outside the subject's requirements.
+        let mut request = case.native.request.clone();
+        request.control = Some(case.native.occurrence.node.clone());
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &request,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .err()
+        .expect("foreign control");
+        assert!(premise(TlProjectionPremise::Control)(&error), "{error:?}");
+        // An observation reference of another bundle.
+        let mut observation = case.native.observation.clone();
+        observation.reference = "another-bundle".into();
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                observation: &observation,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .err()
+        .expect("foreign observation");
+        assert!(
+            premise(TlProjectionPremise::ObservationRevision)(&error),
+            "{error:?}"
+        );
+        // An anchor equal to no position: both the request and the instance name it.
+        let mut request = case.native.request.clone();
+        request.anchor = Some("no-such-position".into());
+        let instance = ValuationInstance {
+            anchor: "no-such-position",
+            ..case.native.instance
+        };
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &request,
+                instance,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .err()
+        .expect("anchor without position");
+        assert!(missing(TlMissingPremise::Anchor)(&error), "{error:?}");
+    });
+}
+
+/// Rows failing the bridge's owner-order checks name their cause and admitted index.
+#[trace("IT-022-SC-03", "FR-350-AC-6", "FR-350-AC-9")]
+#[test]
+fn request_valuation_maps_do_not_change_the_projection() {
+    use qsl_eval::temporal::Valuation;
+    with_case("holds(true) and holds(false)", false, |case| {
+        let before = case.project(TlLimits::default()).expect("projection");
+        let mut request = case.native.request.clone();
+        for (index, value) in [Valuation::Missing, Valuation::True]
+            .into_iter()
+            .enumerate()
+        {
+            request.positions[0].valuations.insert(index as u64, value);
+        }
+        let after = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &request,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect("request maps are not read");
+        assert_eq!(after.input().bytes(), before.input().bytes());
+        assert_eq!(after.request().bytes(), before.request().bytes());
+    });
+}
+
+/// A fixed-sample clock must match the owner anchor exactly and is never converted.
+#[trace("IT-022-SC-06", "FR-350-AC-4")]
+#[test]
+fn fixed_sample_clock_matches_the_owner_anchor_and_units_are_never_converted() {
+    // Equal epoch and period project.
+    with_case("once[0,0] holds(true)", true, |case| {
+        case.project(TlLimits::default())
+            .expect("matching sample clock");
+    });
+    // Only the period differs: the formula bytes are equal, the clock is not.
+    projection_support::with_sample_clock("2", "nanoseconds", || {
+        with_case("holds(true)", true, |case| {
+            let error = case
+                .project(TlLimits::default())
+                .err()
+                .expect("period mismatch");
+            assert!(premise(TlProjectionPremise::Clock)(&error), "{error:?}");
+        });
+    });
+    // Samples reinterpreted as event counts.
+    projection_support::with_observation_form(false, || {
+        with_case("holds(true)", true, |case| {
+            let error = case
+                .project(TlLimits::default())
+                .err()
+                .expect("event counts");
+            assert!(premise(TlProjectionPremise::Clock)(&error), "{error:?}");
+        });
+    });
+    // A millisecond unit: a future target cannot carry it; a past target hands it
+    // unchanged to the TL request owner.
+    projection_support::with_sample_clock("1", "milliseconds", || {
+        with_case("holds(true)", true, |case| {
+            let error = case
+                .project(TlLimits::default())
+                .err()
+                .expect("future unit");
+            assert!(
+                premise(TlProjectionPremise::ClockRepresentation)(&error),
+                "{error:?}"
+            );
+        });
+        with_case("once[0,0] holds(true)", true, |case| {
+            let error = case.project(TlLimits::default()).err().expect("past unit");
+            assert!(matches!(error, TlProjectionError::Owner(_)), "{error:?}");
+        });
+    });
 }

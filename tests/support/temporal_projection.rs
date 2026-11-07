@@ -84,6 +84,40 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
     .check(CheckingLimits::default())
 }
 
+thread_local! {
+    /// The fixed-sample period and unit the next packages on this thread declare.
+    static SAMPLE_CLOCK: std::cell::Cell<(&'static str, &'static str)> =
+        const { std::cell::Cell::new(("1", "nanoseconds")) };
+}
+
+thread_local! {
+    /// Anchors the observation records as samples (`Some(true)`) or event positions
+    /// (`Some(false)`) regardless of the declared clock.
+    static OBSERVATION_SAMPLE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Run `test` with observation records of the given anchor form.
+#[allow(dead_code)] // Only the clock-binding scenarios mix the forms.
+pub(crate) fn with_observation_form<T>(sample: bool, test: impl FnOnce() -> T) -> T {
+    let previous = OBSERVATION_SAMPLE.with(|form| form.replace(Some(sample)));
+    let result = test();
+    OBSERVATION_SAMPLE.with(|form| form.set(previous));
+    result
+}
+
+/// Run `test` with packages declaring a fixed-sample clock of `period` and `unit`.
+#[allow(dead_code)] // Only the clock-binding scenarios vary the declared clock.
+pub(crate) fn with_sample_clock<T>(
+    period: &'static str,
+    unit: &'static str,
+    test: impl FnOnce() -> T,
+) -> T {
+    let previous = SAMPLE_CLOCK.with(|clock| clock.replace((period, unit)));
+    let result = test();
+    SAMPLE_CLOCK.with(|clock| clock.set(previous));
+    result
+}
+
 /// Emit once and admit twice: the packages have equal contents and distinct owners.
 pub(crate) fn packages(
     formula: &str,
@@ -102,14 +136,15 @@ pub(crate) fn packages(
                 graph.source().clone(),
                 clause.clause().span(),
                 if profile.contains("fixed-sample") {
+                    let (period, unit) = SAMPLE_CLOCK.with(std::cell::Cell::get);
                     ClockConfiguration::FixedSample {
                         epoch: ClockExactNumber::Integer {
                             decimal: "0".into(),
                         },
                         period: ClockExactNumber::Integer {
-                            decimal: "1".into(),
+                            decimal: period.into(),
                         },
-                        unit: "nanoseconds".into(),
+                        unit: unit.into(),
                     }
                 } else if profile.contains("timestamped-event") {
                     ClockConfiguration::TimestampedEvent {
@@ -237,7 +272,11 @@ pub(crate) fn with_case_watermark(
         TlLimits::default(),
     )
     .expect("original integration bridge definition");
-    let f = observation::Fixture::new(sample);
+    let f = observation::Fixture::new(
+        OBSERVATION_SAMPLE
+            .with(std::cell::Cell::get)
+            .unwrap_or(sample),
+    );
     let context = f.context(1, None);
     let owner_limits = Limits::owner_max();
     let selection = f.selection(None);
