@@ -655,3 +655,76 @@ fn actual_unsupported_classes_retain_every_owner_dimension_without_projection() 
         }
     });
 }
+
+#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-4")]
+#[test]
+fn each_supported_past_operator_is_owner_admitted_under_both_profiles() {
+    for sample in [false, true] {
+        for formula in [
+            "once[0,1] holds(true)",
+            "historically[0,1] holds(true)",
+            "holds(true) since[0,1] holds(false)",
+            "holds(true) triggered[0,1] holds(false)",
+            "once[1,1] holds(true)",
+        ] {
+            with_case(formula, sample, |case| {
+                let projection = case
+                    .project(TlLimits::default())
+                    .expect("actual supported past owner readers");
+                assert_eq!(projection.request().lane(), TemporalLane::Past);
+                assert!(matches!(projection.input(), TlInput::Past(_)));
+                assert_eq!(
+                    projection.formula().leaves().len(),
+                    case.subject.predicate_leaves().len()
+                );
+                assert_eq!(
+                    projection.usage().valuations,
+                    u64::try_from(case.subject.predicate_leaves().len()).unwrap()
+                );
+            });
+        }
+    }
+}
+
+#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-3")]
+#[test]
+fn each_bounded_future_operator_preserves_independent_surrounding_target() {
+    for sample in [false, true] {
+        for surrounding in [Closure::Complete, Closure::Open] {
+            for formula in [
+                "eventually[0,1] holds(true)",
+                "always[0,1] holds(true)",
+                "holds(true) until[0,1] holds(false)",
+                "holds(true) release[0,1] holds(false)",
+            ] {
+                with_case_scopes(formula, sample, surrounding, OpenClosed::Closed, |case| {
+                    let projection = case
+                        .project(TlLimits::default())
+                        .expect("actual supported future owner readers");
+                    assert_eq!(projection.request().lane(), TemporalLane::Future);
+                    let TlInput::Future(trace) = projection.input() else {
+                        panic!("future input");
+                    };
+                    assert_eq!(trace.document().closed, surrounding == Closure::Complete);
+                    assert_eq!(
+                        projection
+                            .selection()
+                            .observations
+                            .decision_scope_closure
+                            .payload()
+                            .state(),
+                        OpenClosed::Closed
+                    );
+                    assert_eq!(
+                        projection.formula().formula().semantic_profile(),
+                        if surrounding == Closure::Complete {
+                            tl_syntax::SemanticProfile::ClosedTraceV1
+                        } else {
+                            tl_syntax::SemanticProfile::OnlinePrefixV1
+                        }
+                    );
+                });
+            }
+        }
+    }
+}
