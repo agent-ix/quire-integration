@@ -48,7 +48,7 @@ use tl_syntax::PropositionId;
 mod projection_support;
 use projection_support::*;
 
-#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-3")]
 #[test]
 fn opaque_observation_anchor_projects_actual_future_values_and_owner_request() {
     with_case("holds(true) and holds(false)", false, |case| {
@@ -78,7 +78,7 @@ fn opaque_observation_anchor_projects_actual_future_values_and_owner_request() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-1", "FR-350-AC-4")]
 #[test]
 fn genuine_origin_complete_past_history_retains_values_and_clock() {
     for sample in [false, true] {
@@ -114,7 +114,7 @@ fn genuine_origin_complete_past_history_retains_values_and_clock() {
     }
 }
 
-#[trace("TC-461", "FR-350-AC-1")]
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
 #[test]
 fn local_subject_cannot_use_an_independently_admitted_equal_classification() {
     with_case("holds(true)", false, |case| {
@@ -141,7 +141,7 @@ fn local_subject_cannot_use_an_independently_admitted_equal_classification() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-6")]
 #[test]
 fn agreeing_duplicate_cells_are_not_silently_collapsed() {
     with_case("holds(true)", false, |case| {
@@ -185,7 +185,7 @@ fn agreeing_duplicate_cells_are_not_silently_collapsed() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-6")]
 #[test]
 fn absent_cell_establishes_no_false_value_or_partial_projection() {
     with_case("holds(true)", false, |case| {
@@ -218,7 +218,7 @@ fn absent_cell_establishes_no_false_value_or_partial_projection() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
 #[test]
 fn independent_native_premises_refuse_without_owner_outputs() {
     with_case("holds(true)", false, |case| {
@@ -305,7 +305,7 @@ fn independent_native_premises_refuse_without_owner_outputs() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-1")]
 #[test]
 fn past_projection_requires_authoritative_origin_and_complete_input() {
     with_case("once[0,0] holds(true)", false, |case| {
@@ -352,7 +352,7 @@ fn past_projection_requires_authoritative_origin_and_complete_input() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-3")]
+#[trace("TC-461", "FR-350-AC-8")]
 #[test]
 fn projection_counters_accept_exact_and_refuse_one_short() {
     with_case("holds(true)", false, |case| {
@@ -417,7 +417,7 @@ fn projection_counters_accept_exact_and_refuse_one_short() {
     });
 }
 
-#[trace("TC-461", "FR-350-AC-1")]
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
 #[test]
 fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurrence() {
     with_case("holds(true)", false, |case| {
@@ -468,7 +468,7 @@ fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurren
     });
 }
 
-#[trace("TC-461", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
 #[test]
 fn a_relation_admitted_for_another_capture_instance_or_revision_is_not_reused() {
     with_case("holds(true)", false, |case| {
@@ -524,7 +524,7 @@ fn a_relation_admitted_for_another_capture_instance_or_revision_is_not_reused() 
     });
 }
 
-#[trace("TC-461", "FR-350-AC-2")]
+#[trace("TC-461", "FR-350-AC-6")]
 #[test]
 fn missing_semantic_instance_and_position_are_incomplete_not_successful_values() {
     with_case("holds(true)", false, |case| {
