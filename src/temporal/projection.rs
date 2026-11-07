@@ -431,6 +431,17 @@ pub struct ValidatedTlProjection<'a> {
     usage: TlProjectionUsage,
 }
 
+impl std::fmt::Debug for ValidatedTlProjection<'_> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ValidatedTlProjection")
+            .field("anchor", &self.anchor)
+            .field("positions", &self.positions)
+            .field("usage", &self.usage)
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a> ValidatedTlProjection<'a> {
     /// Original admitted package; its retained admission is checked before facts.
     pub fn package(&self) -> &'a CheckedPackageV2 {

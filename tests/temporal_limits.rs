@@ -247,9 +247,7 @@ fn projection_limits_admit_at_the_computed_count_and_refuse_one_below() {
                 lengths(&case, &projection)
             );
             assert_projection_limit(
-                case.project(set(limit, n - 1))
-                    .err()
-                    .expect("n - 1 refuses"),
+                case.project(set(limit, n - 1)).expect_err("n - 1 refuses"),
                 limit,
                 n,
             );
@@ -275,8 +273,7 @@ fn projection_limits_admit_at_the_computed_count_and_refuse_one_below() {
             };
             assert_projection_limit(
                 read_tl_projection(admitted.bytes(), expected, set(limit, n - 1))
-                    .err()
-                    .expect("reader refuses at n - 1"),
+                    .expect_err("reader refuses at n - 1"),
                 limit,
                 n,
             );
@@ -306,7 +303,7 @@ fn one_action_crossing_two_limits_returns_the_first_in_table_order() {
         limits.max_valuations = rows - 1;
         limits.max_work = before;
         assert_projection_limit(
-            case.project(limits).err().expect("both limits crossed"),
+            case.project(limits).expect_err("both limits crossed"),
             TlProjectionLimit::Valuations,
             rows,
         );
@@ -400,8 +397,7 @@ fn join_limits_admit_at_the_computed_count_and_refuse_one_below() {
                     set(limit, n - 1),
                     &mut native_budget(),
                 )
-                .err()
-                .expect("n - 1 refuses"),
+                .expect_err("n - 1 refuses"),
                 limit,
                 n,
             );
@@ -425,8 +421,7 @@ fn join_limits_admit_at_the_computed_count_and_refuse_one_below() {
                     set(limit, n - 1),
                     &mut native_budget(),
                 )
-                .err()
-                .expect("reader refuses at n - 1"),
+                .expect_err("reader refuses at n - 1"),
                 limit,
                 n,
             );
@@ -444,8 +439,7 @@ fn join_limits_admit_at_the_computed_count_and_refuse_one_below() {
                 both,
                 &mut native_budget(),
             )
-            .err()
-            .expect("both crossed"),
+            .expect_err("both crossed"),
             TlProjectionLimit::Support,
             support,
         );

@@ -103,8 +103,7 @@ fn local_subject_cannot_use_an_independently_admitted_equal_classification() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("foreign admission refusal");
+        .expect_err("foreign admission refusal");
         assert!(matches!(
             error,
             TlProjectionError::Binding(MappingBindingRefusal::ForeignClassification)
@@ -178,8 +177,7 @@ fn agreeing_duplicate_cells_project_and_disagreeing_cells_are_incomplete() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("disagreeing rows are incomplete");
+        .expect_err("disagreeing rows are incomplete");
         assert!(matches!(
             error,
             TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
@@ -211,8 +209,7 @@ fn absent_cell_establishes_no_false_value_or_partial_projection() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("missing value refuses projection");
+        .expect_err("missing value refuses projection");
         assert!(matches!(
             error,
             TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
@@ -238,8 +235,7 @@ fn independent_native_premises_refuse_without_owner_outputs() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("anchor mismatch");
+        .expect_err("anchor mismatch");
         assert!(matches!(
             error,
             TlProjectionError::NativePremise(TlProjectionPremise::Anchor)
@@ -258,8 +254,7 @@ fn independent_native_premises_refuse_without_owner_outputs() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("independent decision closure mismatch");
+        .expect_err("independent decision closure mismatch");
         assert!(matches!(
             error,
             TlProjectionError::NativePremise(TlProjectionPremise::DecisionClosure)
@@ -278,8 +273,7 @@ fn independent_native_premises_refuse_without_owner_outputs() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("independent surrounding closure mismatch");
+        .expect_err("independent surrounding closure mismatch");
         assert!(matches!(
             error,
             TlProjectionError::NativePremise(TlProjectionPremise::SurroundingClosure)
@@ -298,8 +292,7 @@ fn independent_native_premises_refuse_without_owner_outputs() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("revision mismatch");
+        .expect_err("revision mismatch");
         assert!(matches!(
             error,
             TlProjectionError::NativePremise(TlProjectionPremise::ObservationRevision)
@@ -325,8 +318,7 @@ fn past_projection_requires_authoritative_origin_and_complete_input() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("no origin history");
+        .expect_err("no origin history");
         assert!(matches!(
             error,
             TlProjectionError::Incomplete(TlMissingPremise::History)
@@ -345,8 +337,7 @@ fn past_projection_requires_authoritative_origin_and_complete_input() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("no complete input");
+        .expect_err("no complete input");
         assert!(matches!(
             error,
             TlProjectionError::Incomplete(TlMissingPremise::CompleteInput)
@@ -372,8 +363,7 @@ fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurren
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("foreign occurrence refuses");
+        .expect_err("foreign occurrence refuses");
         assert!(matches!(
             error,
             TlProjectionError::NativePremise(TlProjectionPremise::Occurrence)
@@ -396,8 +386,7 @@ fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurren
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("request occurrence differs");
+        .expect_err("request occurrence differs");
         assert!(matches!(
             error,
             TlProjectionError::NativePremise(TlProjectionPremise::Occurrence)
@@ -443,8 +432,7 @@ fn a_relation_admitted_for_another_capture_instance_or_revision_is_not_reused() 
                 case.selection,
                 TlLimits::default(),
             )
-            .err()
-            .expect("foreign relation fact refuses");
+            .expect_err("foreign relation fact refuses");
             let TlProjectionError::Valuation { row, cause } = error else {
                 panic!("typed valuation refusal: {error:?}")
             };
@@ -479,8 +467,7 @@ fn missing_semantic_instance_and_position_are_incomplete_not_successful_values()
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("no origin instance");
+        .expect_err("no origin instance");
         assert!(matches!(
             error,
             TlProjectionError::Incomplete(TlMissingPremise::Instance)
@@ -499,8 +486,7 @@ fn missing_semantic_instance_and_position_are_incomplete_not_successful_values()
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("no selected position");
+        .expect_err("no selected position");
         assert!(matches!(
             error,
             TlProjectionError::Incomplete(TlMissingPremise::Anchor)
@@ -825,8 +811,7 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("empty capture instance");
+        .expect_err("empty capture instance");
         assert!(premise(TlProjectionPremise::Anchor)(&error), "{error:?}");
         // A control outside the subject's requirements.
         let mut request = case.native.request.clone();
@@ -843,8 +828,7 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("foreign control");
+        .expect_err("foreign control");
         assert!(premise(TlProjectionPremise::Control)(&error), "{error:?}");
         // An observation reference of another bundle.
         let mut observation = case.native.observation.clone();
@@ -861,8 +845,7 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("foreign observation");
+        .expect_err("foreign observation");
         assert!(
             premise(TlProjectionPremise::ObservationRevision)(&error),
             "{error:?}"
@@ -887,8 +870,7 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
             case.selection,
             TlLimits::default(),
         )
-        .err()
-        .expect("anchor without position");
+        .expect_err("anchor without position");
         assert!(missing(TlMissingPremise::Anchor)(&error), "{error:?}");
     });
 }
@@ -939,18 +921,14 @@ fn fixed_sample_clock_matches_the_owner_anchor_and_units_are_never_converted() {
         with_case("holds(true)", true, |case| {
             let error = case
                 .project(TlLimits::default())
-                .err()
-                .expect("period mismatch");
+                .expect_err("period mismatch");
             assert!(premise(TlProjectionPremise::Clock)(&error), "{error:?}");
         });
     });
     // Samples reinterpreted as event counts.
     projection_support::with_observation_form(false, || {
         with_case("holds(true)", true, |case| {
-            let error = case
-                .project(TlLimits::default())
-                .err()
-                .expect("event counts");
+            let error = case.project(TlLimits::default()).expect_err("event counts");
             assert!(premise(TlProjectionPremise::Clock)(&error), "{error:?}");
         });
     });
@@ -958,17 +936,14 @@ fn fixed_sample_clock_matches_the_owner_anchor_and_units_are_never_converted() {
     // unchanged to the TL request owner.
     projection_support::with_sample_clock("1", "milliseconds", || {
         with_case("holds(true)", true, |case| {
-            let error = case
-                .project(TlLimits::default())
-                .err()
-                .expect("future unit");
+            let error = case.project(TlLimits::default()).expect_err("future unit");
             assert!(
                 premise(TlProjectionPremise::ClockRepresentation)(&error),
                 "{error:?}"
             );
         });
         with_case("once[0,0] holds(true)", true, |case| {
-            let error = case.project(TlLimits::default()).err().expect("past unit");
+            let error = case.project(TlLimits::default()).expect_err("past unit");
             assert!(matches!(error, TlProjectionError::Owner(_)), "{error:?}");
         });
     });

@@ -179,8 +179,7 @@ fn retained_instance_payload_contradiction_refuses_before_projection() {
                 case.selection,
                 TlLimits::default(),
             )
-            .err()
-            .expect("retained owner contradiction must refuse");
+            .expect_err("retained owner contradiction must refuse");
             let TlProjectionError::NativeActivation(contradiction) = error else {
                 panic!("original native contradiction is retained: {error:?}")
             };
@@ -216,8 +215,7 @@ fn actual_declared_capture_missing_wrong_type_and_anchor_remain_distinct_refusal
                     case.selection,
                     TlLimits::default(),
                 )
-                .err()
-                .expect("absent required capture must not create artifact");
+                .expect_err("absent required capture must not create artifact");
                 assert!(matches!(
                     error,
                     TlProjectionError::Incomplete(TlMissingPremise::Capture)
@@ -244,8 +242,7 @@ fn actual_declared_capture_missing_wrong_type_and_anchor_remain_distinct_refusal
                     case.selection,
                     TlLimits::default(),
                 )
-                .err()
-                .expect("cross-wired capture must refuse");
+                .expect_err("cross-wired capture must refuse");
                 assert!(matches!(
                     error,
                     TlProjectionError::NativePremise(TlProjectionPremise::Capture)
@@ -526,8 +523,7 @@ fn retained_native_capture_faults_preserve_original_kind_and_named_subject() {
                     case.selection,
                     TlLimits::default(),
                 )
-                .err()
-                .expect("retained owner fault");
+                .expect_err("retained owner fault");
                 assert_eq!(error.code(), code);
                 // A retained `Missing` fault is incomplete; a `Refused` one is a native premise.
                 match (kind, &error) {
@@ -605,8 +601,7 @@ fn retained_native_guard_and_delivery_anchor_faults_keep_distinct_subjects() {
                 case.selection,
                 TlLimits::default(),
             )
-            .err()
-            .expect("retained original delivery fault");
+            .expect_err("retained original delivery fault");
             assert_eq!(error.code(), code);
             match (kind, &error) {
                 (

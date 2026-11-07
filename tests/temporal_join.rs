@@ -511,12 +511,10 @@ fn support_work_and_byte_counters_accept_exact_and_refuse_one_short_with_fresh_u
                 short,
                 &mut native_budget(),
             )
-            .err()
-            .expect("one-short join refuses");
+            .expect_err("one-short join refuses");
             assert_limit(error, counter, configured);
             let error = read_tl_join(first.bytes(), expected, short, &mut native_budget())
-                .err()
-                .expect("one-short read refuses");
+                .expect_err("one-short read refuses");
             assert_limit(error, counter, configured);
         }
         let both_short = TlLimits {
@@ -533,8 +531,7 @@ fn support_work_and_byte_counters_accept_exact_and_refuse_one_short_with_fresh_u
                 both_short,
                 &mut native_budget(),
             )
-            .err()
-            .expect("shared action crosses both ceilings"),
+            .expect_err("shared action crosses both ceilings"),
             TlProjectionLimit::Support,
             0,
         );
@@ -635,8 +632,7 @@ fn ordered_causes_have_their_own_exact_and_one_short_ceiling() {
                 },
                 &mut native_budget(),
             )
-            .err()
-            .expect("second cause exceeds one"),
+            .expect_err("second cause exceeds one"),
             TlProjectionLimit::Causes,
             1,
         );
@@ -849,7 +845,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
                 .unwrap();
                 let limits = corrected_projection.selection().owner_limits;
                 let corrected_source = evaluate_tl(
-                    &corrected_projection,
+                    corrected_projection,
                     ResultRelationInput::Superseding(original_mapped.source()),
                     limits,
                 );
@@ -859,7 +855,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
                 );
                 let corrected_mapped = map_source(&corrected_source, limits);
                 let missing = join_tl(
-                    &corrected_projection,
+                    corrected_projection,
                     Some(&corrected_native),
                     Some(&corrected_mapped),
                     None,
@@ -879,7 +875,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
                     report::ResultRelationKind::Original
                 );
                 let mixed = join_tl(
-                    &corrected_projection,
+                    corrected_projection,
                     Some(&corrected_native),
                     Some(&current_original_mapped),
                     Some(&prior),
@@ -894,7 +890,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
                 assert_eq!(mixed.decision(), TlJoinDecision::Conflict);
                 assert_eq!(mixed.value(), None);
                 let corrected = join_tl(
-                    &corrected_projection,
+                    corrected_projection,
                     Some(&corrected_native),
                     Some(&corrected_mapped),
                     Some(&prior),
@@ -908,7 +904,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
                     .native_predecessor_usage()
                     .is_some_and(|usage| usage.work > 0 && usage.storage > 0));
                 let wrong = join_tl(
-                    &corrected_projection,
+                    corrected_projection,
                     Some(&corrected_native),
                     Some(&corrected_mapped),
                     Some(&wrong_prior_join),
@@ -928,7 +924,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
                 let reread_wrong = read_tl_join(
                     wrong.bytes(),
                     ExpectedTlJoin {
-                        projection: &corrected_projection,
+                        projection: corrected_projection,
                         native: Some(&corrected_native),
                         mapped: Some(&corrected_mapped),
                         previous: Some(&wrong_prior_join),
@@ -942,7 +938,7 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_reach_equal_final() {
                     read_tl_join(
                         wrong.bytes(),
                         ExpectedTlJoin {
-                            projection: &corrected_projection,
+                            projection: corrected_projection,
                             native: Some(&corrected_native),
                             mapped: Some(&corrected_mapped),
                             previous: Some(&prior)
@@ -1180,7 +1176,7 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
             |corrected, corrected_native| {
                 let corrected_mapped = map_source(
                     &evaluate_tl(
-                        &corrected,
+                        corrected,
                         ResultRelationInput::Superseding(original_mapped.source()),
                         case.selection.owner_limits,
                     ),
@@ -1194,7 +1190,7 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                     with_progress_correction(&original, &native, |projection, native| {
                         let mapped = map_source(
                             &evaluate_tl(
-                                &projection,
+                                projection,
                                 ResultRelationInput::Superseding(mapped.source()),
                                 other.selection.owner_limits,
                             ),
@@ -1211,7 +1207,7 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                 let (foreign_native, foreign_mapped) = foreign.unwrap();
                 for previous in [None, Some(&prior)] {
                     let refused_native = join_tl(
-                        &corrected,
+                        corrected,
                         Some(&foreign_native),
                         Some(&corrected_mapped),
                         previous,
@@ -1233,7 +1229,7 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                     let reread = read_tl_join(
                         refused_native.bytes(),
                         ExpectedTlJoin {
-                            projection: &corrected,
+                            projection: corrected,
                             native: Some(&foreign_native),
                             mapped: Some(&corrected_mapped),
                             previous,
@@ -1245,7 +1241,7 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                     assert_eq!(reread.decision(), TlJoinDecision::Refused);
                     assert_eq!(reread.bytes(), refused_native.bytes());
                     let refused_tl = join_tl(
-                &corrected,
+                corrected,
                 Some(&corrected_native),
                 Some(&foreign_mapped),
                 previous,
@@ -1263,7 +1259,7 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                     let reread = read_tl_join(
                         refused_tl.bytes(),
                         ExpectedTlJoin {
-                            projection: &corrected,
+                            projection: corrected,
                             native: Some(&corrected_native),
                             mapped: Some(&foreign_mapped),
                             previous,
