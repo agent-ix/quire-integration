@@ -193,9 +193,11 @@ placement in the controlled layout grants no temporal-root admission or executio
     allocator in a dedicated test binary. Refuse the first allocation inside
     `Program::try_new`, the first Layout binding's shared type-check worklist. Construction
     returns `ProgramRefusalCode::Membership` and no Program, retaining the native allocation
-    class and original `StorageRequest` unit and amount. Keep denial active through refusal
-    construction so projecting the native error cannot introduce an allocating clone or
-    another allocation. With allocation enabled, the same valid construction succeeds.
+    class and original `StorageRequest` unit and amount. The owner allocator fixture uses
+    one-shot denial and automatically disarms after the denied request; this observation
+    alone does not prove allocation-free refusal projection. Inspect the production mapping
+    separately to confirm projection performs no new allocation or allocating clone. With
+    allocation enabled, the same valid construction succeeds.
     Separately deny the first RT-owned validation scratch reservation and require `Storage`,
     distinct from shared type-check `Membership`. Semantic controls retain the pre-existing
     `TypeMismatch` and first-refusal order. Native projection controls preserve the distinct

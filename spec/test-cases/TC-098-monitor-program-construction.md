@@ -28,9 +28,11 @@ denial. Obtain every declaration, field, source location and type identity throu
 existing checked-package lookup; unavailable or refused lookup fails the test. Construct
 all input parts and expected native request observations before denial. Refuse the first
 actual allocation inside `Program::try_new`, assert `Membership`, the original native
-allocation class and exact request unit/amount, and no Program. Leave allocation denial
-active until refusal projection returns. Disarm and reconstruct the same valid parts for
-a successful retry. Independently deny the first RT-owned validation scratch reservation
+allocation class and exact request unit/amount, and no Program. Record that the owner
+failing allocator automatically disarms after its one denied request; do not credit this
+as denial throughout refusal projection. Inspect the production mapping separately for
+absence of allocation and allocating clones while constructing the refusal. Reconstruct
+the same valid parts with allocation enabled for a successful retry. Independently deny the first RT-owned validation scratch reservation
 and assert `Storage`. Retain semantic unknown-type/operator-ineligible controls and their
 original precedence. Distinguish native allocation versus capacity projection using actual
 owner error values; describe these as projection controls rather than allocator/capacity
