@@ -994,11 +994,15 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
                     &corrected_projection,
                     Some(&corrected_native),
                     Some(&current_original_mapped),
-                    None,
+                    Some(&prior),
                     TlLimits::default(),
                     &mut native_budget(),
                 )
                 .expect("mixed original/corrected pair conflicts");
+                assert!(
+                    mixed.native_admitted(),
+                    "native correction admits the actual complete prior before relation comparison"
+                );
                 assert_eq!(mixed.decision(), TlJoinDecision::Conflict);
                 assert_eq!(mixed.value(), None);
                 assert!(matches!(
