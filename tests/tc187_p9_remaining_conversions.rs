@@ -29,6 +29,9 @@ const FUNCTIONS:&str="
  function decimalRounded using v(): Quantity<m,Decimal[-100,100;2,2;nearest-even]> pure { convert<Quantity<m,Decimal[-100,100;2,2;nearest-even]>>(1 inch) }
  function decimalOutside using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(3 m) }
  function hugeScale using v(): Quantity<m,Decimal[0,1;0,4294967295;exact]> pure { convert<Quantity<m,Decimal[0,1;0,4294967295;exact]>>(1 m) }
+ function decimalBelow using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(0 m - 3 m) }
+ function decimalLowEdge using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(0 m - 2 m) }
+ function decimalHighEdge using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(2 m) }
  function integerExact using v(): Quantity<m,Int[-2,2]> pure { convert<Quantity<m,Int[-2,2]>>(1 inch) }
  function integerRounded using v(): Quantity<m,Int[-2,2;nearest-even]> pure { convert<Quantity<m,Int[-2,2;nearest-even]>>(1 inch) }
  function integerOutside using v(): Quantity<m,Int[-2,2]> pure { convert<Quantity<m,Int[-2,2]>>(3 m) }
@@ -360,29 +363,54 @@ fn original_conversion_boundaries_preserve_values_losses_and_unpaid_events() {
         ),
         4
     );
-    for name in [
+    let carried = [
         "decimalExact",
         "decimalRounded",
         "decimalOutside",
+        "decimalBelow",
+        "decimalLowEdge",
+        "decimalHighEdge",
         "hugeScale",
         "integerExact",
         "integerRounded",
         "integerOutside",
-    ] {
-        let function = FUNCTIONS
-            .lines()
-            .find(|line| line.contains(&format!("function {name} ")))
-            .expect("original carried function");
-        let candidate = source::original_with(EXTRA, function);
-        assert_eq!(
-            source::generation_with(
-                &candidate,
-                &[(name, false, limits(1024, 1024, 4, 2, 32, 1))],
-                &[],
-                &[],
-                &[name]
-            ),
-            0
-        );
-    }
+    ];
+    let functions = FUNCTIONS
+        .lines()
+        .filter(|line| carried.iter().any(|name| line.contains(&format!("function {name} "))))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let candidate = source::original_with(EXTRA, &functions);
+    let selected = [
+        ("decimalRounded", limits(15, 5, 1, 1, 6, 1)),
+        ("decimalExact", limits(15, 5, 1, 1, 4, 1)),
+        ("decimalRounded", limits(15, 5, 1, 1, 4, 1)),
+        ("decimalOutside", limits(2, 1, 0, 1, 2, 0)),
+        ("decimalOutside", limits(2, 1, 0, 1, 1, 0)),
+        ("hugeScale", limits(u64::MAX, 64, 0, 1, 2, 1)),
+        ("integerExact", limits(15, 0, 1, 1, 4, 1)),
+        ("integerRounded", limits(15, 0, 1, 1, 4, 1)),
+        ("integerOutside", limits(2, 0, 0, 1, 2, 0)),
+        ("integerOutside", limits(2, 0, 0, 1, 1, 0)),
+    ];
+    let mut cases = carried
+        .iter()
+        .flat_map(|name| {
+            [
+                limits(1024, 1024, 4, 2, 32, 1),
+                limits(1024, 1024, 4, 2, 0, 1),
+                limits(1024, 1024, 4, 2, 1, 1),
+                limits(1024, 1024, 4, 2, 4, 1),
+                limits(1024, 1024, 4, 2, 5, 1),
+                limits(15, 5, 4, 2, 32, 1),
+                limits(16, 5, 4, 2, 4, 1),
+            ]
+            .map(|l| (*name, false, l))
+        })
+        .collect::<Vec<_>>();
+    cases.extend(selected.map(|(name, l)| (name, false, l)));
+    assert_eq!(
+        source::generation(&candidate, &cases, &[], &[]),
+        cases.len()
+    );
 }

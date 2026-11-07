@@ -35,7 +35,7 @@ enum RowDispatch {
         generated_owner: &'static str,
         missing: &'static str,
     },
-    GeneratedArithmetic(&'static str),
+    GeneratedAgreement(&'static str),
     NativeOriginal {
         expected: &'static [&'static str],
         operation: NativeOperation,
@@ -94,26 +94,23 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U11x" => Some(RowDispatch::Topology("missing-name")),
         "U30" | "U31" => Some(RowDispatch::Checked("type-mismatch")),
         "U14" => Some(RowDispatch::Checked("ill_typed")),
-        "U12" => Some(RowDispatch::GeneratedArithmetic("empty dimensionless")),
+        "U12" => Some(RowDispatch::GeneratedAgreement("empty dimensionless")),
+        "U02" => Some(RowDispatch::GeneratedAgreement("empty dimension")),
+        "U04" => Some(RowDispatch::GeneratedAgreement("5463/20")),
+        "U07" => Some(RowDispatch::GeneratedAgreement("nearest-even")),
+        "U08" => Some(RowDispatch::GeneratedAgreement("refuse atomically")),
+        "U09b" => Some(RowDispatch::GeneratedAgreement("conversion succeeds exactly")),
+        "U10" => Some(RowDispatch::GeneratedAgreement("1 m")),
+        "U16" => Some(RowDispatch::GeneratedAgreement("unit.target-domain")),
+        "U17" => Some(RowDispatch::GeneratedAgreement("membership")),
+        "U18" => Some(RowDispatch::GeneratedAgreement("4294967296")),
+        "U22" => Some(RowDispatch::GeneratedAgreement("40000")),
+        "U25" => Some(RowDispatch::GeneratedAgreement("1 J")),
+        "U29" => Some(RowDispatch::GeneratedAgreement("integer-domain")),
         "U13" | "U21" => Some(RowDispatch::QslValue {
             expected: if id == "U13" { "incomplete" } else { "dimensionless" },
             generated_owner: "IR-842",
             missing: "QSL-to-IR-to-CG generated quantity power and native comparison",
-        }),
-        "U16" | "U29" => Some(RowDispatch::QslValue {
-            expected: "unit.target-domain",
-            generated_owner: "IR-1349",
-            missing: "strict IR reader InvalidDerivedShape before CG carried-target generation",
-        }),
-        "U17" => Some(RowDispatch::QslValue {
-            expected: "membership",
-            generated_owner: "IR-1349",
-            missing: "strict IR reader InvalidDerivedShape before CG carried-target generation",
-        }),
-        "U18" => Some(RowDispatch::QslValue {
-            expected: "4294967296",
-            generated_owner: "IR-1349",
-            missing: "strict IR reader InvalidDerivedShape before CG carried-target generation",
         }),
         "U28" => Some(RowDispatch::QslValue {
             expected: "127/500000",
@@ -144,52 +141,12 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
             expected: &["false"],
             operation: NativeOperation::Compare,
         }),
-        "U22" => Some(RowDispatch::QslControl {
-            expected: "40000",
-            remaining_owner: "IR-1348",
-            missing: "isolated original conversion TypeMismatch; no native agreement",
-        }),
-        "U25" => Some(RowDispatch::QslControl {
-            expected: "1 J",
-            remaining_owner: "IR-1348",
-            missing: "original compound-target InvalidSyntax; no native agreement",
-        }),
         "U27" => Some(RowDispatch::QslControl {
             expected: "undefined",
             remaining_owner: "IR-1348",
             missing: "full-source UnprovedNonzero and no generated compound agreement",
         }),
         "U03" | "U05" | "U09" => Some(RowDispatch::Checked("ill_typed")),
-        "U02" => Some(RowDispatch::NativeOwner {
-            expected: "empty dimension",
-            generated_owner: "IR-842",
-            missing: "CG generated comparison for original normalization operations",
-        }),
-        "U04" => Some(RowDispatch::NativeOwner {
-            expected: "5463/20",
-            generated_owner: "IR-842",
-            missing: "CG generated comparison for original affine conversion",
-        }),
-        "U07" => Some(RowDispatch::NativeOwner {
-            expected: "nearest-even",
-            generated_owner: "IR-842",
-            missing: "CG generated carried conversion and native comparison",
-        }),
-        "U08" => Some(RowDispatch::NativeOwner {
-            expected: "refuse atomically",
-            generated_owner: "IR-842",
-            missing: "CG generated carried conversion and native comparison",
-        }),
-        "U09b" => Some(RowDispatch::NativeOwner {
-            expected: "conversion succeeds exactly",
-            generated_owner: "IR-842",
-            missing: "CG generated comparison for distinct scale-one alias",
-        }),
-        "U10" => Some(RowDispatch::NativeOwner {
-            expected: "1 m",
-            generated_owner: "IR-842",
-            missing: "CG generated comparison for exact tuple and final denial",
-        }),
         "U36" => Some(RowDispatch::NativeOwner {
             expected: "unequal compound units",
             generated_owner: "IR-842",
@@ -206,8 +163,8 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
             missing: "value and generated agreement beyond equivalence admission",
         }),
         "U01" => Some(RowDispatch::Planned {
-            tickets: &["QSL-1737", "IR-1345"],
-            missing: "public checked-package BoundedQuantity emission and source-to-CG agreement for admitted carried_quantity operations",
+            tickets: &["IR-842"],
+            missing: "CG operand check admits only unit and compound_unit forms, so the carried_quantity parameter of a carried convert-then-add refuses OperandTypeMismatch and source-to-CG agreement is unexecuted",
         }),
         "U11g3" => Some(RowDispatch::Planned {
             tickets: &["QSL-1738"],
@@ -398,9 +355,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 assert!(
                     matches!(
                         (vector.id, generated_owner),
-                        ("U28", "IR-1348")
-                            | ("U13" | "U21", "IR-842")
-                            | ("U16" | "U17" | "U18" | "U29", "IR-1349")
+                        ("U28", "IR-1348") | ("U13" | "U21", "IR-842")
                     ),
                     "{} generated owner",
                     vector.id
@@ -410,21 +365,16 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                     "{} missing generated path",
                     vector.id
                 );
-                if generated_owner == "IR-1349" {
-                    assert!(
-                        missing.contains("strict IR reader"),
-                        "{} reader frontier",
-                        vector.id
-                    );
-                }
                 observed.insert(vector.id);
             }
-            RowDispatch::GeneratedArithmetic(expected) => {
-                // tc187_u12_arithmetic independently executes the original
-                // QSL operations and their generated native symbols.
+            RowDispatch::GeneratedAgreement(expected) => {
+                // tc187_u12_arithmetic, tc187_ir842_conversions and
+                // tc187_p9_remaining_conversions execute these original
+                // operations as QSL source, emitted bytes, IR admission, CG
+                // generation and a native oracle compared with QSL evaluation.
                 assert!(
                     vector.expected.contains(expected),
-                    "{} generated arithmetic expectation",
+                    "{} generated agreement expectation",
                     vector.id
                 );
                 observed.insert(vector.id);
@@ -487,7 +437,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                     "{} expectation",
                     vector.id
                 );
-                let expected_owner = if matches!(vector.id, "U22" | "U25" | "U27") {
+                let expected_owner = if matches!(vector.id, "U27") {
                     "IR-1348"
                 } else {
                     "IR-842"
@@ -502,14 +452,13 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             }
             RowDispatch::Planned { tickets, missing } => {
                 let expected_tickets: &[&str] = match vector.id {
-                    "U01" => &["QSL-1737", "IR-1345"],
                     "U11g3" => &["QSL-1738"],
                     _ => &["IR-842"],
                 };
                 assert_eq!(tickets, expected_tickets, "{} owners", vector.id);
                 assert!(!missing.is_empty(), "{} missing route", vector.id);
                 if vector.id == "U01" {
-                    assert!(missing.contains("BoundedQuantity"));
+                    assert!(missing.contains("carried_quantity"));
                     assert!(missing.contains("source-to-CG agreement"));
                 }
                 if vector.id == "U11g3" {

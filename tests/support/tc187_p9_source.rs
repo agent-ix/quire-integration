@@ -194,29 +194,11 @@ pub fn generation(
     integer_bound_refusals: &[&str],
     compound_result_refusals: &[&str],
 ) -> usize {
-    generation_with(
-        original,
-        cases,
-        integer_bound_refusals,
-        compound_result_refusals,
-        &[],
-    )
-}
-
-/// Execute eligible original quantity families and preserve carried-target derivation stops.
-pub fn generation_with(
-    original: &Original,
-    cases: &[(&str, bool, ScalarLimits)],
-    integer_bound_refusals: &[&str],
-    compound_result_refusals: &[&str],
-    carried_refusals: &[&str],
-) -> usize {
     generation_core(
         original,
         cases,
         integer_bound_refusals,
         compound_result_refusals,
-        carried_refusals,
         None,
     )
 }
@@ -227,7 +209,7 @@ pub fn generation_denied(
     cases: &[(&str, bool, ScalarLimits)],
     denial: quire_exact::InjectedDenial,
 ) -> usize {
-    generation_core(original, cases, &[], &[], &[], Some(denial))
+    generation_core(original, cases, &[], &[], Some(denial))
 }
 
 fn generation_core(
@@ -235,7 +217,6 @@ fn generation_core(
     cases: &[(&str, bool, ScalarLimits)],
     integer_bound_refusals: &[&str],
     compound_result_refusals: &[&str],
-    carried_refusals: &[&str],
     denial: Option<quire_exact::InjectedDenial>,
 ) -> usize {
     use quire_contract_codegen::{ClaimDisposition, ExactScalarRefusal, OperationProvenance};
@@ -247,34 +228,12 @@ fn generation_core(
     assert!(emission.omitted().is_empty(), "{:?}", emission.omitted());
     let mut evidence = CheckedPackageEvidence::new();
     evidence.support_feature("quire.value.complete/v1");
-    let read_result = CheckedPackageV2::read(
+    let CheckedPackageV2ReadResult::Admitted(package) = CheckedPackageV2::read(
         emission.package().bytes(),
         CheckedPackageReadLimits::bounded(),
         &evidence,
-    );
-    let package = match read_result {
-        CheckedPackageV2ReadResult::Admitted(package) => package,
-        CheckedPackageV2ReadResult::Refused(refusal) if !carried_refusals.is_empty() => {
-            assert!(cases
-                .iter()
-                .all(|(name, _, _)| carried_refusals.contains(name)));
-            assert_eq!(
-                refusal.code,
-                quire_contract_ir::CheckedPackageRefusalCode::InvalidPackage
-            );
-            assert_eq!(
-                refusal.cause,
-                Some(quire_contract_ir::CheckedPackageRefusalCause::InvalidDerivedShape)
-            );
-            let locus = refusal.locus.as_ref().expect("actual carried type locus");
-            assert_eq!(locus.path.len(), 2);
-            assert!(
-                matches!(&locus.path[..],[quire_contract_ir::CheckedNodePathSegment::Name(a),quire_contract_ir::CheckedNodePathSegment::Name(b)] if a.as_ref()=="scalar_type" && b.as_ref()=="carried_quantity")
-            );
-            eprintln!("CARRIED_READER {:?}: InvalidPackage/InvalidDerivedShape at original scalar_type/carried_quantity; no CG claim",carried_refusals);
-            return 0;
-        }
-        other => panic!("original quantity IR admits: {other:?}"),
+    ) else {
+        panic!("original quantity IR admits");
     };
     let mut nodes = BTreeMap::new();
     let mut items = Vec::new();
@@ -299,10 +258,6 @@ fn generation_core(
         match results.pop().expect("one derived operation") {
             Ok(item) => {
                 assert!(!integer_bound_refusals.contains(name));
-                assert!(
-                    !carried_refusals.contains(name),
-                    "carried source unexpectedly became derivable: {name}"
-                );
                 items.push(item);
             }
             Err(ExactScalarRefusal::RequiresBound { unbounded_type }) => {
@@ -320,13 +275,6 @@ fn generation_core(
                 assert_eq!(refused.semantic_form.as_ref(), "integer");
                 eprintln!("{name}: RequiresBound on genuine scalar_type/integer exponent; generated agreement Planned");
             }
-            Err(other) if carried_refusals.contains(name) => {
-                assert!(
-                    matches!(&other,ExactScalarRefusal::NoDerivableClaim { reason: quire_contract_codegen::ClaimDerivationRefusal::OperandFormsNotDerivable {operation_identity} | quire_contract_codegen::ClaimDerivationRefusal::ModeNotDerivable {operation_identity} } if operation_identity=="quire.op.quantity.convert"),
-                    "{name}: {other:?}"
-                );
-                eprintln!("CARRIED_DERIVATION {name}: {other:?}");
-            }
             Err(other) => panic!("{name}: unexpected derivation refusal: {other:?}"),
         }
         nodes.insert(*name, node);
@@ -342,6 +290,19 @@ mod oracle_observation;
 use quire_exact::{{Meter,Outcome,Quantity,Value,ScalarLimits}};
 use quire_semantic_value::quantity::UnitTable;
 fn lift<T>(outcome: Outcome<T>,value:impl FnOnce(T)->Value)->Outcome<Value> {{ match outcome {{ Outcome::Completed(v)=>Outcome::Completed(value(v)),Outcome::Undefined(v)=>Outcome::Undefined(v),Outcome::Refused(v)=>Outcome::Refused(v),Outcome::Incomplete(v)=>Outcome::Incomplete(v) }} }}
+fn carried_observation(outcome: Outcome<(quire_semantic_value::quantity::Conversion, quire_exact::CarriedQuantityType)>,unit:quire_exact::UnitId)->(Outcome<Value>,Vec<quire_semantic_value::loss::ValueLoss>) {{
+    use quire_semantic_value::{{loss::ValueLoss,quantity::ConvertedValue}};
+    match outcome {{
+        Outcome::Completed((conversion,_))=>match conversion.value() {{
+            ConvertedValue::Exact(exact)=>(Outcome::Completed(Value::Quantity(Quantity::new(exact.clone(),unit))),Vec::new()),
+            ConvertedValue::Decimal(result)=>(Outcome::Completed(Value::Quantity(Quantity::new(result.value().normalized().to_rational(),unit))),result.loss().cloned().map(ValueLoss::Decimal).into_iter().collect()),
+            ConvertedValue::Integer{{value,loss}}=>(Outcome::Completed(Value::Quantity(Quantity::new(quire_exact::Rational::from_integer(value.value().clone()),unit))),loss.clone().map(ValueLoss::Decimal).into_iter().collect()),
+        }},
+        Outcome::Undefined(v)=>(Outcome::Undefined(v),Vec::new()),
+        Outcome::Refused(v)=>(Outcome::Refused(v),Vec::new()),
+        Outcome::Incomplete(v)=>(Outcome::Incomplete(v),Vec::new()),
+    }}
+}}
 #[test]
 fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
 "#,
@@ -352,7 +313,7 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
     let mut functions = String::new();
     let mut expected = Vec::new();
     for (name, child, limits) in cases {
-        if integer_bound_refusals.contains(name) || carried_refusals.contains(name) {
+        if integer_bound_refusals.contains(name) {
             continue;
         }
         let claims = output
@@ -397,10 +358,15 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
             .iter()
             .find(|item| item.node_id == nodes[name])
             .expect("derived original item");
-        let conversion = matches!(
+        let carried = matches!(
             item.operation,
-            quire_contract_codegen::ExactScalarOperation::QuantityConversion
+            quire_contract_codegen::ExactScalarOperation::CarriedQuantityConversion { .. }
         );
+        let conversion = carried
+            || matches!(
+                item.operation,
+                quire_contract_codegen::ExactScalarOperation::QuantityConversion
+            );
         let comparison = matches!(
             item.operation,
             quire_contract_codegen::ExactScalarOperation::QuantityComparison { .. }
@@ -490,13 +456,14 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
             .into_iter()
             .map(|loss| loss.loss)
             .collect::<Vec<_>>();
-        assert!(losses.is_empty());
         expected.push(super::oracle_observation::snapshot(
             &outcome, &losses, &meter,
         ));
         if conversion {
-            let quire_exact::ValueType::Quantity(unit_id) = operation.value_type() else {
-                panic!("exact conversion result type");
+            let unit_id = match operation.value_type() {
+                quire_exact::ValueType::Quantity(unit_id) => unit_id,
+                quire_exact::ValueType::CarriedQuantity(target) => target.unit(),
+                other => panic!("conversion result type: {other:?}"),
             };
             let key = unit_id
                 .declared_key()
@@ -510,16 +477,18 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
                 denial.point, denial.occurrence
             )
         });
-        driver.push_str(&format!("let mut meter=Meter::new({limits:?}){native_denial}; let mut scope=quire_semantic_value::quantity::UnitScope::new(&table);\nlet actual:Outcome<Value>='case: {{\n{preparation}"));
+        driver.push_str(&format!("let mut meter=Meter::new({limits:?}){native_denial}; let mut scope=quire_semantic_value::quantity::UnitScope::new(&table);\nlet (actual,losses):(Outcome<Value>,Vec<quire_semantic_value::loss::ValueLoss>)='case: {{\n{preparation}"));
         if comparison {
-            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated comparison\"); lift(actual,Value::Boolean)\n",generated.symbol,arguments.join(",")));
+            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated comparison\"); (lift(actual,Value::Boolean),Vec::new())\n",generated.symbol,arguments.join(",")));
+        } else if carried {
+            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated carried conversion\"); carried_observation(actual,target.id())\n",generated.symbol,arguments.join(",")));
         } else if conversion {
-            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated conversion\"); lift(actual,Value::Quantity)\n",generated.symbol,arguments.join(",")));
+            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated conversion\"); (lift(actual,Value::Quantity),Vec::new())\n",generated.symbol,arguments.join(",")));
         } else {
-            driver.push_str(&format!("let (actual,identified)=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated arithmetic\"); if let Outcome::Completed(ref quantity)=actual {{ assert_eq!(quantity.unit(),&identified.id()); }} lift(actual,Value::Quantity)\n",generated.symbol,arguments.join(",")));
+            driver.push_str(&format!("let (actual,identified)=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated arithmetic\"); if let Outcome::Completed(ref quantity)=actual {{ assert_eq!(quantity.unit(),&identified.id()); }} (lift(actual,Value::Quantity),Vec::new())\n",generated.symbol,arguments.join(",")));
         }
         driver.push_str("};\n");
-        driver.push_str("let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new(); println!(\"IT019_OBSERVATION {}\",oracle_observation::snapshot(&actual,&losses,&meter)); }\n");
+        driver.push_str("println!(\"IT019_OBSERVATION {}\",oracle_observation::snapshot(&actual,&losses,&meter)); }\n");
         // Each observation is its own function so a long case list never shares one stack frame.
         let number = expected.len();
         functions.push_str(&format!("#[allow(unused_variables)]\nfn case_{number}(graph:&quire_semantic_value::unit::UnitGraph,table:&UnitTable){{\n{driver}}}\n"));
@@ -753,7 +722,7 @@ fn prepare_operand(
             let quire_exact::Value::Integer(exponent) = leaf(*exponent) else {
                 panic!("power exponent is an Integer");
             };
-            out.push_str(&format!("let exp{id}:quire_exact::Integer={:?}.parse().expect(\"original exponent\"); let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::Power(scope.resolve(&{base}).expect(\"prepared base\"),&exp{id}),&mut meter).expect(\"native power\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case lift(other,Value::Quantity) }};\n",exponent.to_string()));
+            out.push_str(&format!("let exp{id}:quire_exact::Integer={:?}.parse().expect(\"original exponent\"); let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::Power(scope.resolve(&{base}).expect(\"prepared base\"),&exp{id}),&mut meter).expect(\"native power\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case (lift(other,Value::Quantity),Vec::new()) }};\n",exponent.to_string()));
         }
         NodeKind::Quantity(operator, _, _) => {
             let [left, right] = children.as_slice() else {
@@ -762,11 +731,13 @@ fn prepare_operand(
             let left = prepare_operand(*left, leaf, out, count);
             let right = prepare_operand(*right, leaf, out, count);
             let constructor = match operator {
+                ArithmeticOperator::Add => "Add",
+                ArithmeticOperator::Subtract => "Subtract",
                 ArithmeticOperator::Multiply => "Multiply",
                 ArithmeticOperator::Divide => "Divide",
                 other => panic!("unsupported prepared quantity operator {other:?}"),
             };
-            out.push_str(&format!("let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::{constructor}(scope.resolve(&{left}).expect(\"prepared left\"),scope.resolve(&{right}).expect(\"prepared right\")),&mut meter).expect(\"native operation\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case lift(other,Value::Quantity) }};\n"));
+            out.push_str(&format!("let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::{constructor}(scope.resolve(&{left}).expect(\"prepared left\"),scope.resolve(&{right}).expect(\"prepared right\")),&mut meter).expect(\"native operation\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case (lift(other,Value::Quantity),Vec::new()) }};\n"));
         }
         _ => {
             let quire_exact::Value::Quantity(quantity) = leaf(node) else {
