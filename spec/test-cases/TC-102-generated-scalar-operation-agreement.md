@@ -1,6 +1,6 @@
 ---
 id: TC-102
-title: "Execute generated Boolean, Integer and Text scalar operations"
+title: "Execute generated Boolean, Integer, Rational, Decimal, IEEE and Text scalar operations"
 type: TC
 relationships:
   - target: ix://agent-ix/quire-integration/IT-019
@@ -8,7 +8,7 @@ relationships:
   - target: ix://agent-ix/quire-contract-codegen/FR-014
     type: references
 ---
-# TC-102: Execute generated Boolean, Integer and Text scalar operations
+# TC-102: Execute generated Boolean, Integer, Rational, Decimal, IEEE and Text scalar operations
 
 ## Description
 
@@ -61,11 +61,28 @@ Neither evaluator is reproduced.
    `1/2 + 1/3 = 5/6`, `4/3 - 7/2 = -13/6`, `2/3 * 3/4 = 1/2` and
    `-(7/3) = -7/3`. Require the actual derived RationalArithmetic claim and
    complete native/QSL agreement at work 0, 1 and 1024.
+8. Add Integer LessOrEqual and GreaterOrEqual, operand-endpoint cases for every
+   Integer body (`9 + 9`, `-9 - 9`, `-9 * 9`, negating `-9`, equal, reversed
+   and endpoint ordering pairs), and Rational Divide (`Rational[1,9;1,9]`
+   divisor), IntegerDivide (`Int[1,9]` divisor) and the four Rational orderings.
+9. Evaluate Decimal Add, Subtract, Multiply, Negate and the four orderings over
+   `Decimal[-1000,1000;0,2;exact]` operands, literal-divisor Divide bodies
+   (QSL requires a provably nonzero divisor) including an out-of-domain
+   refusal, and `convert<Decimal[-9,9;0,0;mode]>` for every rounding mode over
+   2.5 and -2.5. Require authored coefficients and scales for completed cases
+   and the Decimal loss list in every comparison.
+10. Check IEEE source with the selected IEEE profile admitted. Evaluate Add,
+    Subtract, Multiply and Divide for Float32 and Float64 under all six rounding
+    modes over nine operand pairs, and both width conversions under all six
+    modes over eight operands, at work 1024, 0 and 1. Compare values, IEEE flag
+    losses, exact-mode refusals, charges and counters; require the `1 op 3`
+    bit patterns.
 
-Other operand kinds, further Text input boundaries and supplied-stop Boolean
-paths remain Planned under IR-842; division/modulo remain Planned behind
-IR-1391's CG result-bound derivation. These selected cases make no
-whole-family claim.
+Further Text input boundaries, IEEE NumericEqual/TotalOrder/BitIdentical
+comparisons (CG refuses generation with `FormMismatch`), Enum comparison and
+evaluated-right Boolean paths remain Planned under IR-842 with the measured
+owner seams recorded in IT-019; division/modulo remain Planned behind IR-1391's
+CG result-bound derivation. These selected cases make no whole-family claim.
 
 ## Expected Results
 
