@@ -981,10 +981,19 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
                 .expect("missing prior is conflict");
                 assert_eq!(missing.decision(), TlJoinDecision::Conflict);
                 assert_eq!(missing.value(), None);
+                let current_original_mapped = evaluate_mapped(corrected_projection);
+                assert_eq!(
+                    current_original_mapped.source().request(),
+                    corrected_projection.request()
+                );
+                assert_eq!(
+                    current_original_mapped.source().relation_kind(),
+                    report::ResultRelationKind::Original
+                );
                 let mixed = join_tl(
                     &corrected_projection,
                     Some(&corrected_native),
-                    Some(&original_mapped),
+                    Some(&current_original_mapped),
                     None,
                     TlLimits::default(),
                     &mut native_budget(),
