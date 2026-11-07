@@ -4,6 +4,7 @@
 
 use ix_trace_rs::{string_edge, trace};
 use qsv_failing_allocator::{arm, disarm, FailingAllocator};
+use quire_contract_runtime::exact::CheckCause;
 use quire_contract_runtime::monitor::{
     build, Buffer, BuildPlan, Entries, Expression, ExpressionId, Function, FunctionId, Layout,
     LocalId, MonitorFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode, StepBudget,
@@ -7226,4 +7227,30 @@ fn declared_type_semantics_keep_original_locus_and_layout_precedence() {
     assert_eq!(refusal.code, ProgramRefusalCode::InvalidLayout);
     assert_eq!(refusal.node, Some(root));
     assert_eq!(refusal.membership_failure, None);
+}
+
+#[trace("TC-098", "IT-018-SC-16")]
+#[test]
+fn native_type_projection_keeps_allocation_and_capacity_requests_distinct() {
+    // These actual owner error values test projection only. They are not
+    // observations of allocator denial or impossible capacity exhaustion.
+    for request in [
+        StorageRequest::new(7, StorageUnit::Bytes),
+        StorageRequest::new(19, StorageUnit::AdditionalElements),
+    ] {
+        for error in [
+            TypeCheckError::Allocation(request),
+            TypeCheckError::Capacity(request),
+        ] {
+            let expected = CheckCause::TypeCheck(error.clone());
+            arm(0);
+            let actual = CheckCause::from(error);
+            let denied = disarm();
+            assert_eq!(
+                denied, None,
+                "native request projection allocates no storage"
+            );
+            assert_eq!(actual, expected);
+        }
+    }
 }
