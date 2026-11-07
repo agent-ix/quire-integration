@@ -161,7 +161,6 @@ fn input_cases(row: &Row) -> Vec<(&[i64], ResultKind)> {
     cases
 }
 
-/// Trace: TC-102, IT-019-SC-05.
 #[trace("TC-102", "IT-019-SC-05")]
 #[test]
 fn original_integer_operations_agree_with_generated_native_observations() {

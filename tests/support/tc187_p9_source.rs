@@ -8,8 +8,8 @@ use qsl_semantics::check::PackageDeclarations;
 use qsl_semantics::model::intake::SelectedModels;
 use quire_contract_codegen::{derive_exact_scalar_items, generate_exact_scalar_oracles};
 use quire_contract_ir::{
-    CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, CheckedPackageV2ReadResult,
-    CheckedTerm,
+    CheckedNodeId, CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2,
+    CheckedPackageV2ReadResult, CheckedTerm,
 };
 use quire_exact::{Meter, NodeKey, ScalarLimits};
 use quire_semantic_value::checking::CheckingLimits;
@@ -232,12 +232,13 @@ fn generation_core(
     assert!(emission.omitted().is_empty(), "{:?}", emission.omitted());
     let mut evidence = CheckedPackageEvidence::new();
     evidence.support_feature("quire.value.complete/v1");
-    let CheckedPackageV2ReadResult::Admitted(package) = CheckedPackageV2::read(
+    let package = match CheckedPackageV2::read(
         emission.package().bytes(),
         CheckedPackageReadLimits::bounded(),
         &evidence,
-    ) else {
-        panic!("original quantity IR admits");
+    ) {
+        CheckedPackageV2ReadResult::Admitted(package) => package,
+        other => panic!("original quantity IR admits: {other:?}"),
     };
     let mut nodes = BTreeMap::new();
     let mut items = Vec::new();
@@ -280,6 +281,16 @@ fn generation_core(
                 eprintln!("{name}: RequiresBound on genuine scalar_type/integer exponent; generated agreement Planned");
             }
             Err(other) => panic!("{name}: unexpected derivation refusal: {other:?}"),
+        }
+        for computed in computed_operations(&package, &node) {
+            if items.iter().any(|item| item.node_id == computed) {
+                continue;
+            }
+            let mut derived = derive_exact_scalar_items(&package, std::slice::from_ref(&computed));
+            match derived.pop().expect("one derived computed operand") {
+                Ok(item) => items.push(item),
+                Err(other) => panic!("{name}: computed operand derivation refusal: {other:?}"),
+            }
         }
         nodes.insert(*name, node);
     }
@@ -398,9 +409,21 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
                 panic!("closed operand completes");
             };
             if !input_meter.admitted_charges().is_empty() {
-                // A computed operand is charged on the operation's own meter, so the
-                // native side replays its owner operations before the generated one.
+                // A computed operand is charged on the operation's own meter, so each of
+                // its operations runs through its own generated symbol before the claim.
+                let Some(CheckedTerm::Application {
+                    arguments: root_arguments,
+                    ..
+                }) = package.term(&nodes[name])
+                else {
+                    panic!("{name}: original operation application");
+                };
+                let CheckedTerm::Reference { target } = &root_arguments[index] else {
+                    panic!("{name}: computed operand reference");
+                };
                 let prepared = prepare_operand(
+                    &package,
+                    target,
                     operand,
                     &|node| {
                         let mut leaf_meter = Meter::new(operand_limits());
@@ -420,6 +443,18 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
                             panic!("leaf operand completes");
                         };
                         value
+                    },
+                    &|id| {
+                        let claim = output
+                            .claim_map
+                            .items
+                            .iter()
+                            .find(|claim| &claim.node_id == id)
+                            .expect("a claim for every computed operand");
+                        let ClaimDisposition::Generated(generated) = &claim.result else {
+                            panic!("computed operand does not generate: {:?}", claim.result);
+                        };
+                        generated.symbol.clone()
                     },
                     &mut preparation,
                     &mut formed,
@@ -704,58 +739,99 @@ pub fn source_text(extra: &str, functions: &str) -> String {
     source
 }
 
-/// Replay a computed operand's owner operations on the case's own meter; the
-/// returned name is the native quantity in `scope`, or the case stops there.
+/// The checked-package nodes of the quantity operations computed beneath `root`, operands first.
+fn computed_operations(package: &CheckedPackageV2, root: &CheckedNodeId) -> Vec<CheckedNodeId> {
+    let mut found = Vec::new();
+    let Some(CheckedTerm::Application { arguments, .. }) = package.term(root) else {
+        return found;
+    };
+    for argument in arguments {
+        let CheckedTerm::Reference { target } = argument else {
+            continue;
+        };
+        if matches!(package.term(target), Some(CheckedTerm::Application { .. })) {
+            found.extend(computed_operations(package, target));
+            found.push(target.clone());
+        }
+    }
+    found
+}
+
+/// Run a computed operand's operations through their own generated symbols on the case's meter;
+/// the returned name is the native quantity in `scope`, or the case stops there.
 fn prepare_operand(
+    package: &CheckedPackageV2,
+    ir: &CheckedNodeId,
     node: qsl_semantics::check::CheckedNode<'_>,
     leaf: &dyn Fn(qsl_semantics::check::CheckedNode<'_>) -> quire_exact::Value,
+    symbol: &dyn Fn(&CheckedNodeId) -> String,
     out: &mut String,
     count: &mut usize,
 ) -> String {
     use quire_checked::node::NodeKind;
-    use quire_exact::ArithmeticOperator;
     *count += 1;
     let id = *count;
     let children = node.children();
-    match node.kind() {
+    let computed = matches!(
+        node.kind(),
+        NodeKind::QuantityPower(_, _) | NodeKind::Quantity(..)
+    );
+    if !computed {
+        let quire_exact::Value::Quantity(quantity) = leaf(node) else {
+            panic!("prepared leaf is a quantity literal");
+        };
+        let key = quantity
+            .unit()
+            .declared_key()
+            .expect("prepared leaf uses a declared unit");
+        out.push_str(&format!(
+            "let q{id}=Quantity::new({},quire_exact::UnitId::declared({}));\n",
+            native_rational(quantity.magnitude()),
+            native_key(key)
+        ));
+        return format!("q{id}");
+    }
+    let Some(CheckedTerm::Application { arguments, .. }) = package.term(ir) else {
+        panic!("computed operand application");
+    };
+    let operand = |position: usize, out: &mut String, count: &mut usize| {
+        let CheckedTerm::Reference { target } = &arguments[position] else {
+            panic!("computed operand argument reference");
+        };
+        prepare_operand(
+            package,
+            target,
+            children[position],
+            leaf,
+            symbol,
+            out,
+            count,
+        )
+    };
+    let call = match node.kind() {
         NodeKind::QuantityPower(_, _) => {
-            let [base, exponent] = children.as_slice() else {
-                panic!("power has a base and an exponent");
-            };
-            let base = prepare_operand(*base, leaf, out, count);
-            let quire_exact::Value::Integer(exponent) = leaf(*exponent) else {
+            let base = operand(0, out, count);
+            let quire_exact::Value::Integer(exponent) = leaf(children[1]) else {
                 panic!("power exponent is an Integer");
             };
-            out.push_str(&format!("let exp{id}:quire_exact::Integer={:?}.parse().expect(\"original exponent\"); let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::Power(scope.resolve(&{base}).expect(\"prepared base\"),&exp{id}),&mut meter).expect(\"native power\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case (lift(other,Value::Quantity),Vec::new()) }};\n",exponent.to_string()));
-        }
-        NodeKind::Quantity(operator, _, _) => {
-            let [left, right] = children.as_slice() else {
-                panic!("quantity operation has two operands");
-            };
-            let left = prepare_operand(*left, leaf, out, count);
-            let right = prepare_operand(*right, leaf, out, count);
-            let constructor = match operator {
-                ArithmeticOperator::Add => "Add",
-                ArithmeticOperator::Subtract => "Subtract",
-                ArithmeticOperator::Multiply => "Multiply",
-                ArithmeticOperator::Divide => "Divide",
-            };
-            out.push_str(&format!("let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::{constructor}(scope.resolve(&{left}).expect(\"prepared left\"),scope.resolve(&{right}).expect(\"prepared right\")),&mut meter).expect(\"native operation\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case (lift(other,Value::Quantity),Vec::new()) }};\n"));
+            out.push_str(&format!(
+                "let exp{id}:quire_exact::Integer={:?}.parse().expect(\"original exponent\");\n",
+                exponent.to_string()
+            ));
+            format!(
+                "quire_exact_scalar_oracles::{}(scope.resolve(&{base}).expect(\"prepared base\"),&exp{id},&mut meter)",
+                symbol(ir)
+            )
         }
         _ => {
-            let quire_exact::Value::Quantity(quantity) = leaf(node) else {
-                panic!("prepared leaf is a quantity literal");
-            };
-            let key = quantity
-                .unit()
-                .declared_key()
-                .expect("prepared leaf uses a declared unit");
-            out.push_str(&format!(
-                "let q{id}=Quantity::new({},quire_exact::UnitId::declared({}));\n",
-                native_rational(quantity.magnitude()),
-                native_key(key)
-            ));
+            let left = operand(0, out, count);
+            let right = operand(1, out, count);
+            format!(
+                "quire_exact_scalar_oracles::{}(scope.resolve(&{left}).expect(\"prepared left\"),scope.resolve(&{right}).expect(\"prepared right\"),&mut meter)",
+                symbol(ir)
+            )
         }
-    }
+    };
+    out.push_str(&format!("let (outcome{id},unit{id})={call}.expect(\"generated computed operand\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case (lift(other,Value::Quantity),Vec::new()) }};\n"));
     format!("q{id}")
 }

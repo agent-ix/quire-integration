@@ -30,11 +30,6 @@ enum RowDispatch {
     Topology(&'static str),
     Admitted(&'static str),
     Checked(&'static str),
-    QslValue {
-        expected: &'static str,
-        generated_owner: &'static str,
-        missing: &'static str,
-    },
     GeneratedAgreement(&'static str),
     NativeOriginal {
         expected: &'static [&'static str],
@@ -107,16 +102,9 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         "U22" => Some(RowDispatch::GeneratedAgreement("40000")),
         "U25" => Some(RowDispatch::GeneratedAgreement("1 J")),
         "U29" => Some(RowDispatch::GeneratedAgreement("integer-domain")),
-        "U13" | "U21" => Some(RowDispatch::QslValue {
-            expected: if id == "U13" { "incomplete" } else { "dimensionless" },
-            generated_owner: "IR-842",
-            missing: "QSL-to-IR-to-CG generated quantity power and native comparison",
-        }),
-        "U28" => Some(RowDispatch::QslValue {
-            expected: "127/500000",
-            generated_owner: "IR-1348",
-            missing: "CG compound-result generation and native comparison",
-        }),
+        "U13" => Some(RowDispatch::GeneratedAgreement("incomplete")),
+        "U21" => Some(RowDispatch::GeneratedAgreement("dimensionless")),
+        "U28" => Some(RowDispatch::GeneratedAgreement("127/500000")),
         "U15" => Some(RowDispatch::NativeOriginal {
             expected: &["127/50", "unit.edge"],
             operation: NativeOperation::Convert,
@@ -143,8 +131,8 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
         }),
         "U27" => Some(RowDispatch::QslControl {
             expected: "undefined",
-            remaining_owner: "IR-1348",
-            missing: "full-source UnprovedNonzero and no generated compound agreement",
+            remaining_owner: "QSL",
+            missing: "QSL check refuses the zero divisor as Unproved(Nonzero) before emission, so no generated claim exists",
         }),
         "U03" | "U05" | "U09" => Some(RowDispatch::Checked("ill_typed")),
         "U36" => Some(RowDispatch::NativeOwner {
@@ -163,7 +151,7 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
             missing: "value and generated agreement beyond equivalence admission",
         }),
         "U01" => Some(RowDispatch::Planned {
-            tickets: &["IR-842"],
+            tickets: &["IR-1401"],
             missing: "CG operand check admits only unit and compound_unit forms, so the carried_quantity parameter of a carried convert-then-add refuses OperandTypeMismatch and source-to-CG agreement is unexecuted",
         }),
         "U11g3" => Some(RowDispatch::Planned {
@@ -339,39 +327,11 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 );
                 observed.insert(vector.id);
             }
-            RowDispatch::QslValue {
-                expected,
-                generated_owner,
-                missing,
-            } => {
-                // The power, conversion and quantity tests bind public
-                // source-value cells. Generated comparisons for those rows
-                // remain Planned under distinct owners.
-                assert!(
-                    vector.expected.contains(expected),
-                    "{} value expectation",
-                    vector.id
-                );
-                assert!(
-                    matches!(
-                        (vector.id, generated_owner),
-                        ("U28", "IR-1348") | ("U13" | "U21", "IR-842")
-                    ),
-                    "{} generated owner",
-                    vector.id
-                );
-                assert!(
-                    missing.contains("CG"),
-                    "{} missing generated path",
-                    vector.id
-                );
-                observed.insert(vector.id);
-            }
             RowDispatch::GeneratedAgreement(expected) => {
-                // tc187_u12_arithmetic, tc187_ir842_conversions and
-                // tc187_p9_remaining_conversions execute these original
-                // operations as QSL source, emitted bytes, IR admission, CG
-                // generation and a native oracle compared with QSL evaluation.
+                // tc187_u12_arithmetic, tc187_u13_u21_power, tc187_ir842_conversions and
+                // tc187_p9_remaining_conversions execute these original operations as QSL
+                // source, emitted bytes, IR admission, CG generation and a native oracle
+                // compared with QSL evaluation.
                 assert!(
                     vector.expected.contains(expected),
                     "{} generated agreement expectation",
@@ -438,7 +398,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                     vector.id
                 );
                 let expected_owner = if matches!(vector.id, "U27") {
-                    "IR-1348"
+                    "QSL"
                 } else {
                     "IR-842"
                 };
@@ -452,6 +412,7 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             }
             RowDispatch::Planned { tickets, missing } => {
                 let expected_tickets: &[&str] = match vector.id {
+                    "U01" => &["IR-1401"],
                     "U11g3" => &["QSL-1738"],
                     _ => &["IR-842"],
                 };
@@ -485,6 +446,15 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             "U08", "U09", "U09b", "U10", "U33", "U36", "U37",
         ])
     );
+    // Rows executed above that keep a Planned remainder with its own owner: U25's nominal-to-compound
+    // first step (IR-1403, compound unit grammar) and U21's zero-to-negative power, which QSL
+    // refuses as Unproved(Nonzero) before emission.
+    for (id, owner) in [("U25", "IR-1403"), ("U21", "QSL")] {
+        assert!(
+            observed.contains(id),
+            "{id} is executed and keeps a Planned remainder on {owner}"
+        );
+    }
     assert!(planned > 0, "SC-04 is not yet complete");
     assert!(
         dispatch("U41").is_none(),

@@ -131,7 +131,6 @@ fn text(value: &str, profile: TextProfile) -> Text {
     .expect("authored operand admits independently of comparison")
 }
 
-/// Trace: TC-102, IT-019-SC-05.
 #[trace("TC-102", "IT-019-SC-05")]
 #[test]
 fn original_text_comparisons_agree_with_generated_native_observations() {

@@ -259,7 +259,6 @@ fn public_u21_zero_powers_observe_value_undefined_and_first_read_denial() {
     assert!(meter.admitted_charges().is_empty());
 }
 
-/// Trace: TC-106, IT-019-SC-04, QSpec-TC-187 U13 and U21.
 #[trace("TC-106", "IT-019-SC-04", "QSpec-TC-187")]
 #[test]
 fn public_u13_huge_and_u21_zero_power_match_generated_native_oracles() {

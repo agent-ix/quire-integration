@@ -78,11 +78,12 @@ Neither evaluator is reproduced.
     losses, exact-mode refusals, charges and counters; require the `1 op 3`
     bit patterns.
 
-Further Text input boundaries, IEEE NumericEqual/TotalOrder/BitIdentical
-comparisons (CG refuses generation with `FormMismatch`), Enum comparison and
-evaluated-right Boolean paths remain Planned under IR-842 with the measured
-owner seams recorded in IT-019; division/modulo remain Planned behind IR-1391's
-CG result-bound derivation. These selected cases make no whole-family claim.
+Further Text input boundaries remain Planned under IR-842. The other Planned
+entries keep their own owners, recorded in IT-019: IEEE NumericEqual/TotalOrder/
+BitIdentical comparisons (CG refuses generation with `FormMismatch`) under
+IR-1401, evaluated-right Boolean paths under IR-1402, enum equality (CG
+`BlockedOnUpstream`), and division/modulo behind IR-1391's CG result-bound
+derivation. These selected cases make no whole-family claim.
 
 ## Expected Results
 
@@ -94,7 +95,8 @@ At work zero, connectives stop at BooleanResultRetain with next charge 1;
 equality stops at EqualityPlanForm with next charge 2. Work one completes every
 connective and still stops equality at EqualityPlanForm. Those Boolean stops
 have their real locations, no losses, no admitted charges and zero consumption
-in every LimitKind counter. All 110 selected cases execute at work 0, 1 and 1024: 330
-operation observations. Any row
+in every LimitKind counter. The 25 Boolean, 35 Integer, 72 Text and 29 Rational cases
+execute at work 0, 1 and 1024 (483 observations); the 39 Decimal cases execute at five
+work allowances (195); the IEEE cohort is 1584 observations. Any row
 that does not genuinely derive is reported separately and receives no agreement
 credit. Full IT-019-SC-05 and family closure remain Planned under IR-842.
