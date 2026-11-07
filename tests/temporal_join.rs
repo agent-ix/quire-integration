@@ -1686,6 +1686,12 @@ fn a_native_correction_against_a_foreign_original_tl_result_is_refused_and_confl
                 &[TlJoinCause::ResultRefused, TlJoinCause::ResultMismatch]
             );
             assert_eq!(joined.value(), None);
+            // The native correction read and validated against its prior; the TL side
+            // is refused because its request is not the projection's, which is not an
+            // owner read refusal.
+            assert!(joined.native_admitted());
+            assert!(joined.owner_refusals().native().is_none());
+            assert!(joined.owner_refusals().mapped().is_none());
         });
     });
 }

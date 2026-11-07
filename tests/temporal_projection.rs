@@ -1092,3 +1092,30 @@ fn an_interval_bound_above_u32_max_is_a_native_premise() {
         assert!(premise(TlProjectionPremise::Interval)(&error), "{error:?}");
     });
 }
+
+/// An aggregate atom has no TL proposition: the formula constructor's refusal is
+/// reported as `tl-projection-formula`.
+#[trace("IT-022-SC-05", "FR-350-AC-3")]
+#[test]
+fn an_aggregate_atom_is_reported_as_tl_projection_formula() {
+    use qsl_eval::temporal::evidence::{CaptureFact, CapturedValue};
+    with_case(
+        "@value capture n: Int[0, 9] = e; always[0,5] (sum of n over past[0,2] <= 15)",
+        false,
+        |case| {
+            let anchor = case.native.instance.anchor.to_owned();
+            let error = run(&case, |r| {
+                r.origins[0].captures = vec![CaptureFact::Value {
+                    anchor,
+                    value: CapturedValue::new(b"1".as_slice()),
+                }];
+            })
+            .expect_err("an aggregate atom cannot be projected");
+            assert!(matches!(error, TlProjectionError::Formula(_)), "{error:?}");
+            assert_eq!(
+                error.code(),
+                quire_integration::temporal::TlProjectionCode::Formula
+            );
+        },
+    );
+}

@@ -47,8 +47,21 @@ pub(crate) fn checked_formula(
     profile: &str,
     document: &[u8],
 ) -> Result<CheckedGraph, Vec<CheckRefusal>> {
-    let source = format!(
-        r#"language "ix:native" edition "1-draft";
+    // A formula marked `@value` ranges over an integer subject, the only subject a
+    // window aggregate atom accepts.
+    let source = if let Some(body) = formula.strip_prefix("@value ") {
+        format!(
+            r#"language "ix:native" edition "1-draft";
+profile v = "quire.value.complete/v1";
+profile t = "{profile}";
+temporal Due using t over (e: Int[0, 9]) clock "events" on origin {{
+    {body}
+}}
+"#
+        )
+    } else {
+        format!(
+            r#"language "ix:native" edition "1-draft";
 profile v = "quire.model.complete/v1";
 profile t = "{profile}";
 model M = "acme/orders";
@@ -56,7 +69,8 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
     {formula}
 }}
 "#
-    );
+        )
+    };
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "test:temporal-binding"),
         "temporal-binding.native",

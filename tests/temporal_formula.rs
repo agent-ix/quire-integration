@@ -669,10 +669,9 @@ fn bounded_profiles_refuse_missing_intervals_before_any_checked_package_exists()
     }
 }
 
-#[trace("IT-020-SC-04", "IT-022-SC-05", "FR-350-AC-3")]
+#[trace("IT-020-SC-04")]
 #[test]
-fn an_aggregate_atom_is_a_representation_refusal_that_projection_reports_as_formula() {
-    use quire_integration::temporal::{TlProjectionCode, TlProjectionError};
+fn an_aggregate_atom_is_a_representation_refusal() {
     let (package, _, clause) = packages(
         "@value capture n: Int[0, 9] = e; always[0,5] (sum of n over past[0,2] <= 15)",
         EVENT,
@@ -688,8 +687,4 @@ fn an_aggregate_atom_is_a_representation_refusal_that_projection_reports_as_form
     )
     .expect_err("an aggregate atom has no proposition");
     assert_eq!(error.code(), TlFormulaCode::Representation);
-    assert_eq!(
-        TlProjectionError::Formula(error).code(),
-        TlProjectionCode::Formula
-    );
 }
