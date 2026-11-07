@@ -204,6 +204,10 @@ pub fn generation(
 }
 
 /// Execute original quantity cases while both sides deny one named charge occurrence.
+#[allow(
+    dead_code,
+    reason = "only the targets that deny a named charge use this entry point"
+)]
 pub fn generation_denied(
     original: &Original,
     cases: &[(&str, bool, ScalarLimits)],
@@ -735,7 +739,6 @@ fn prepare_operand(
                 ArithmeticOperator::Subtract => "Subtract",
                 ArithmeticOperator::Multiply => "Multiply",
                 ArithmeticOperator::Divide => "Divide",
-                other => panic!("unsupported prepared quantity operator {other:?}"),
             };
             out.push_str(&format!("let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::{constructor}(scope.resolve(&{left}).expect(\"prepared left\"),scope.resolve(&{right}).expect(\"prepared right\")),&mut meter).expect(\"native operation\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case (lift(other,Value::Quantity),Vec::new()) }};\n"));
         }

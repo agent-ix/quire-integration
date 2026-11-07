@@ -72,10 +72,7 @@ const fn refused(arguments: &'static [(i64, u32)]) -> Case {
 const WIDE: &str = "Decimal[-1000,1000;0,2;exact]";
 const PAIR: &str = "left: Decimal[-1000,1000;0,2;exact], right: Decimal[-1000,1000;0,2;exact]";
 const ROUND_INPUT: &str = "operand: Decimal[-25,25;1,1;exact]";
-const ROUND_CASES: &[Case] = &[
-    value(&[(25, 1)], 3, 0),
-    value(&[(-25, 1)], -3, 0),
-];
+const ROUND_CASES: &[Case] = &[value(&[(25, 1)], 3, 0), value(&[(-25, 1)], -3, 0)];
 
 const ROWS: &[Row] = &[
     Row {
@@ -376,7 +373,10 @@ fn observe() {
                             assert_eq!(*actual, b, "{} {:?}", row.name, case.arguments);
                         }
                         (Outcome::Refused(_), Expected::Refused) => {}
-                        _ => panic!("{} {:?} required result: {outcome:?}", row.name, case.arguments),
+                        _ => panic!(
+                            "{} {:?} required result: {outcome:?}",
+                            row.name, case.arguments
+                        ),
                     }
                 } else if work == 0 {
                     assert!(

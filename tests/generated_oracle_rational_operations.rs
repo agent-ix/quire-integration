@@ -104,10 +104,7 @@ const ROWS: &[Row] = &[
         parameters: "left: Rational[-9,9;1,9]",
         result: RATIONAL_RESULT,
         integer_operands: false,
-        cases: &[
-            rational(&[(7, 3)], -7, 3),
-            rational(&[(-9, 1)], 9, 1),
-        ],
+        cases: &[rational(&[(7, 3)], -7, 3), rational(&[(-9, 1)], 9, 1)],
     },
     Row {
         name: "rdiv",

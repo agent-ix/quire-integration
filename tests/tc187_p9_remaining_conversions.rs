@@ -377,7 +377,11 @@ fn original_conversion_boundaries_preserve_values_losses_and_unpaid_events() {
     ];
     let functions = FUNCTIONS
         .lines()
-        .filter(|line| carried.iter().any(|name| line.contains(&format!("function {name} "))))
+        .filter(|line| {
+            carried
+                .iter()
+                .any(|name| line.contains(&format!("function {name} ")))
+        })
         .collect::<Vec<_>>()
         .join("\n");
     let candidate = source::original_with(EXTRA, &functions);

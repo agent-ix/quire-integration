@@ -266,7 +266,13 @@ fn quantity_arithmetic_operators_over_the_unit_grid_match_generated_native_oracl
             expressions.push(format!("3 {unit} {operator} 5 {unit}"));
         }
     }
-    for (left, right) in [("m", "s"), ("cm", "inch"), ("m", "m"), ("kg", "s"), ("cm", "cm")] {
+    for (left, right) in [
+        ("m", "s"),
+        ("cm", "inch"),
+        ("m", "m"),
+        ("kg", "s"),
+        ("cm", "cm"),
+    ] {
         for operator in ["*", "/"] {
             expressions.push(format!("6 {left} {operator} 4 {right}"));
             expressions.push(format!("1 {left} {operator} 3 {right}"));
