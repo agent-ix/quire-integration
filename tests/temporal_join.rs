@@ -939,3 +939,63 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
         assert_eq!(original_mapped.bytes(), saved_mapped);
     });
 }
+
+#[trace("TC-461", "FR-350-AC-5", "FR-350-AC-6")]
+#[test]
+fn native_failed_execution_precedes_equal_boolean_and_retains_all_causes() {
+    with_case("holds(true)", false, |case| {
+        let mut request = case.native.request.clone();
+        request.execution = qsl_eval::temporal::evidence::ExecutionDisposition::Failed;
+        let projection = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &request,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect("failed assessment execution remains independent of projection premises");
+        let native = evaluate_native(&projection);
+        let mapped = evaluate_mapped(&projection);
+        assert_eq!(native.outcome(), ReportOutcome::Evaluated);
+        assert_eq!(native.truth(), Some(Truth::True));
+        assert_eq!(mapped.source().execution(), AssessmentExecution::Completed);
+        let joined = join_tl(
+            &projection,
+            Some(&native),
+            Some(&mapped),
+            None,
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .expect("actual failed-execution join");
+        assert_eq!(joined.decision(), TlJoinDecision::Failed);
+        assert_eq!(joined.value(), None);
+        assert_eq!(
+            joined.causes(),
+            &[TlJoinCause::ResultFailed, TlJoinCause::ResultMismatch]
+        );
+        assert_eq!(
+            joined.projection().native().request.execution,
+            qsl_eval::temporal::evidence::ExecutionDisposition::Failed
+        );
+        let read = read_tl_join(
+            joined.bytes(),
+            ExpectedTlJoin {
+                projection: &projection,
+                native: Some(&native),
+                mapped: Some(&mapped),
+                previous: None,
+            },
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .expect("strict failed join read");
+        assert_eq!(read.bytes(), joined.bytes());
+        assert_eq!(read.decision(), TlJoinDecision::Failed);
+    });
+}

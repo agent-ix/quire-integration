@@ -46,7 +46,9 @@ pub(super) fn rows(
         || wrong_subject
         || native.is_some_and(|result| result.outcome() == ReportOutcome::Refused)
         || source.is_some_and(|result| result.execution() == AssessmentExecution::Refused);
-    let failed = source.is_some_and(|result| result.execution() == AssessmentExecution::Failed);
+    let failed = projection.native().request.execution
+        == qsl_eval::temporal::evidence::ExecutionDisposition::Failed
+        || source.is_some_and(|result| result.execution() == AssessmentExecution::Failed);
     let unavailable = missing_result
         || mapped.is_some_and(|result| {
             matches!(
@@ -197,7 +199,16 @@ fn support_equal(
 fn axes_equal(projection: &ValidatedTlProjection<'_>, mapped: &ValidatedMappedResult) -> bool {
     let source = mapped.source();
     let expected = projection.request();
-    source.request() == expected
+    let execution_equal = match projection.native().request.execution {
+        qsl_eval::temporal::evidence::ExecutionDisposition::Completed => {
+            source.execution() == AssessmentExecution::Completed
+        }
+        qsl_eval::temporal::evidence::ExecutionDisposition::Failed => {
+            source.execution() == AssessmentExecution::Failed
+        }
+    };
+    execution_equal
+        && source.request() == expected
         && source.decision_scope_progress() == expected.decision_scope_progress()
         && source.decision_scope_closure() == expected.decision_scope_closure()
         && source.surrounding_execution_progress() == expected.surrounding_execution_progress()

@@ -54,6 +54,7 @@ pub(super) fn encode(
     native: NativeProjectionInput<'_>,
     selection: TlProjectionSelection<'_>,
     facts: &Facts<'_, '_>,
+    source: &quire_contract_ir::CheckedSourceMapEntry,
     built: &super::owners::Built,
     request: &quire_mltl::request::ValidatedTemporalRequest,
     budget: &mut Budget,
@@ -154,7 +155,7 @@ pub(super) fn encode(
         version: 1,
         bridge_definition: selection.bridge_definition.bytes(),
         package: package.name(),
-        source: subject.source_span(),
+        source,
         declaration: (
             &native.occurrence.node,
             &native.occurrence.role,

@@ -174,3 +174,30 @@ result is required by projection selection and retained as complete bytes in
 the correspondence. Changed authority, identity, profile and version each have
 a named refusal. Unknown, duplicate, missing, trailing and noncanonical members
 refuse; the exact record byte bound admits and one byte short refuses.
+
+## Retained activation and exact source occurrence
+
+Before constructing a TL artifact, projection calls the original native
+`ActivationInput::contradiction` admission against the exact obligation and
+caller ledger. A changed payload under a retained semantic trigger is an owner
+contradiction. An unchanged redelivery uses the actual retained payload and
+immutable capture environment, without replacing them with current initializer
+facts or re-running initializers. Missing retained captures and evictions refuse
+or remain incomplete. Exposed ledger instance/result row counts are precharged
+before the owner clone/scan; current delivery/origin/capture/eviction visits are
+also bounded. Owner clone allocations are transient owner behavior, not a claim
+that every internal allocation is a generated bridge record.
+
+Source correspondence selects the actual admitted source-map entry by all three
+occurrence members: node, role and ordinal. It does not use a node-only first
+source span when multiple authored declarations share one semantic node.
+
+Native assessment execution remains independent of native report outcome and TL
+execution. A failed native execution may still produce an evaluated Boolean
+report; that value must not override the ordered `result-failed` row. Unequal
+execution premises also retain the applicable later mismatch cause.
+
+The currently retained structural model-root values do not expose the authored
+model aliases or their alias order. That mandatory FR-350 correspondence axis
+remains blocked on actual owner-retained facts or an owner contract correction
+(IR-1005 comment `ba739c71`); root-node order is not presented as alias order.

@@ -4,7 +4,10 @@
 use std::collections::BTreeMap;
 
 use qsl_eval::temporal::{
-    evidence::{AuthenticatedBinding, CaptureFact, ClauseSelection, Evicted, TriggerEvidence},
+    evidence::{
+        ActivationInput, AuthenticatedBinding, CaptureFact, ClauseSelection, Evicted,
+        ObligationKey, TriggerEvidence, TriggerRecord, TriggerScope,
+    },
     ProgressClosure, ProgressCompleteness,
 };
 use qsl_package::checked_views::{
@@ -383,62 +386,152 @@ fn check_captures<'a>(
         .trigger
         .as_ref()
         .ok_or(Error::Incomplete(Missing::Instance))?;
-    let mut captures = None;
-    let mut payload = None;
-    match subject.activation() {
-        Activation::Origin => {
-            for origin in &native.request.origins {
-                budget.work()?;
-                if &origin.identity != selected {
-                    continue;
-                }
-                if payload.is_some_and(|prior| prior != &origin.payload)
-                    || captures.is_some_and(|prior| prior != origin.captures.as_slice())
-                {
-                    return Err(Error::NativePremise(Premise::CaptureConflict));
-                }
-                payload = Some(&origin.payload);
-                captures = Some(origin.captures.as_slice());
-            }
+    let occurrence = CheckedOccurrence {
+        role: native.occurrence.role.clone(),
+        ordinal: native.occurrence.ordinal,
+    };
+    let obligation = ObligationKey::new(
+        native.occurrence.node.package.clone(),
+        serde_json::to_vec(&(&native.occurrence.node, occurrence))
+            .map_err(Error::SyntaxEncoding)?,
+        native.occurrence.ordinal,
+    );
+    // The public owner admission takes owned collections. Reserve every exposed
+    // row visit before its clone and owner scan; no new native budget is minted.
+    if let Some(ledger) = &native.request.ledger {
+        for _ in 0..ledger.instance_count() {
+            budget.work()?;
         }
-        Activation::Each { guard, .. } => {
-            for delivery in &native.request.deliveries {
-                budget.work()?;
-                if &delivery.identity != selected {
-                    continue;
-                }
-                if delivery.anchor != native.instance.anchor {
-                    return Err(Error::NativePremise(Premise::Anchor));
-                }
-                if guard.is_some() && delivery.guard != Some(true) {
-                    return Err(Error::Incomplete(Missing::Instance));
-                }
-                if payload.is_some_and(|prior| prior != &delivery.payload)
-                    || captures.is_some_and(|prior| prior != delivery.captures.as_slice())
-                {
-                    return Err(Error::NativePremise(Premise::CaptureConflict));
-                }
-                payload = Some(&delivery.payload);
-                captures = Some(delivery.captures.as_slice());
-            }
+        for _ in 0..ledger.result_count() {
+            budget.work()?;
         }
     }
-    let captures = captures.ok_or(Error::Incomplete(Missing::Instance))?;
-    if captures.len() != subject.captures().len() {
-        return Err(Error::Incomplete(Missing::Capture));
-    }
-    for capture in captures {
+    for delivery in &native.request.deliveries {
         budget.work()?;
-        match capture {
-            CaptureFact::Value { anchor, .. } if anchor == native.instance.anchor => {}
-            CaptureFact::Value { .. } | CaptureFact::WrongType => {
-                return Err(Error::NativePremise(Premise::Capture))
-            }
-            CaptureFact::Missing | CaptureFact::Null | CaptureFact::Stale => {
-                return Err(Error::Incomplete(Missing::Capture))
+        budget.bytes(delivery.payload.as_bytes().len())?;
+        for capture in &delivery.captures {
+            budget.work()?;
+            if let CaptureFact::Value { value, .. } = capture {
+                budget.bytes(value.as_bytes().len())?;
             }
         }
     }
+    for origin in &native.request.origins {
+        budget.work()?;
+        budget.bytes(origin.payload.as_bytes().len())?;
+        for capture in &origin.captures {
+            budget.work()?;
+            if let CaptureFact::Value { value, .. } = capture {
+                budget.bytes(value.as_bytes().len())?;
+            }
+        }
+    }
+    for _ in &native.request.evicted {
+        budget.work()?;
+    }
+    // Call the native owner's original contradiction admission, including its ledger.
+    let activation =
+        ActivationInput {
+            scope: TriggerScope {
+                closure: native.request.trigger_scope,
+                evidence: native.request.trigger_evidence,
+                record: if native.request.completeness.as_ref().is_some_and(|record| {
+                    matches!(record.state, ProgressCompleteness::Complete { .. })
+                }) {
+                    TriggerRecord::Complete
+                } else {
+                    TriggerRecord::Incomplete
+                },
+            },
+            deliveries: native.request.deliveries.clone(),
+            origins: native.request.origins.clone(),
+            anchor: native.instance.anchor.to_owned(),
+            evicted: native.request.evicted.clone(),
+            ledger: native.request.ledger.clone(),
+            execution: native.request.execution,
+        };
+    if let Some(contradiction) = activation.contradiction(&obligation) {
+        return Err(Error::NativeActivation(contradiction));
+    }
+    let retained = native
+        .request
+        .ledger
+        .as_ref()
+        .and_then(|ledger| ledger.instance(&obligation, selected));
+    let (values, payload) = if let Some(retained) = retained {
+        if retained.fault().is_some() {
+            return Err(Error::Incomplete(Missing::Capture));
+        }
+        let captures = retained.environment().entries();
+        if captures.len() != subject.capture_names().len() {
+            return Err(Error::Incomplete(Missing::Capture));
+        }
+        let mut values = Vec::with_capacity(captures.len());
+        for (capture, name) in captures.iter().zip(subject.capture_names()) {
+            budget.work()?;
+            if capture.name() != name {
+                return Err(Error::NativePremise(Premise::Capture));
+            }
+            values.push(capture.value().as_bytes());
+        }
+        // Redelivery never re-runs initializers or replaces the owner environment.
+        (values, retained.payload().as_bytes())
+    } else {
+        let mut captures = None;
+        let mut payload = None;
+        match subject.activation() {
+            Activation::Origin => {
+                for origin in &native.request.origins {
+                    budget.work()?;
+                    if &origin.identity == selected && captures.is_none() {
+                        payload = Some(&origin.payload);
+                        captures = Some(origin.captures.as_slice());
+                    }
+                }
+            }
+            Activation::Each { guard, .. } => {
+                for delivery in &native.request.deliveries {
+                    budget.work()?;
+                    if &delivery.identity != selected || captures.is_some() {
+                        continue;
+                    }
+                    if guard.is_some() && delivery.guard != Some(true) {
+                        continue;
+                    }
+                    if delivery.anchor != native.instance.anchor {
+                        return Err(Error::NativePremise(Premise::Anchor));
+                    }
+                    payload = Some(&delivery.payload);
+                    captures = Some(delivery.captures.as_slice());
+                }
+            }
+        }
+        let captures = captures.ok_or(Error::Incomplete(Missing::Instance))?;
+        if captures.len() != subject.captures().len() {
+            return Err(Error::Incomplete(Missing::Capture));
+        }
+        let mut values = Vec::with_capacity(captures.len());
+        for capture in captures {
+            budget.work()?;
+            match capture {
+                CaptureFact::Value { anchor, value } if anchor == native.instance.anchor => {
+                    values.push(value.as_bytes())
+                }
+                CaptureFact::Value { .. } | CaptureFact::WrongType => {
+                    return Err(Error::NativePremise(Premise::Capture))
+                }
+                CaptureFact::Missing | CaptureFact::Null | CaptureFact::Stale => {
+                    return Err(Error::Incomplete(Missing::Capture))
+                }
+            }
+        }
+        (
+            values,
+            payload
+                .ok_or(Error::Incomplete(Missing::Instance))?
+                .as_bytes(),
+        )
+    };
     for evicted in &native.request.evicted {
         budget.work()?;
         match evicted {
@@ -457,18 +550,7 @@ fn check_captures<'a>(
             Evicted::Capture { .. } | Evicted::Valuation { .. } => {}
         }
     }
-    Ok((
-        captures
-            .iter()
-            .filter_map(|capture| match capture {
-                CaptureFact::Value { value, .. } => Some(value.as_bytes()),
-                _ => None,
-            })
-            .collect(),
-        payload
-            .ok_or(Error::Incomplete(Missing::Instance))?
-            .as_bytes(),
-    ))
+    Ok((values, payload))
 }
 
 fn watermark(boundary: BoundaryRef<'_>) -> Result<u64, Error> {

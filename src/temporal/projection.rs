@@ -222,6 +222,8 @@ pub enum TlProjectionPremise {
     ObservationRevision,
     /// Position reference, range or order differs from admitted owner facts.
     Position,
+    /// No exact admitted source-map entry matches the selected occurrence.
+    Source,
     /// Actual source clock and selected observation clock differ.
     Clock,
     /// Original interval cannot be represented in the selected formula domain.
@@ -329,6 +331,9 @@ pub enum TlProjectionError {
     /// Original exact-number constructor failure.
     #[error("TL clock number refused: {0}")]
     ExactNumber(#[source] tl_mltl::ExactNumberError),
+    /// Original native immutable-instance contradiction admission.
+    #[error("native activation refused: {0}")]
+    NativeActivation(qsl_eval::temporal::evidence::Contradiction),
     /// An explicit cell is absent, never an implicit false.
     #[error("no admitted valuation at position {position} for {operand:?}")]
     MissingValuation {
@@ -362,7 +367,9 @@ impl TlProjectionError {
             Self::Binding(_) => TlProjectionCode::Binding,
             Self::Unsupported(_) => TlProjectionCode::Unsupported,
             Self::Incomplete(_) | Self::MissingValuation { .. } => TlProjectionCode::Incomplete,
-            Self::NativePremise(_) | Self::Correspondence => TlProjectionCode::NativePremise,
+            Self::NativePremise(_) | Self::NativeActivation(_) | Self::Correspondence => {
+                TlProjectionCode::NativePremise
+            }
             Self::Valuation { .. } | Self::DuplicateValuation { .. } => TlProjectionCode::Valuation,
             Self::NativeClock(_) => TlProjectionCode::NativeClock,
             Self::Formula(_) => TlProjectionCode::Formula,
@@ -559,6 +566,20 @@ pub fn project_tl<'a>(
         selection,
         &mut budget,
     )?;
+    let mut source = None;
+    for entry in package.source_map() {
+        budget.work()?;
+        if entry.node_id == native.occurrence.node
+            && entry.role == native.occurrence.role
+            && entry.ordinal == native.occurrence.ordinal
+        {
+            source = Some(entry);
+            break;
+        }
+    }
+    let source = source.ok_or(TlProjectionError::NativePremise(
+        TlProjectionPremise::Source,
+    ))?;
     let built = owners::construct(
         package,
         subject,
@@ -591,6 +612,7 @@ pub fn project_tl<'a>(
         native,
         selection,
         &facts,
+        source,
         &built,
         &request,
         &mut budget,
@@ -598,7 +620,7 @@ pub fn project_tl<'a>(
     Ok(ValidatedTlProjection {
         package,
         bytes,
-        source: subject.source_span(),
+        source,
         formula: built.formula,
         propositions: built.propositions,
         input: built.input,
