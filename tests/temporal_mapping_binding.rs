@@ -121,7 +121,14 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let other = temporal_subject(&second, &clause).expect("second subject reads");
     let classification = mapping_support(&subject, Closure::Complete).expect("classification");
     let other_classification = mapping_support(&other, Closure::Complete).expect("classification");
+    // The retained selection carries the issuing admission's capability, which equal
+    // bytes read again do not share, so the supported content matches while the
+    // whole classification stays bound to its own admission.
     assert_eq!(
+        classification.support, other_classification.support,
+        "equal content"
+    );
+    assert_ne!(
         classification, other_classification,
         "equal content/name is insufficient"
     );
