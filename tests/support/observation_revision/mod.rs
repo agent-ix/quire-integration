@@ -33,6 +33,44 @@ impl Fixture {
     }
 
     pub fn with_owner(owner_identity: &str) -> Self {
+        Self::with_owner_and_anchor(
+            owner_identity,
+            Anchor::TimestampNanos(5),
+            ClockRange::Timestamp {
+                start_nanos: 0,
+                end_nanos: 10,
+            },
+        )
+    }
+
+    /// A real admitted event-position observation for temporal bridge tests.
+    #[allow(dead_code)] // The observation-revision test target does not use this constructor.
+    pub fn event_position() -> Self {
+        Self::with_owner_and_anchor(
+            "observation-owner",
+            Anchor::EventPosition(5),
+            ClockRange::EventPosition {
+                start: 0,
+                end_exclusive: 10,
+            },
+        )
+    }
+
+    fn with_owner_and_anchor(owner_identity: &str, anchor: Anchor, range: ClockRange) -> Self {
+        let (scope_kind, scope_identity) = match range {
+            ClockRange::Timestamp { .. } => (
+                ScopeKind::Window {
+                    window_identity: id("window"),
+                },
+                id("window"),
+            ),
+            ClockRange::EventPosition { .. } | ClockRange::FixedSample { .. } => (
+                ScopeKind::Snapshot {
+                    snapshot_identity: id("snapshot"),
+                },
+                id("snapshot"),
+            ),
+        };
         let mut producer = StaticProducerBundle {
             bundle_identity: Some("integration:producer".into()),
             bundle_revision: Some(Revision::producer("original")),
@@ -71,7 +109,7 @@ impl Fixture {
                 canonical_value: "true".into(),
             },
             visibility: Visibility::External,
-            anchor: Anchor::TimestampNanos(5),
+            anchor,
             event_time_nanos: 5,
             ingestion_time_nanos: 6,
             causal_relationship_identity: None,
@@ -114,13 +152,8 @@ impl Fixture {
                 membership_complete: true,
                 closure_identity: Some(id("closure")),
                 closure_digest: Some(Digest::new([2; 32])),
-                kind: ScopeKind::Window {
-                    window_identity: id("window"),
-                },
-                range: ClockRange::Timestamp {
-                    start_nanos: 0,
-                    end_nanos: 10,
-                },
+                kind: scope_kind,
+                range,
                 members: vec![Member {
                     object_identity: id("member"),
                     record_identity: record.identity.clone(),
@@ -147,7 +180,7 @@ impl Fixture {
             definition_digest: Digest::new([3; 32]),
         };
         let subject = SubjectSelection {
-            scope_identity: id("window"),
+            scope_identity,
             population_identity: qualified.scope().population_identity.clone(),
         };
         let mut fixture = Self {
@@ -156,7 +189,19 @@ impl Fixture {
             subject,
             documents: vec![],
         };
-        fixture.documents = fixture.derive();
+        fixture.documents = if matches!(range, ClockRange::EventPosition { .. }) {
+            vec![(
+                bundle::ComponentRole::Observation,
+                a::observation::derive(
+                    fixture.context(1, None),
+                    &fixture.observation_selection(),
+                    limits(),
+                )
+                .unwrap(),
+            )]
+        } else {
+            fixture.derive()
+        };
         fixture
     }
 

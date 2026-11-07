@@ -50,15 +50,20 @@ and occurrence key. The subject supplies the owner profile and clock rows.
    admitted observation's canonical anchor in the authenticated clock family
    without parsing the opaque identity.
    Reject a missing, foreign, duplicate, or conflicting match.
-4. IT-022-SC-04: Retain the original request, instance trigger, valuation
-   positions, exact occurrence, authenticated binding, admitted observation,
-   and numeric anchor as typed values. No evaluator is called.
+4. IT-022-SC-04: Retain the original request, its opaque native valuation
+   relation identity, instance trigger, valuation positions, exact occurrence,
+   authenticated binding, admitted observation, and numeric anchor as typed
+   values. No evaluator is called.
 5. IT-022-SC-05: Refuse before scanning when the request has more positions
    than the component ceiling. Exactly at the setting admits; one over returns
    a typed limit refusal and no receipt.
 6. IT-022-SC-06: Retain the admitted checked package's selected model package
    identities in `CheckedPackageV2::selected_model_packages` order. Do not
    invent a source alias or infer one from package layout.
+7. IT-022-SC-07: Compose native input admission and strict TL formula
+   construction against the same admitted checked package and subject. A
+   successful preparation exposes both complete typed components without
+   claiming a TL valuation request, correspondence, or final projection.
 
 ## Expected Results
 

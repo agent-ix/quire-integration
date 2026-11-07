@@ -21,7 +21,10 @@ use quire_contract_ir::{
     CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, ClockConfiguration,
     TemporalForm,
 };
-use quire_integration::temporal::{admit_native_tl_input, NativeInputCode, NativeInputLimits};
+use quire_integration::temporal::{
+    admit_native_tl_input, prepare_tl_projection_input, NativeInputCode, NativeInputLimits,
+    ProjectionInputLimits,
+};
 use quire_integration::temporal::{validate_mapping_binding, MappingBindingRefusal};
 use quire_semantic_value::checking::CheckingLimits;
 
@@ -80,15 +83,18 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
     let selections: Vec<_> = graph
         .temporal_clauses()
         .iter()
-        .map(|clause| qsl_package::TemporalClockSelection {
-            source: graph.source().clone(),
-            declaration_span: clause.clause().span(),
-            clock: clock.clone(),
+        .map(|clause| {
+            qsl_package::TemporalClockSelection::new(
+                graph.source().clone(),
+                clause.clause().span(),
+                clock.clone(),
+            )
         })
         .collect();
     let emitted = qsl_package::emit_checked_with_temporal_selections(
         &qsl_package::CheckedPackage::link(graph),
         &selections,
+        qsl_package::EmitLimits::new(16_777_216),
     )
     .expect("the producer emits the temporal package");
     assert!(emitted.omitted().is_empty());
@@ -187,7 +193,8 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     "IT-022-SC-03",
     "IT-022-SC-04",
     "IT-022-SC-05",
-    "IT-022-SC-06"
+    "IT-022-SC-06",
+    "IT-022-SC-07"
 )]
 #[test]
 fn native_request_selects_exact_observation_and_keeps_valuations() {
@@ -217,6 +224,7 @@ fn native_request_selects_exact_observation_and_keeps_valuations() {
     };
     let clock = subject.clock().unwrap();
     let request = EvidenceRequest {
+        native_valuations: vec![4, 7],
         trigger: Some(trigger.clone()),
         correspondence: EvidenceRef::named("correspondence"),
         positions: vec![position],
@@ -279,6 +287,7 @@ fn native_request_selects_exact_observation_and_keeps_valuations() {
     assert_eq!(admitted.anchor(), Some(5));
     assert_eq!(admitted.occurrence(), &subject.occurrences()[0]);
     assert!(std::ptr::eq(admitted.request(), &request));
+    assert_eq!(admitted.request().native_valuations, [4, 7]);
     assert!(std::ptr::eq(admitted.observation(), &observation));
     assert_eq!(admitted.trigger(), Some(&trigger));
     assert_eq!(
@@ -380,4 +389,33 @@ fn native_request_selects_exact_observation_and_keeps_valuations() {
         .code(),
         NativeInputCode::ObservationAnchor
     );
+
+    let event_fixture = observation_support::Fixture::event_position();
+    let event_observation =
+        event_fixture.observation(event_fixture.observation_document(), 1, None);
+    let event_identity = event_observation
+        .payload()
+        .observation_identity()
+        .to_owned();
+    event_request.anchor = Some(event_identity.clone());
+    event_request.positions[0].observation.identity = event_identity;
+    let classification = mapping_support(&event_subject, Closure::Complete).unwrap();
+    let prepared = prepare_tl_projection_input(
+        &event_package,
+        &event_subject,
+        &classification,
+        Closure::Complete,
+        &event_request,
+        &event_observation,
+        ProjectionInputLimits::default(),
+    )
+    .unwrap();
+    assert_eq!(prepared.native().anchor(), Some(5));
+    assert_eq!(
+        prepared.native().selected_model_packages(),
+        &["acme/orders"]
+    );
+    assert!(std::ptr::eq(prepared.native().request(), &event_request));
+    assert_eq!(prepared.formula().leaves().len(), 1);
+    assert_eq!(prepared.formula().classification(), &classification);
 }

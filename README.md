@@ -50,12 +50,14 @@ whole FR-350 criteria is claimed complete by this component.
 
 The native temporal input component accepts the actual QSL `EvidenceRequest` and
 `TraceBinding`, authenticates the selected clause occurrence and profile/clock,
-and retains the original trigger and position valuations. A present opaque anchor
+and retains the original trigger, native valuation relation identity and position
+valuations. A present opaque anchor
 must match one request position and an independently admitted QObs observation
 before its numeric position is exposed. It retains the checked package owner's
 selected model package identities in their admitted order without source aliases.
 `tests/temporal_mapping_binding.rs` covers
-this IT-022 prerequisite. It does not construct a TL request or invoke an evaluator.
+this IT-022 prerequisite and composes it with strict TL formula construction
+against one admitted package. It does not construct a TL request or invoke an evaluator.
 
 The observation revision component strictly admits genuine QObs v1 historical bundle
 bytes, verifies exact selected observation membership including envelope revision, and

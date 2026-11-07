@@ -45,9 +45,14 @@ pub fn validate_mapping_binding(
 
 mod formula;
 mod native_input;
+mod projection_input;
 
 pub use native_input::{
     admit_native_tl_input, NativeInputCode, NativeInputError, NativeInputLimits, NativeTlInput,
+};
+pub use projection_input::{
+    prepare_tl_projection_input, PreparedTlProjectionInput, ProjectionInputCode,
+    ProjectionInputError, ProjectionInputLimits,
 };
 
 pub use formula::{
