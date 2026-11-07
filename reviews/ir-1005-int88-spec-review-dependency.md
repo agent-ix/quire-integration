@@ -57,3 +57,9 @@ Round 1, verified at be2d39d against IT-022, TC-115 and FR-350 in quire-contract
 | FND-002 | fixed | depends_on edges added for QSL FR-043/052/516/527, QObs FR-004 and quire-mltl FR-001/003 |
 | FND-003 | fixed | Stale owner status prose removed |
 | FND-004 | still-open | new this round; not yet addressed |
+
+Round 2, verified at 279faba.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-004 | fixed | Inputs cite FR-350 Boundary and interface; SC-13 names validate_supplied_predecessor and direct_predecessor_bytes as an owner prerequisite; criterion-level depends_on edges are an accepted form (quire-contract-ir FR-065 uses one) and quire validate passes. FR-350-AC-11 exists only in quire-contract-ir#944 and quire-mltl FR-001-AC-11/AC-12 only in quire-mltl#18, so #88 merges after both |

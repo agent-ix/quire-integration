@@ -101,7 +101,8 @@ identity and clock revision.
    request trigger with no admitted delivery or origin returns
    `tl-projection-incomplete` with missing premise `instance`. An instance
    anchor unequal to `request.anchor`, and an empty capture instance, each
-   refuse with `tl-projection-native-premise` premise `anchor`. Use an opaque `request.anchor` spelled like another
+   refuse with `tl-projection-native-premise` premise `anchor`. Use an
+   opaque `request.anchor` spelled like another
    position's stamp and require the numeric anchor of the position whose
    observation identity equals it. Absent, duplicate and foreign observation
    identities, and a position record with another clock identity or clock
@@ -174,7 +175,8 @@ identity and clock revision.
     `read_tl_join` with any other expected input refuses.
 13. IT-022-SC-13 (FR-350-AC-5, AC-10): This scenario requires the owner
     operation quire-mltl `ValidatedTemporalResult::validate_supplied_predecessor`
-    with its public `direct_predecessor_bytes` (quire-mltl FR-001). Advance a real QObs progress watermark
+    with its public `direct_predecessor_bytes` (quire-mltl FR-001). Advance
+    a real QObs progress watermark
     from 1 to 2 over one carrier to create genuine native and TL corrections;
     first show a relation-only change is rejected by the native owner. With
     `previous` holding both direct predecessors, the correction reaches R7.

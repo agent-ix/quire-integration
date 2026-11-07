@@ -33,6 +33,7 @@ scenario's FR-350 criterion ids:
 | `temporal_binding_axes` | `IT-022-SC-10` | `FR-350-AC-3`, `FR-350-AC-10`, `FR-350-AC-11` |
 | `temporal_join` | `IT-022-SC-11`, `IT-022-SC-12`, `IT-022-SC-13`, `IT-022-SC-15` | `FR-350-AC-5`, `FR-350-AC-6`, `FR-350-AC-10` |
 | `temporal_limits` | `IT-022-SC-14` | `FR-350-AC-8` |
+
 Assert complete typed owner values and typed refusals, never only an error
 string or a trace tag. Run the IT-020 formula and IT-021 observation revision
 regressions.

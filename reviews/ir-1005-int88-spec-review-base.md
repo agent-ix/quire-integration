@@ -59,3 +59,9 @@ Round 1, verified at be2d39d against IT-022, TC-115 and FR-350 in quire-contract
 | FND-003 | fixed | TC-115 verifies IT-022 and names its test targets |
 | FND-004 | fixed | SC-14 names all seven settings, defaults, limit-reached{limit, value, setting} and table-order tie-break |
 | FND-005 | still-open | new this round; not yet addressed |
+
+Round 2, verified at 279faba.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-005 | fixed | TC-115 table maps each test target to its IT-022-SC and FR-350 trace tags in #[trace(...)] |

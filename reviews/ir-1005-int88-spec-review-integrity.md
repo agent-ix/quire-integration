@@ -48,3 +48,15 @@ Round 1, verified at be2d39d against IT-022 and TC-115.
 | --- | --- | --- |
 | FND-001 | fixed | Objective now qualifies the complete bridge and every scenario is required; Expected Results matches |
 | FND-002 | fixed | Single Test Procedure and Expected Results; appended sections, stray blank lines and long lines removed |
+
+## New findings (disposition pass 2)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-003 | low | TC-115 has no blank line between the trace table and the next paragraph, so GFM renders "Assert complete typed owner values..." as a table row; IT-022 SC-02 and SC-13 gained unwrapped long lines | spec/test-cases/TC-115-native-temporal-projection.md:35-36; spec/integration/IT-022-native-temporal-projection.md:104,177 |
+
+Round 2, verified at 279faba.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-003 | still-open | new this round; insert a blank line after the TC-115 table and rewrap the two IT-022 lines |

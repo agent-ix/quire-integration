@@ -61,3 +61,9 @@ Round 1, verified at be2d39d against IT-022, TC-115 and FR-350 in quire-contract
 | FND-004 | fixed | SC-06 limits the owner refusal to the refusal clause of FR-350-AC-4 and requires passing positive cases; SC-13 requires a correction to reach R7 |
 | FND-005 | fixed | Clock identified by QObs clock identity and clock revision (Inputs, SC-02) |
 | FND-006 | still-open | new this round; not yet addressed |
+
+Round 2, verified at 279faba against FR-350 in quire-contract-ir#944 (40ac6f9).
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-006 | fixed | SC-02 now refuses an instance anchor mismatch and an empty capture instance with tl-projection-native-premise, matching FR-350-AC-9; a trigger with no admitted delivery or origin stays incomplete per FR-350 binding step 3 |
