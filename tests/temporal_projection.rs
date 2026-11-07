@@ -623,3 +623,35 @@ fn projection_reader_requires_complete_canonical_expected_value() {
         ));
     });
 }
+
+#[trace("TC-461", "FR-350-AC-2")]
+#[test]
+fn actual_unsupported_classes_retain_every_owner_dimension_without_projection() {
+    with_case("holds(true)", false, |case| {
+        for (formula, profile) in [
+            ("eventually holds(true)", "quire.temporal.infinite-trace/v1"),
+            ("eventually[0,2] (once[0,1] holds(true))", EVENT),
+            (
+                "eventually[0,2] (once[0,1] holds(true))",
+                "quire.temporal.timestamped-event.finite-window/v1",
+            ),
+        ] {
+            let (package, _, clause) = packages(formula, profile);
+            let subject = temporal_subject(&package, &clause).unwrap();
+            let classification = mapping_support(&subject, Closure::Complete).unwrap();
+            let result = project_tl(
+                &package,
+                &subject,
+                &classification,
+                Closure::Complete,
+                case.native,
+                case.selection,
+                TlLimits::default(),
+            );
+            let Err(TlProjectionError::Unsupported(retained)) = result else {
+                panic!("original owner unsupported classification must refuse atomically");
+            };
+            assert_eq!(*retained, classification);
+        }
+    });
+}
