@@ -204,3 +204,46 @@ fn u02_original_product_quotient_normalizes_to_length_in_generated_native_oracle
     let cases = [1024, 0, 1, 2, 3, 6].map(|work| ("quotientNormalized", true, roomy(work)));
     assert_eq!(source::generation(&original, &cases, &[], &[]), 6);
 }
+
+/// Every public quantity ordering and equality operator over the declared unit grid.
+#[trace(
+    "TC-106",
+    "IT-019-SC-04",
+    "QSpec-TC-187",
+    "QSpec-FR-142",
+    "QSpec-FR-142-AC-6"
+)]
+#[test]
+fn quantity_comparison_operators_over_the_unit_grid_match_generated_native_oracles() {
+    let extra = format!("{EXTRA} unit inch : Distance = rational(127, 5000) * m;");
+    // Distinct units are statically ill-typed, so the grid is every declared unit
+    // compared with itself over ordered, equal and reversed magnitudes.
+    let values = [(1, 2), (2, 2), (3, 2)];
+    let grid = [
+        "m", "cm", "inch", "s", "kg", "K", "degC", "degF", "J", "m2", "cm2",
+    ];
+    let mut functions = String::new();
+    let mut names = Vec::new();
+    for (unit_index, unit) in grid.iter().enumerate() {
+        for (operator_index, operator) in ["=", "!=", "<", "<=", ">", ">="].iter().enumerate() {
+            for (value_index, (a, b)) in values.iter().enumerate() {
+                let name = format!("compare_{unit_index}_{operator_index}_{value_index}");
+                functions.push_str(&format!(
+                    "function {name} using v(): Boolean pure {{ {a} {unit} {operator} {b} {unit} }}\n"
+                ));
+                names.push(name);
+            }
+        }
+    }
+    let original = source::original_with(&extra, &functions);
+    let mut cases = Vec::new();
+    for name in &names {
+        for l in [roomy(1024), roomy(0), roomy(1), roomy(3), roomy(6)] {
+            cases.push((name.as_str(), false, l));
+        }
+    }
+    assert_eq!(
+        source::generation(&original, &cases, &[], &[]),
+        names.len() * 5
+    );
+}

@@ -347,6 +347,9 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
 "#,
         native_units(original)
     );
+    let header = std::mem::take(&mut driver);
+    let mut calls = String::new();
+    let mut functions = String::new();
     let mut expected = Vec::new();
     for (name, child, limits) in cases {
         if integer_bound_refusals.contains(name) || carried_refusals.contains(name) {
@@ -517,8 +520,13 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
         }
         driver.push_str("};\n");
         driver.push_str("let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new(); println!(\"IT019_OBSERVATION {}\",oracle_observation::snapshot(&actual,&losses,&meter)); }\n");
+        // Each observation is its own function so a long case list never shares one stack frame.
+        let number = expected.len();
+        functions.push_str(&format!("#[allow(unused_variables)]\nfn case_{number}(graph:&quire_semantic_value::unit::UnitGraph,table:&UnitTable){{\n{driver}}}\n"));
+        calls.push_str(&format!("case_{number}(&graph,&table);\n"));
+        driver.clear();
     }
-    driver.push_str("}\n");
+    driver = format!("{header}{calls}}}\n{functions}");
     if expected.is_empty() {
         return 0;
     }
