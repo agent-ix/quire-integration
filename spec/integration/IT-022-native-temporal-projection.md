@@ -259,3 +259,14 @@ decision predicates are classified; it cannot suppress an already established
 refused, failed, unavailable, unsupported, incomplete or conflicting decision.
 Genuine foreign corrected native and TL reports exercise both supplied-prior
 and missing-prior contexts, retaining refusal priority and no Boolean.
+
+Correction fixtures advance a real progress fact, rather than only changing the
+relation and ledger (which the native owner excludes from input identity).
+Genuine QObs progress and closure producers/readers admit watermark advancement
+from 1 to 2 over the same finite carrier, and the selected native progress and
+actual TL request retain those admitted values. Execution remains completed.
+Each correction helper first proves relation/ledger-only repetition is rejected,
+then asserts the actual prior/current native input identities differ, native
+correction issuance succeeds and its original strict reader accepts the complete
+prior. Only after that do substitution, foreign-result and precedence assertions
+run. No synthetic identity or changed evidence label stands in for new input.

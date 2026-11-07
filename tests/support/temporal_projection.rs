@@ -201,6 +201,17 @@ pub(crate) fn with_case_scopes(
     decision: OpenClosed,
     test: impl FnOnce(Case<'_>),
 ) {
+    with_case_watermark(formula, sample, surrounding, decision, 1, test);
+}
+
+pub(crate) fn with_case_watermark(
+    formula: &str,
+    sample: bool,
+    surrounding: Closure,
+    decision: OpenClosed,
+    watermark: u64,
+    test: impl FnOnce(Case<'_>),
+) {
     let surrounding_state = if surrounding == Closure::Complete {
         OpenClosed::Closed
     } else {
@@ -251,11 +262,28 @@ pub(crate) fn with_case_scopes(
         owner_limits,
     )
     .expect("clock reader");
+    let boundary = || {
+        if sample {
+            a::TemporalBoundary::FixedSample {
+                lower: 0,
+                upper_inclusive: 0,
+                carrier_end_exclusive: 1,
+                watermark,
+            }
+        } else {
+            a::TemporalBoundary::EventPosition {
+                lower: 0,
+                upper_inclusive: 0,
+                carrier_end_exclusive: 1,
+                watermark,
+            }
+        }
+    };
     let read_progress = |state| {
         let progress_selection = a::progress::Selection::new(
             clock_selection.clone(),
             vec![observation::id("source")],
-            f.boundary(),
+            boundary(),
             state,
             observation::id("trigger"),
             f.cutoff(),
@@ -277,7 +305,7 @@ pub(crate) fn with_case_scopes(
             observation::id("events"),
             observation::id("clock-version"),
             vec![observation::id("source")],
-            f.boundary(),
+            boundary(),
             state,
         );
         let closure_document = a::closure::derive(context, &closure_selection, owner_limits)
@@ -363,9 +391,9 @@ pub(crate) fn with_case_scopes(
         }],
         trigger_evidence: TriggerEvidence::Admitted,
         trigger_scope: ProgressClosure::Closed,
-        decision_progress: Some(1),
+        decision_progress: Some(watermark),
         decision_closure: Some(native_closure(decision)),
-        surrounding_progress: Some(1),
+        surrounding_progress: Some(watermark),
         surrounding_closure: Some(native_closure(surrounding_state)),
         execution: ExecutionDisposition::Completed,
         completeness: Some(CompletenessRecord {

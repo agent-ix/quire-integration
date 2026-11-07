@@ -861,230 +861,198 @@ fn genuine_correction_pairs_preserve_prior_bytes_and_refuse_missing_predecessor_
         let saved_prior = prior.bytes().to_vec();
         let saved_native = original_native.to_owner_bytes();
         let saved_mapped = original_mapped.bytes().to_vec();
-        let ledger = original_native
-            .ledger()
-            .expect("actual evaluator next-call ledger");
-        let occurrence = case.native.occurrence;
-        let checked_occurrence = quire_contract_ir::CheckedOccurrence {
-            role: occurrence.role.clone(),
-            ordinal: occurrence.ordinal,
-        };
-        let obligation = ObligationKey::new(
-            occurrence.node.package.clone(),
-            serde_json::to_vec(&(&occurrence.node, checked_occurrence))
-                .expect("public native obligation key"),
-            occurrence.ordinal,
-        );
-        let predecessor = ledger
-            .result(&obligation, case.native.request.trigger.as_ref())
-            .expect("actual original ledger result")
-            .result_identity()
-            .clone();
-        assert_eq!(predecessor.as_bytes(), original_native.result_identity());
-        let mut request = case.native.request.clone();
-        request.ledger = Some(ledger.clone());
-        request.relation = Relation::Superseding(predecessor);
-        let corrected_projection = project_tl(
-            case.package,
-            case.subject,
-            case.classification,
-            case.surrounding,
-            NativeProjectionInput {
-                request: &request,
-                ..case.native
-            },
-            case.selection,
-            TlLimits::default(),
-        )
-        .expect("correction retains actual native owner inputs");
-        let corrected_native =
-            evaluate_native_with_prior(&corrected_projection, Some(&original_native));
-        let native_limits = corrected_projection.selection().native_report_limits;
-        let (_, encoded_usage) = original_native
-            .to_owner_bytes_bounded(native_limits)
-            .unwrap();
-        assert!(encoded_usage.work > 0 && encoded_usage.storage > 0);
-        let validation_usage = corrected_native
-            .validate_predecessor(&original_native, native_limits)
-            .unwrap();
-        assert!(validation_usage.work > 0 && validation_usage.storage > 0);
-        assert_eq!(
-            corrected_native.predecessor_owner_bytes(),
-            Some(saved_native.as_slice())
-        );
-        let subject = CheckedSubject::new(
-            corrected_projection.package(),
-            corrected_projection.native().occurrence,
-            corrected_projection.native().valuations,
-            corrected_projection.native().request,
-        )
-        .unwrap()
-        .with_predecessor(&original_native, native_limits);
-        let checked = Report::from_owner_bytes(
-            &corrected_native.to_owner_bytes(),
-            &subject,
-            corrected_projection.native().observation,
-            &mut native_budget(),
-        )
-        .unwrap();
-        assert_eq!(
-            checked.predecessor_owner_bytes(),
-            Some(saved_native.as_slice())
-        );
-        assert_eq!(
-            corrected_native.predecessor(),
-            Some(original_native.result_identity())
-        );
-        let mut exhausted = Meter::new(scalar_limits());
-        let ceiling = exhausted.limits().work_units;
-        exhausted
-            .charge(
-                quire_exact::Charge::new(quire_exact::ChargePoint::TemporalVisit)
-                    .work(quire_exact::Integer::from(ceiling)),
-            )
-            .unwrap();
-        let original_subject = CheckedSubject::new(
-            original_projection.package(),
-            original_projection.native().occurrence,
-            original_projection.native().valuations,
-            original_projection.native().request,
-        )
-        .unwrap();
-        let different_prior = native::evaluate_v2(
-            &original_subject,
-            original_projection.native().observation,
-            &mut exhausted,
-            &mut native_budget(),
-        )
-        .unwrap();
-        assert_eq!(different_prior.outcome(), ReportOutcome::Meter);
-        assert_eq!(
-            different_prior.result_identity(),
-            original_native.result_identity()
-        );
-        assert_ne!(different_prior.to_owner_bytes(), saved_native);
-        assert!(matches!(
-            corrected_native.validate_predecessor(&different_prior, native_limits),
-            Err(native::ReportRefusal::InvalidPredecessor)
-        ));
-        let wrong_subject = CheckedSubject::new(
-            corrected_projection.package(),
-            corrected_projection.native().occurrence,
-            corrected_projection.native().valuations,
-            corrected_projection.native().request,
-        )
-        .unwrap()
-        .with_predecessor(&different_prior, native_limits);
-        assert!(matches!(
-            Report::from_owner_bytes(
-                &corrected_native.to_owner_bytes(),
-                &wrong_subject,
-                corrected_projection.native().observation,
-                &mut native_budget()
-            ),
-            Err(native::ReportRefusal::InvalidPredecessor)
-        ));
-        let wrong_prior_join = join_tl(
+        with_progress_correction(
             &original_projection,
-            Some(&different_prior),
-            Some(&original_mapped),
-            None,
-            TlLimits::default(),
-            &mut native_budget(),
-        )
-        .unwrap();
-        let limits = corrected_projection.selection().owner_limits;
-        let corrected_source = evaluate_tl(
-            &corrected_projection,
-            ResultRelationInput::Superseding(original_mapped.source()),
-            limits,
-        );
-        assert_eq!(
-            corrected_source.relation_kind(),
-            report::ResultRelationKind::Superseding
-        );
-        let corrected_mapped = map_source(&corrected_source, limits);
-        let missing = join_tl(
-            &corrected_projection,
-            Some(&corrected_native),
-            Some(&corrected_mapped),
-            None,
-            TlLimits::default(),
-            &mut native_budget(),
-        )
-        .expect("missing prior is conflict");
-        assert_eq!(missing.decision(), TlJoinDecision::Conflict);
-        assert_eq!(missing.value(), None);
-        let mixed = join_tl(
-            &corrected_projection,
-            Some(&corrected_native),
-            Some(&original_mapped),
-            None,
-            TlLimits::default(),
-            &mut native_budget(),
-        )
-        .expect("mixed original/corrected pair conflicts");
-        assert_eq!(mixed.decision(), TlJoinDecision::Conflict);
-        assert_eq!(mixed.value(), None);
-        assert!(matches!(
-            join_tl(
-                &corrected_projection,
-                Some(&corrected_native),
-                Some(&corrected_mapped),
-                Some(&prior),
-                TlLimits::default(),
-                &mut native_budget()
-            ),
-            Err(TlJoinError::PredecessorAuthority { native_encoding_usage: Some(encoding), native_predecessor_usage: Some(usage) }) if usage.work > 0 && usage.storage > 0 && encoding.work > 0 && encoding.storage > 0
-        ));
-        let wrong = join_tl(
-            &corrected_projection,
-            Some(&corrected_native),
-            Some(&corrected_mapped),
-            Some(&wrong_prior_join),
-            TlLimits::default(),
-            &mut native_budget(),
-        )
-        .unwrap();
-        assert_eq!(wrong.decision(), TlJoinDecision::Conflict);
-        assert_eq!(wrong.value(), None);
-        assert!(!wrong.native_admitted());
-        assert!(matches!(
-            wrong.owner_refusals().native_predecessor(),
-            Some(native::ReportRefusal::InvalidPredecessor)
-        ));
-        let wire: Value = serde_json::from_slice(wrong.bytes()).unwrap();
-        assert_eq!(wire["nativeAdmitted"], false);
-        let reread_wrong = read_tl_join(
-            wrong.bytes(),
-            ExpectedTlJoin {
-                projection: &corrected_projection,
-                native: Some(&corrected_native),
-                mapped: Some(&corrected_mapped),
-                previous: Some(&wrong_prior_join),
+            &original_native,
+            |corrected_projection, corrected_native| {
+                let native_limits = corrected_projection.selection().native_report_limits;
+                let (_, encoded_usage) = original_native
+                    .to_owner_bytes_bounded(native_limits)
+                    .unwrap();
+                assert!(encoded_usage.work > 0 && encoded_usage.storage > 0);
+                let validation_usage = corrected_native
+                    .validate_predecessor(&original_native, native_limits)
+                    .unwrap();
+                assert!(validation_usage.work > 0 && validation_usage.storage > 0);
+                assert_eq!(
+                    corrected_native.predecessor_owner_bytes(),
+                    Some(saved_native.as_slice())
+                );
+                let subject = CheckedSubject::new(
+                    corrected_projection.package(),
+                    corrected_projection.native().occurrence,
+                    corrected_projection.native().valuations,
+                    corrected_projection.native().request,
+                )
+                .unwrap()
+                .with_predecessor(&original_native, native_limits);
+                let checked = Report::from_owner_bytes(
+                    &corrected_native.to_owner_bytes(),
+                    &subject,
+                    corrected_projection.native().observation,
+                    &mut native_budget(),
+                )
+                .unwrap();
+                assert_eq!(
+                    checked.predecessor_owner_bytes(),
+                    Some(saved_native.as_slice())
+                );
+                assert_eq!(
+                    corrected_native.predecessor(),
+                    Some(original_native.result_identity())
+                );
+                let mut exhausted = Meter::new(scalar_limits());
+                let ceiling = exhausted.limits().work_units;
+                exhausted
+                    .charge(
+                        quire_exact::Charge::new(quire_exact::ChargePoint::TemporalVisit)
+                            .work(quire_exact::Integer::from(ceiling)),
+                    )
+                    .unwrap();
+                let original_subject = CheckedSubject::new(
+                    original_projection.package(),
+                    original_projection.native().occurrence,
+                    original_projection.native().valuations,
+                    original_projection.native().request,
+                )
+                .unwrap();
+                let different_prior = native::evaluate_v2(
+                    &original_subject,
+                    original_projection.native().observation,
+                    &mut exhausted,
+                    &mut native_budget(),
+                )
+                .unwrap();
+                assert_eq!(different_prior.outcome(), ReportOutcome::Meter);
+                assert_eq!(
+                    different_prior.result_identity(),
+                    original_native.result_identity()
+                );
+                assert_ne!(different_prior.to_owner_bytes(), saved_native);
+                assert!(matches!(
+                    corrected_native.validate_predecessor(&different_prior, native_limits),
+                    Err(native::ReportRefusal::InvalidPredecessor)
+                ));
+                let wrong_subject = CheckedSubject::new(
+                    corrected_projection.package(),
+                    corrected_projection.native().occurrence,
+                    corrected_projection.native().valuations,
+                    corrected_projection.native().request,
+                )
+                .unwrap()
+                .with_predecessor(&different_prior, native_limits);
+                assert!(matches!(
+                    Report::from_owner_bytes(
+                        &corrected_native.to_owner_bytes(),
+                        &wrong_subject,
+                        corrected_projection.native().observation,
+                        &mut native_budget()
+                    ),
+                    Err(native::ReportRefusal::InvalidPredecessor)
+                ));
+                let wrong_prior_join = join_tl(
+                    &original_projection,
+                    Some(&different_prior),
+                    Some(&original_mapped),
+                    None,
+                    TlLimits::default(),
+                    &mut native_budget(),
+                )
+                .unwrap();
+                let limits = corrected_projection.selection().owner_limits;
+                let corrected_source = evaluate_tl(
+                    &corrected_projection,
+                    ResultRelationInput::Superseding(original_mapped.source()),
+                    limits,
+                );
+                assert_eq!(
+                    corrected_source.relation_kind(),
+                    report::ResultRelationKind::Superseding
+                );
+                let corrected_mapped = map_source(&corrected_source, limits);
+                let missing = join_tl(
+                    &corrected_projection,
+                    Some(&corrected_native),
+                    Some(&corrected_mapped),
+                    None,
+                    TlLimits::default(),
+                    &mut native_budget(),
+                )
+                .expect("missing prior is conflict");
+                assert_eq!(missing.decision(), TlJoinDecision::Conflict);
+                assert_eq!(missing.value(), None);
+                let mixed = join_tl(
+                    &corrected_projection,
+                    Some(&corrected_native),
+                    Some(&original_mapped),
+                    None,
+                    TlLimits::default(),
+                    &mut native_budget(),
+                )
+                .expect("mixed original/corrected pair conflicts");
+                assert_eq!(mixed.decision(), TlJoinDecision::Conflict);
+                assert_eq!(mixed.value(), None);
+                assert!(matches!(
+                    join_tl(
+                        &corrected_projection,
+                        Some(&corrected_native),
+                        Some(&corrected_mapped),
+                        Some(&prior),
+                        TlLimits::default(),
+                        &mut native_budget()
+                    ),
+                    Err(TlJoinError::PredecessorAuthority { native_encoding_usage: Some(encoding), native_predecessor_usage: Some(usage) }) if usage.work > 0 && usage.storage > 0 && encoding.work > 0 && encoding.storage > 0
+                ));
+                let wrong = join_tl(
+                    &corrected_projection,
+                    Some(&corrected_native),
+                    Some(&corrected_mapped),
+                    Some(&wrong_prior_join),
+                    TlLimits::default(),
+                    &mut native_budget(),
+                )
+                .unwrap();
+                assert_eq!(wrong.decision(), TlJoinDecision::Conflict);
+                assert_eq!(wrong.value(), None);
+                assert!(!wrong.native_admitted());
+                assert!(matches!(
+                    wrong.owner_refusals().native_predecessor(),
+                    Some(native::ReportRefusal::InvalidPredecessor)
+                ));
+                let wire: Value = serde_json::from_slice(wrong.bytes()).unwrap();
+                assert_eq!(wire["nativeAdmitted"], false);
+                let reread_wrong = read_tl_join(
+                    wrong.bytes(),
+                    ExpectedTlJoin {
+                        projection: &corrected_projection,
+                        native: Some(&corrected_native),
+                        mapped: Some(&corrected_mapped),
+                        previous: Some(&wrong_prior_join),
+                    },
+                    TlLimits::default(),
+                    &mut native_budget(),
+                )
+                .unwrap();
+                assert_eq!(reread_wrong.bytes(), wrong.bytes());
+                assert!(matches!(
+                    read_tl_join(
+                        wrong.bytes(),
+                        ExpectedTlJoin {
+                            projection: &corrected_projection,
+                            native: Some(&corrected_native),
+                            mapped: Some(&corrected_mapped),
+                            previous: Some(&prior)
+                        },
+                        TlLimits::default(),
+                        &mut native_budget()
+                    ),
+                    Err(TlJoinError::PredecessorAuthority { .. })
+                ));
+                assert_eq!(prior.bytes(), saved_prior);
+                assert_eq!(original_native.to_owner_bytes(), saved_native);
+                assert_eq!(original_mapped.bytes(), saved_mapped);
             },
-            TlLimits::default(),
-            &mut native_budget(),
-        )
-        .unwrap();
-        assert_eq!(reread_wrong.bytes(), wrong.bytes());
-        assert!(matches!(
-            read_tl_join(
-                wrong.bytes(),
-                ExpectedTlJoin {
-                    projection: &corrected_projection,
-                    native: Some(&corrected_native),
-                    mapped: Some(&corrected_mapped),
-                    previous: Some(&prior)
-                },
-                TlLimits::default(),
-                &mut native_budget()
-            ),
-            Err(TlJoinError::PredecessorAuthority { .. })
-        ));
-        assert_eq!(prior.bytes(), saved_prior);
-        assert_eq!(original_native.to_owner_bytes(), saved_native);
-        assert_eq!(original_mapped.bytes(), saved_mapped);
+        );
     });
 }
 
@@ -1258,6 +1226,7 @@ fn native_report_owner_limits_are_explicit_and_preserve_the_existing_ir_budget()
 fn actual_correction_request(
     projection: &ValidatedTlProjection<'_>,
     prior: &Report,
+    advanced: projection_support::Case<'_>,
 ) -> qsl_eval::temporal::evidence::EvidenceRequest {
     let input = projection.native();
     let selected = quire_contract_ir::CheckedOccurrence {
@@ -1278,6 +1247,10 @@ fn actual_correction_request(
     let mut request = input.request.clone();
     request.ledger = Some(ledger.clone());
     request.relation = Relation::Superseding(predecessor);
+    request.decision_progress = advanced.native.request.decision_progress;
+    request.surrounding_progress = advanced.native.request.surrounding_progress;
+    assert_ne!(request.decision_progress, input.request.decision_progress);
+    assert_eq!(request.execution, input.request.execution);
     request
 }
 
@@ -1297,105 +1270,81 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
             &mut native_budget(),
         )
         .unwrap();
-        let request = actual_correction_request(&original, &original_native);
-        let corrected = project_tl(
-            case.package,
-            case.subject,
-            case.classification,
-            case.surrounding,
-            NativeProjectionInput {
-                request: &request,
-                ..case.native
-            },
-            case.selection,
-            TlLimits::default(),
-        )
-        .unwrap();
-        let corrected_native = evaluate_native_with_prior(&corrected, Some(&original_native));
-        let corrected_mapped = map_source(
-            &evaluate_tl(
-                &corrected,
-                ResultRelationInput::Superseding(original_mapped.source()),
-                case.selection.owner_limits,
-            ),
-            case.selection.owner_limits,
-        );
-        let mut foreign = None;
-        with_case("not holds(true)", false, |other| {
-            let original = other.project(TlLimits::default()).unwrap();
-            let native = evaluate_native(&original);
-            let mapped = evaluate_mapped(&original);
-            let request = actual_correction_request(&original, &native);
-            let projection = project_tl(
-                other.package,
-                other.subject,
-                other.classification,
-                other.surrounding,
-                NativeProjectionInput {
-                    request: &request,
-                    ..other.native
-                },
-                other.selection,
-                TlLimits::default(),
-            )
-            .unwrap();
-            let native = evaluate_native_with_prior(&projection, Some(&native));
-            let mapped = map_source(
-                &evaluate_tl(
-                    &projection,
-                    ResultRelationInput::Superseding(mapped.source()),
-                    other.selection.owner_limits,
-                ),
-                other.selection.owner_limits,
-            );
-            assert!(native.predecessor().is_some());
-            assert_eq!(
-                mapped.source().relation_kind(),
-                report::ResultRelationKind::Superseding
-            );
-            foreign = Some((native, mapped));
-        });
-        let (foreign_native, foreign_mapped) = foreign.unwrap();
-        for previous in [None, Some(&prior)] {
-            let refused_native = join_tl(
-                &corrected,
-                Some(&foreign_native),
-                Some(&corrected_mapped),
-                previous,
-                TlLimits::default(),
-                &mut native_budget(),
-            )
-            .expect("foreign native binding precedes missing/wrong predecessor");
-            assert_eq!(refused_native.decision(), TlJoinDecision::Refused);
-            assert_eq!(refused_native.value(), None);
-            assert_eq!(
-                refused_native.causes().first(),
-                Some(&TlJoinCause::ResultRefused)
-            );
-            assert!(matches!(
-                refused_native.owner_refusals().native(),
-                Some(native::ReportRefusal::BindingMismatch(_))
-            ));
-            assert!(refused_native
-                .owner_refusals()
-                .native_predecessor()
-                .is_none());
-            assert!(!refused_native.native_admitted());
-            let reread = read_tl_join(
-                refused_native.bytes(),
-                ExpectedTlJoin {
-                    projection: &corrected,
-                    native: Some(&foreign_native),
-                    mapped: Some(&corrected_mapped),
-                    previous,
-                },
-                TlLimits::default(),
-                &mut native_budget(),
-            )
-            .unwrap();
-            assert_eq!(reread.decision(), TlJoinDecision::Refused);
-            assert_eq!(reread.bytes(), refused_native.bytes());
-            let refused_tl = join_tl(
+        with_progress_correction(
+            &original,
+            &original_native,
+            |corrected, corrected_native| {
+                let corrected_mapped = map_source(
+                    &evaluate_tl(
+                        &corrected,
+                        ResultRelationInput::Superseding(original_mapped.source()),
+                        case.selection.owner_limits,
+                    ),
+                    case.selection.owner_limits,
+                );
+                let mut foreign = None;
+                with_case("not holds(true)", false, |other| {
+                    let original = other.project(TlLimits::default()).unwrap();
+                    let native = evaluate_native(&original);
+                    let mapped = evaluate_mapped(&original);
+                    with_progress_correction(&original, &native, |projection, native| {
+                        let mapped = map_source(
+                            &evaluate_tl(
+                                &projection,
+                                ResultRelationInput::Superseding(mapped.source()),
+                                other.selection.owner_limits,
+                            ),
+                            other.selection.owner_limits,
+                        );
+                        assert!(native.predecessor().is_some());
+                        assert_eq!(
+                            mapped.source().relation_kind(),
+                            report::ResultRelationKind::Superseding
+                        );
+                        foreign = Some((native, mapped));
+                    });
+                });
+                let (foreign_native, foreign_mapped) = foreign.unwrap();
+                for previous in [None, Some(&prior)] {
+                    let refused_native = join_tl(
+                        &corrected,
+                        Some(&foreign_native),
+                        Some(&corrected_mapped),
+                        previous,
+                        TlLimits::default(),
+                        &mut native_budget(),
+                    )
+                    .expect("foreign native binding precedes missing/wrong predecessor");
+                    assert_eq!(refused_native.decision(), TlJoinDecision::Refused);
+                    assert_eq!(refused_native.value(), None);
+                    assert_eq!(
+                        refused_native.causes().first(),
+                        Some(&TlJoinCause::ResultRefused)
+                    );
+                    assert!(matches!(
+                        refused_native.owner_refusals().native(),
+                        Some(native::ReportRefusal::BindingMismatch(_))
+                    ));
+                    assert!(refused_native
+                        .owner_refusals()
+                        .native_predecessor()
+                        .is_none());
+                    assert!(!refused_native.native_admitted());
+                    let reread = read_tl_join(
+                        refused_native.bytes(),
+                        ExpectedTlJoin {
+                            projection: &corrected,
+                            native: Some(&foreign_native),
+                            mapped: Some(&corrected_mapped),
+                            previous,
+                        },
+                        TlLimits::default(),
+                        &mut native_budget(),
+                    )
+                    .unwrap();
+                    assert_eq!(reread.decision(), TlJoinDecision::Refused);
+                    assert_eq!(reread.bytes(), refused_native.bytes());
+                    let refused_tl = join_tl(
                 &corrected,
                 Some(&corrected_native),
                 Some(&foreign_mapped),
@@ -1404,28 +1353,148 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                 &mut native_budget(),
             )
             .expect("foreign corrected TL refusal precedes unavailable TL predecessor authority");
-            assert_eq!(refused_tl.decision(), TlJoinDecision::Refused);
-            assert_eq!(refused_tl.value(), None);
-            assert_eq!(
-                refused_tl.causes().first(),
-                Some(&TlJoinCause::ResultRefused)
+                    assert_eq!(refused_tl.decision(), TlJoinDecision::Refused);
+                    assert_eq!(refused_tl.value(), None);
+                    assert_eq!(
+                        refused_tl.causes().first(),
+                        Some(&TlJoinCause::ResultRefused)
+                    );
+                    assert!(refused_tl.owner_refusals().native().is_none());
+                    assert_eq!(refused_tl.native_admitted(), previous.is_some());
+                    let reread = read_tl_join(
+                        refused_tl.bytes(),
+                        ExpectedTlJoin {
+                            projection: &corrected,
+                            native: Some(&corrected_native),
+                            mapped: Some(&foreign_mapped),
+                            previous,
+                        },
+                        TlLimits::default(),
+                        &mut native_budget(),
+                    )
+                    .unwrap();
+                    assert_eq!(reread.decision(), TlJoinDecision::Refused);
+                    assert_eq!(reread.bytes(), refused_tl.bytes());
+                }
+            },
+        );
+    });
+}
+
+fn with_progress_correction(
+    original: &ValidatedTlProjection<'_>,
+    prior: &Report,
+    test: impl FnOnce(&ValidatedTlProjection<'_>, Report),
+) {
+    projection_support::with_case_watermark(
+        "holds(true)",
+        false,
+        Closure::Complete,
+        OpenClosed::Closed,
+        2,
+        |advanced| {
+            let request = actual_correction_request(original, prior, advanced);
+            let input = original.native();
+            let mut unchanged = request.clone();
+            unchanged.decision_progress = input.request.decision_progress;
+            unchanged.surrounding_progress = input.request.surrounding_progress;
+            let unchanged_subject = CheckedSubject::new(
+                original.package(),
+                input.occurrence,
+                input.valuations,
+                &unchanged,
+            )
+            .unwrap()
+            .with_predecessor(prior, original.selection().native_report_limits);
+            assert!(
+                matches!(
+                    native::evaluate_v2(
+                        &unchanged_subject,
+                        input.observation,
+                        &mut Meter::new(scalar_limits()),
+                        &mut native_budget()
+                    ),
+                    Err(native::NativeReportError::Evaluation(_))
+                ),
+                "ledger/relation alone is an actual unchanged-input owner refusal"
             );
-            assert!(refused_tl.owner_refusals().native().is_none());
-            assert_eq!(refused_tl.native_admitted(), previous.is_some());
-            let reread = read_tl_join(
-                refused_tl.bytes(),
-                ExpectedTlJoin {
-                    projection: &corrected,
-                    native: Some(&corrected_native),
-                    mapped: Some(&foreign_mapped),
-                    previous,
-                },
-                TlLimits::default(),
-                &mut native_budget(),
+            let subject = qsl_package::checked_views::temporal_subject(
+                original.package(),
+                &input.occurrence.node,
             )
             .unwrap();
-            assert_eq!(reread.decision(), TlJoinDecision::Refused);
-            assert_eq!(reread.bytes(), refused_tl.bytes());
-        }
-    });
+            let corrected = project_tl(
+                original.package(),
+                &subject,
+                original.formula().classification(),
+                Closure::Complete,
+                NativeProjectionInput {
+                    request: &request,
+                    ..input
+                },
+                advanced.selection,
+                TlLimits::default(),
+            )
+            .expect("actual advanced owner progress projects coherently");
+            assert_eq!(
+                corrected
+                    .selection()
+                    .observations
+                    .decision_scope_progress
+                    .payload()
+                    .boundary(),
+                advanced
+                    .selection
+                    .observations
+                    .decision_scope_progress
+                    .payload()
+                    .boundary()
+            );
+            assert_eq!(corrected.native().request.decision_progress, Some(2));
+            assert_eq!(
+                corrected.native().request.execution,
+                qsl_eval::temporal::evidence::ExecutionDisposition::Completed
+            );
+            assert_ne!(
+                corrected.request(),
+                original.request(),
+                "actual admitted QObs progress advances the TL request too"
+            );
+            let report = evaluate_native_with_prior(&corrected, Some(prior));
+            assert_eq!(report.outcome(), ReportOutcome::Evaluated);
+            let original_input = qsl_eval::temporal::ResultIdentity::input_identity_from_bytes(
+                prior.result_identity(),
+            )
+            .unwrap();
+            let corrected_input = qsl_eval::temporal::ResultIdentity::input_identity_from_bytes(
+                report.result_identity(),
+            )
+            .unwrap();
+            assert_ne!(
+                original_input, corrected_input,
+                "real admitted progress changes owner input identity"
+            );
+            assert_eq!(report.predecessor(), Some(prior.result_identity()));
+            report
+                .validate_predecessor(prior, corrected.selection().native_report_limits)
+                .expect("genuine changed-input native correction precedes outcome assertions");
+            let checked = CheckedSubject::new(
+                corrected.package(),
+                input.occurrence,
+                input.valuations,
+                &request,
+            )
+            .unwrap()
+            .with_predecessor(prior, corrected.selection().native_report_limits);
+            let read = Report::from_owner_bytes(
+                &report.to_owner_bytes(),
+                &checked,
+                input.observation,
+                &mut native_budget(),
+            )
+            .expect("changed-input correction passes original strict native reader");
+            assert_eq!(read.to_owner_bytes(), report.to_owner_bytes());
+            test(&corrected, report);
+        },
+    );
 }
