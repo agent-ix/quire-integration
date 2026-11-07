@@ -11,6 +11,8 @@ use quire_contract_ir::CheckedPackageV2;
 /// Why a supplied classification cannot be consumed for this admitted subject.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MappingBindingRefusal {
+    /// The classification was issued by a different package admission.
+    ForeignClassification,
     /// The subject borrows a different admitted package instance.
     ForeignSubject,
     /// The selected clause cannot be classified under its admitted profile.
@@ -35,6 +37,9 @@ pub fn validate_mapping_binding(
     if !subject.belongs_to(package) {
         return Err(MappingBindingRefusal::ForeignSubject);
     }
+    if !classification.belongs_to(package) {
+        return Err(MappingBindingRefusal::ForeignClassification);
+    }
     let expected =
         mapping_support(subject, surrounding).map_err(MappingBindingRefusal::Classification)?;
     if &expected != classification {
@@ -55,4 +60,25 @@ mod observation_revision;
 pub use observation_revision::{
     read_observation_revision, AdmittedObservationRevision, ObservationAdmissionCode,
     ObservationAdmissionError, ObservationAdmissionLimit, ObservationAdmissionLimits,
+};
+
+mod projection;
+
+pub use projection::{
+    project_tl, read_tl_projection, ExpectedTlProjection, NativeProjectionInput, TlInput, TlLimits,
+    TlMissingPremise, TlProjectionCode, TlProjectionError, TlProjectionLimit, TlProjectionPremise,
+    TlProjectionSelection, TlProjectionUsage, ValidatedTlProjection,
+    PROFILE as TL_CORRESPONDENCE_PROFILE,
+};
+
+mod join;
+pub use join::{
+    join_tl, read_tl_join, ExpectedTlJoin, TlJoinCause, TlJoinCode, TlJoinDecision, TlJoinError,
+    TlJoinOwnerRefusals, ValidatedTlJoin, VERSION as TL_JOIN_VERSION,
+};
+
+mod definition;
+pub use definition::{
+    read_tl_bridge_definition, TlBridgeDefinitionError, ValidatedTlBridgeDefinition,
+    TL_BRIDGE_DEFINITION,
 };

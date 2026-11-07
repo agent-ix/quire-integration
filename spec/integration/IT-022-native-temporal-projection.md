@@ -310,3 +310,39 @@ failed premise returns its FR-350 typed error with no partial value. Every
 join row, cause order, correction outcome and strict-read refusal matches
 FR-350. Each of the seven limits admits at its measured count and refuses one
 below it with the named cause. No bridge operation invokes an evaluator.
+
+## Retained values and error detail
+
+These public items carry owner detail beside the FR-350 outputs and add no
+decision input. Each is exercised by the scenarios named.
+
+- `ValidatedTlProjection::source_positions()` returns, for each TL position in
+  ascending stamp order, the index of its entry in `request.positions`
+  (IT-022-SC-02, IT-022-SC-10).
+- `ValidatedTlJoin::owner_refusals()` returns the typed native strict-read or
+  predecessor refusal and the typed TL mapped-result re-read refusal that put
+  a side into the `refused` or `lineage` state (IT-022-SC-12, IT-022-SC-13).
+- `ValidatedTlJoin::native_encoding_usage()` and `native_predecessor_usage()`
+  return the native owner's own usage receipts for the bounded writer and the
+  full predecessor validation. They are not bridge counters and never enter
+  `TlLimits` accounting (IT-022-SC-13, IT-022-SC-14).
+- `TlProjectionError` variants other than the eleven FR-350 codes' primary
+  payloads (`PropositionMap`, `SyntaxRead`, `SyntaxEncoding`, `History`,
+  `ExactNumber`) carry the typed tl-syntax or tl-mltl constructor or reader
+  refusal and map to `tl-projection-owner`; `NonIntegerNumber` and
+  `Canonical` map to `tl-projection-encoding` (IT-022-SC-16).
+
+## Checks verified at unit level
+
+QObs's capture selection (quire-observation `src/authority/capture.rs:206-251`)
+covers every qualified record at one anchor, and a bundle holds each role once
+(`src/authority/bundle.rs:1294-1324`). A genuine bundle therefore carries a
+single stamp and cannot hold one observation identity twice. The bridge's
+stamp ordering, repeated stamp, gap and range-length checks, the several-anchor
+match, the duplicate bundle observation identity, the numeric anchor offset and
+the unique source-map entry are defensive for owner input. They are pure
+functions over typed identities and stamps (`projection/positions.rs`), verified
+by unit tests there rather than through a bundle. The refusals that need an
+input no QSL source or QObs producer yields today (`subject-name`,
+`tl-projection-encoding` for a non-integer IR number) are verified at the
+function that produces them.
