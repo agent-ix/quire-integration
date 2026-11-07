@@ -1395,3 +1395,107 @@ fn with_progress_correction(
         },
     );
 }
+
+/// Each lineage condition of FR-350's `L` is its own case and reaches R6 with no Boolean.
+#[trace("IT-022-SC-13", "FR-350-AC-5", "FR-350-AC-10")]
+#[test]
+fn each_lineage_condition_reaches_conflict_in_its_own_case() {
+    with_case("holds(true)", false, |case| {
+        let original = case.project(TlLimits::default()).expect("projection");
+        let native0 = evaluate_native(&original);
+        let mapped0 = evaluate_mapped(&original);
+        let prior = join_tl(
+            &original,
+            Some(&native0),
+            Some(&mapped0),
+            None,
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .expect("original join");
+        let conflict =
+            |joined: Result<quire_integration::temporal::ValidatedTlJoin<'_>, TlJoinError>,
+             name: &str| {
+                let joined = joined.unwrap_or_else(|error| panic!("{name}: {error:?}"));
+                assert_eq!(joined.decision(), TlJoinDecision::Conflict, "{name}");
+                assert_eq!(joined.causes(), &[TlJoinCause::ResultMismatch], "{name}");
+                assert_eq!(joined.value(), None, "{name}");
+            };
+        // Both originals, yet a previous join is supplied.
+        conflict(
+            join_tl(
+                &original,
+                Some(&native0),
+                Some(&mapped0),
+                Some(&prior),
+                TlLimits::default(),
+                &mut native_budget(),
+            ),
+            "original with previous",
+        );
+        let native_only = join_tl(
+            &original,
+            Some(&native0),
+            None,
+            None,
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .expect("native-only join");
+        with_progress_correction(&original, &native0, |corrected, native1| {
+            let limits = corrected.selection().owner_limits;
+            let source1 = evaluate_tl(
+                corrected,
+                ResultRelationInput::Superseding(mapped0.source()),
+                limits,
+            );
+            let mapped1 = map_source(&source1, limits);
+            conflict(
+                join_tl(
+                    corrected,
+                    Some(&native1),
+                    Some(&mapped1),
+                    None,
+                    TlLimits::default(),
+                    &mut native_budget(),
+                ),
+                "correction without previous",
+            );
+            // The previous join retained no TL result: missing-predecessor.
+            conflict(
+                join_tl(
+                    corrected,
+                    Some(&native1),
+                    Some(&mapped1),
+                    Some(&native_only),
+                    TlLimits::default(),
+                    &mut native_budget(),
+                ),
+                "TL missing-predecessor",
+            );
+            // The previous join retained a different complete TL result of equal
+            // identity: predecessor-mismatch.
+            let different = evaluate_mapped(corrected);
+            let wrong_tl = join_tl(
+                &original,
+                Some(&native0),
+                Some(&different),
+                None,
+                TlLimits::default(),
+                &mut native_budget(),
+            )
+            .expect("join over a foreign TL result");
+            conflict(
+                join_tl(
+                    corrected,
+                    Some(&native1),
+                    Some(&mapped1),
+                    Some(&wrong_tl),
+                    TlLimits::default(),
+                    &mut native_budget(),
+                ),
+                "TL predecessor-mismatch",
+            );
+        });
+    });
+}

@@ -459,7 +459,7 @@ fn native_state(report: &Report) -> NativeState {
         | ReportOutcome::CoveredPositions
         | ReportOutcome::WindowLimit
         | ReportOutcome::EvictedValuation => NativeState::Incomplete,
-        _ => native_final(report.truth(), report.settlement())
+        ReportOutcome::Evaluated => native_final(report.truth(), report.settlement())
             .map_or(NativeState::Pending, NativeState::Final),
     }
 }

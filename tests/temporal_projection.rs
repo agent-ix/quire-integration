@@ -13,6 +13,7 @@ use quire_integration::temporal::{
 use quire_mltl::request::TemporalLane;
 use quire_observation::authority::OpenClosed;
 use quire_spec_language::temporal::{self as native, ValuationEvidence, ValuationInstance};
+use tl_mltl::wire::OwnerReadErrorCode;
 use tl_syntax::PropositionId;
 
 #[path = "support/temporal_projection.rs"]
@@ -944,7 +945,150 @@ fn fixed_sample_clock_matches_the_owner_anchor_and_units_are_never_converted() {
         });
         with_case("once[0,0] holds(true)", true, |case| {
             let error = case.project(TlLimits::default()).expect_err("past unit");
-            assert!(matches!(error, TlProjectionError::Owner(_)), "{error:?}");
+            // The TL request owner's own refusal (quire-mltl FR-001-AC-9), exactly.
+            let TlProjectionError::Owner(owner) = &error else {
+                panic!("tl-projection-owner required: {error:?}")
+            };
+            assert_eq!(owner.code(), OwnerReadErrorCode::ExpectedMismatch);
+            assert_eq!(owner.field(), "clockBinding");
         });
+    });
+}
+
+/// Project with a mutated copy of the case's request and keep only the verdict.
+fn run(
+    case: &Case<'_>,
+    mutate: impl FnOnce(&mut qsl_eval::temporal::evidence::EvidenceRequest),
+) -> Result<(), TlProjectionError> {
+    let mut request = case.native.request.clone();
+    mutate(&mut request);
+    project_tl(
+        case.package,
+        case.subject,
+        case.classification,
+        case.surrounding,
+        NativeProjectionInput {
+            request: &request,
+            ..case.native
+        },
+        case.selection,
+        TlLimits::default(),
+    )
+    .map(|_| ())
+}
+
+/// The position-set defects a single genuine bundle record can exhibit. A QObs
+/// bundle carries one capture environment at one anchor and every role exactly
+/// once, so the owner admits no bundle with several distinct stamps.
+#[trace("IT-022-SC-02", "IT-022-SC-16", "FR-350-AC-4", "FR-350-AC-9")]
+#[test]
+fn position_set_defects_return_their_assigned_premises() {
+    with_case("holds(true)", false, |case| {
+        let several = run(&case, |r| {
+            r.positions.push(r.positions[0].clone());
+        })
+        .expect_err("anchor matches several positions");
+        assert!(
+            premise(TlProjectionPremise::Anchor)(&several),
+            "{several:?}"
+        );
+    });
+    projection_support::with_positions(1, 1, 0, || {
+        with_case("holds(true)", false, |case| {
+            let above = run(&case, |r| {
+                r.completeness.as_mut().unwrap().state =
+                    qsl_eval::temporal::ProgressCompleteness::Complete { through: 0 };
+            })
+            .expect_err("stamp above through");
+            assert!(premise(TlProjectionPremise::Position)(&above), "{above:?}");
+        });
+    });
+    // A clock range longer than the supplied samples: a sample is missing.
+    projection_support::with_range_extra(1, || {
+        with_case("holds(true)", false, |case| {
+            let error = case
+                .project(TlLimits::default())
+                .expect_err("missing sample");
+            assert!(missing(TlMissingPremise::Position)(&error), "{error:?}");
+        });
+    });
+}
+
+/// A past target needs an origin-complete history: range start 0 and an
+/// authoritative origin that is exactly `Some(true)`.
+#[trace("IT-022-SC-04", "FR-350-AC-1")]
+#[test]
+fn past_history_needs_range_start_zero_and_an_authoritative_origin() {
+    projection_support::with_positions(1, 1, 0, || {
+        with_case("once[0,0] holds(true)", false, |case| {
+            let error = case.project(TlLimits::default()).expect_err("start 1");
+            assert!(missing(TlMissingPremise::History)(&error), "{error:?}");
+        });
+    });
+    with_case("once[0,0] holds(true)", false, |case| {
+        for origin in [Some(false), None] {
+            let error = run(&case, |r| r.authoritative_origin = origin)
+                .expect_err("origin not authoritative");
+            assert!(
+                missing(TlMissingPremise::History)(&error),
+                "{origin:?}: {error:?}"
+            );
+        }
+    });
+}
+
+/// A rational epoch or period has no integer form under any unit.
+#[trace("IT-022-SC-16", "FR-350-AC-4")]
+#[test]
+fn a_rational_clock_is_refused_as_a_clock_representation_under_every_unit() {
+    for (unit, formula) in [
+        ("nanoseconds", "holds(true)"),
+        ("milliseconds", "holds(true)"),
+        ("milliseconds", "once[0,0] holds(true)"),
+    ] {
+        projection_support::with_sample_clock("1/2", unit, || {
+            with_case(formula, true, |case| {
+                let error = case.project(TlLimits::default()).expect_err("rational");
+                assert!(
+                    premise(TlProjectionPremise::ClockRepresentation)(&error),
+                    "{unit} {formula}: {error:?}"
+                );
+            });
+        });
+    }
+}
+
+/// A QObs completeness view with a contradicted fact is a native premise.
+#[trace("IT-022-SC-07", "IT-022-SC-16", "FR-350-AC-9")]
+#[test]
+fn contradicted_completeness_is_a_native_premise_and_incomplete_is_incomplete_input() {
+    use quire_observation::authority::completeness::FactStatus;
+    projection_support::with_completeness(FactStatus::Contradicted, || {
+        with_case("holds(true)", false, |case| {
+            let error = case.project(TlLimits::default()).expect_err("contradicted");
+            assert!(
+                premise(TlProjectionPremise::Completeness)(&error),
+                "{error:?}"
+            );
+        });
+    });
+    projection_support::with_completeness(FactStatus::Incomplete, || {
+        with_case("holds(true)", false, |case| {
+            let error = case.project(TlLimits::default()).expect_err("incomplete");
+            assert!(
+                missing(TlMissingPremise::CompleteInput)(&error),
+                "{error:?}"
+            );
+        });
+    });
+}
+
+/// An integer interval above `u32::MAX` cannot be preserved.
+#[trace("IT-022-SC-05", "FR-350-AC-3")]
+#[test]
+fn an_interval_bound_above_u32_max_is_a_native_premise() {
+    with_case("eventually[0,4294967296] holds(true)", false, |case| {
+        let error = case.project(TlLimits::default()).expect_err("bound");
+        assert!(premise(TlProjectionPremise::Interval)(&error), "{error:?}");
     });
 }

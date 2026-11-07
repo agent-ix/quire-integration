@@ -365,6 +365,10 @@ fn check_owner_anchor(
             if index.parse::<u64>().ok() != Some(stamp) {
                 return Err(clock_error());
             }
+            // A rational with a denominator other than 1 has no integer form under
+            // any unit, so it is refused before the unit is considered.
+            let epoch = integer(epoch)?;
+            let period = integer(period)?;
             if unit.as_ref() != "nanoseconds" {
                 // The unit is never converted. A future target cannot carry it;
                 // a past target hands the unchanged clock to the TL request owner.
@@ -374,8 +378,6 @@ fn check_owner_anchor(
                     Err(Error::NativePremise(Premise::ClockRepresentation))
                 };
             }
-            let epoch = integer(epoch)?;
-            let period = integer(period)?;
             if epoch_nanos.parse::<i64>().ok() == Some(epoch)
                 && period_nanos.parse::<i64>().ok() == Some(period)
             {
@@ -489,8 +491,8 @@ fn check_captures<'a>(
             ledger: native.request.ledger.clone(),
             execution: native.request.execution,
         };
-    if let Some(contradiction) = activation.contradiction(&obligation) {
-        return Err(Error::NativeActivation(contradiction));
+    if activation.contradiction(&obligation).is_some() {
+        return Err(Error::NativePremise(Premise::Activation));
     }
     let retained = ledger.and_then(|ledger| ledger.instance(&obligation, selected));
     let (values, payload) = if let Some(retained) = retained {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! FR-350: genuine native occurrence, evidence and TL-owner projection.
 
-#[path = "../temporal_projection/observation.rs"]
+#[path = "observation_revision/mod.rs"]
 mod observation;
 use crate::support;
 
@@ -91,6 +91,72 @@ thread_local! {
 }
 
 thread_local! {
+    /// The status of the completeness view's single fact.
+    static COMPLETENESS: std::cell::Cell<a::completeness::FactStatus> =
+        const { std::cell::Cell::new(a::completeness::FactStatus::Available) };
+}
+
+/// Run `test` with a completeness view whose fact has `status`.
+#[allow(dead_code)] // Only the completeness scenarios vary it.
+pub(crate) fn with_completeness<T>(
+    status: a::completeness::FactStatus,
+    test: impl FnOnce() -> T,
+) -> T {
+    let previous = COMPLETENESS.with(|state| state.replace(status));
+    let result = test();
+    COMPLETENESS.with(|state| state.set(previous));
+    result
+}
+
+thread_local! {
+    /// Stamps the clock range covers beyond the admitted records.
+    static RANGE_EXTRA: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// Run `test` with a clock range longer than its admitted records.
+#[allow(dead_code)] // Only the missing-sample scenario uses it.
+pub(crate) fn with_range_extra<T>(extra: u64, test: impl FnOnce() -> T) -> T {
+    let previous = RANGE_EXTRA.with(|range| range.replace(extra));
+    let result = test();
+    RANGE_EXTRA.with(|range| range.set(previous));
+    result
+}
+
+thread_local! {
+    /// Whether the bundle carries the first observation document twice.
+    static DUPLICATE_FIRST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `test` with one observation identity placed in the bundle twice.
+#[allow(dead_code)] // Only the duplicate-identity scenario uses it.
+pub(crate) fn with_duplicate_first<T>(test: impl FnOnce() -> T) -> T {
+    let previous = DUPLICATE_FIRST.with(|flag| flag.replace(true));
+    let result = test();
+    DUPLICATE_FIRST.with(|flag| flag.set(previous));
+    result
+}
+
+thread_local! {
+    /// First stamp, record count and the record the activation anchors at.
+    static POSITIONS: std::cell::Cell<(u64, u64, usize)> = const { std::cell::Cell::new((0, 1, 0)) };
+}
+
+/// Run `test` with `count` admitted observation records from stamp `start`, the
+/// native instance anchored at record `anchor`.
+#[allow(dead_code)] // Only the multi-position scenarios vary the bundle.
+pub(crate) fn with_positions<T>(
+    start: u64,
+    count: u64,
+    anchor: usize,
+    test: impl FnOnce() -> T,
+) -> T {
+    let previous = POSITIONS.with(|positions| positions.replace((start, count, anchor)));
+    let result = test();
+    POSITIONS.with(|positions| positions.set(previous));
+    result
+}
+
+thread_local! {
     /// Anchors the observation records as samples (`Some(true)`) or event positions
     /// (`Some(false)`) regardless of the declared clock.
     static OBSERVATION_SAMPLE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
@@ -141,8 +207,15 @@ pub(crate) fn packages(
                         epoch: ClockExactNumber::Integer {
                             decimal: "0".into(),
                         },
-                        period: ClockExactNumber::Integer {
-                            decimal: period.into(),
+                        // `n/d` declares a rational period.
+                        period: match period.split_once('/') {
+                            Some((numerator, denominator)) => ClockExactNumber::Rational {
+                                numerator: numerator.into(),
+                                denominator: denominator.into(),
+                            },
+                            None => ClockExactNumber::Integer {
+                                decimal: period.into(),
+                            },
                         },
                         unit: unit.into(),
                     }
@@ -275,13 +348,31 @@ pub(crate) fn with_case_watermark(
     let observed_sample = OBSERVATION_SAMPLE
         .with(std::cell::Cell::get)
         .unwrap_or(sample);
-    let f = observation::Fixture::new(observed_sample);
+    let (start, count, anchor_index) = POSITIONS.with(std::cell::Cell::get);
+    let f = observation::Fixture::projection(observation::Shape {
+        duplicate_first: DUPLICATE_FIRST.with(std::cell::Cell::get),
+        range_extra: RANGE_EXTRA.with(std::cell::Cell::get),
+        ..observation::Shape::positions(
+            if observed_sample {
+                observation::Form::Sample
+            } else {
+                observation::Form::Event
+            },
+            start,
+            count,
+        )
+    });
+    let watermark = if watermark == 1 {
+        start + count + RANGE_EXTRA.with(std::cell::Cell::get)
+    } else {
+        watermark
+    };
     let context = f.context(1, None);
     let owner_limits = Limits::owner_max();
     let selection = f.selection(None);
     let publication =
         bundle::publish(context, &selection, None, owner_limits).expect("owner bundle");
-    let observed = f.observation(f.observation_document(), 1, None);
+    let observed = f.observation_at(anchor_index);
     let observation = read_observation_revision(
         publication.document().bytes(),
         context,
@@ -303,23 +394,7 @@ pub(crate) fn with_case_watermark(
         owner_limits,
     )
     .expect("clock reader");
-    let boundary = || {
-        if observed_sample {
-            a::TemporalBoundary::FixedSample {
-                lower: 0,
-                upper_inclusive: 0,
-                carrier_end_exclusive: 1,
-                watermark,
-            }
-        } else {
-            a::TemporalBoundary::EventPosition {
-                lower: 0,
-                upper_inclusive: 0,
-                carrier_end_exclusive: 1,
-                watermark,
-            }
-        }
-    };
+    let boundary = || f.boundary_at(watermark);
     let read_progress = |state| {
         let progress_selection = a::progress::Selection::new(
             clock_selection.clone(),
@@ -366,11 +441,25 @@ pub(crate) fn with_case_watermark(
     let surrounding_closure = read_closure(surrounding_state);
     let completeness_selection = a::completeness::Selection::new(
         observation::id("boundary"),
-        vec![a::completeness::Fact::new(
-            observation::id("member"),
-            Some(f.qualified.records()[0].identity.clone()),
-            a::completeness::FactStatus::Available,
-        )],
+        f.qualified
+            .records()
+            .iter()
+            .enumerate()
+            .map(|(index, record)| {
+                let status = COMPLETENESS.with(std::cell::Cell::get);
+                a::completeness::Fact::new(
+                    observation::id(&if index == 0 {
+                        "member".to_owned()
+                    } else {
+                        format!("member-{index}")
+                    }),
+                    // An incomplete fact names no available observation.
+                    (status != a::completeness::FactStatus::Incomplete)
+                        .then(|| record.identity.clone()),
+                    status,
+                )
+            })
+            .collect(),
     );
     let completeness_document =
         a::completeness::derive(context, &completeness_selection, owner_limits)
@@ -421,11 +510,17 @@ pub(crate) fn with_case_watermark(
             authority_identity: bridge_definition.authority().to_owned(),
             ..EvidenceRef::named(bridge_definition.identity())
         },
-        positions: vec![EvidencePosition {
-            observation: EvidenceRef::named(anchor),
-            position: 0,
-            ..EvidencePosition::default()
-        }],
+        positions: (0..count)
+            .map(|offset| EvidencePosition {
+                observation: EvidenceRef::named(
+                    f.observation_at(usize::try_from(offset).unwrap())
+                        .payload()
+                        .observation_identity(),
+                ),
+                position: start + offset,
+                ..EvidencePosition::default()
+            })
+            .collect(),
         anchor: Some(anchor.to_owned()),
         deliveries: Vec::new(),
         origins: vec![ExecutionOrigin {
@@ -442,7 +537,9 @@ pub(crate) fn with_case_watermark(
         execution: ExecutionDisposition::Completed,
         completeness: Some(CompletenessRecord {
             reference: EvidenceRef::named("complete"),
-            state: ProgressCompleteness::Complete { through: 0 },
+            state: ProgressCompleteness::Complete {
+                through: start + count - 1,
+            },
             facts: Vec::new(),
         }),
         authoritative_origin: Some(true),
@@ -463,14 +560,18 @@ pub(crate) fn with_case_watermark(
         }),
         limits: TemporalEvidenceLimits::default(),
     };
-    let trace = native_trace(profile, anchor);
-    let rows = subject
-        .predicate_leaves()
-        .iter()
-        .enumerate()
-        .map(|(index, operand)| ValuationRow {
+    let trace = native_trace_n(profile, anchor, usize::try_from(count).unwrap());
+    let rows = (0..usize::try_from(count).unwrap())
+        .flat_map(|position| {
+            subject
+                .predicate_leaves()
+                .iter()
+                .enumerate()
+                .map(move |(index, operand)| (position, index, operand))
+        })
+        .map(|(position, index, operand)| ValuationRow {
             subject: occurrence.clone(),
-            position: 0,
+            position,
             anchor: anchor.to_owned(),
             capture_instance: CAPTURE_INSTANCE.to_owned(),
             revision: revision.revision.clone(),
@@ -513,19 +614,26 @@ pub(crate) fn with_case_watermark(
     });
 }
 
+#[allow(dead_code)] // Single-position targets only.
 pub(crate) fn native_trace(profile: &str, anchor: &str) -> native::Trace {
+    native_trace_n(profile, anchor, 1)
+}
+
+pub(crate) fn native_trace_n(profile: &str, anchor: &str, count: usize) -> native::Trace {
     native::Trace {
         clock: native::ClockBinding {
             name: "events".into(),
             profile_identity: profile.into(),
             parameters: BTreeMap::new(),
         },
-        positions: vec![native::Position {
-            coordinate: 0,
-            order: None,
-            valuations: BTreeMap::new(),
-            instance_valuations: BTreeMap::new(),
-        }],
+        positions: (0..count)
+            .map(|coordinate| native::Position {
+                coordinate: i64::try_from(coordinate).unwrap(),
+                order: None,
+                valuations: BTreeMap::new(),
+                instance_valuations: BTreeMap::new(),
+            })
+            .collect(),
         anchor: anchor.into(),
         triggers: Vec::new(),
         trigger_evidence: native::Evidence::Admitted,
@@ -544,5 +652,9 @@ pub(crate) fn native_trace(profile: &str, anchor: &str) -> native::Trace {
 #[allow(dead_code)] // Not every target sharing this support admits valuation rows.
 pub(crate) fn trace_for(case: &Case<'_>) -> native::Trace {
     let profile: &str = &case.subject.profile().definition.identity;
-    native_trace(profile, case.native.instance.anchor)
+    native_trace_n(
+        profile,
+        case.native.instance.anchor,
+        case.native.request.positions.len(),
+    )
 }

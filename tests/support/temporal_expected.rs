@@ -71,7 +71,6 @@ pub(crate) fn expected_members(
     captures: &[&[u8]],
     trigger_payload: &[u8],
     source_entry: &impl Serialize,
-    stamps: &[u64],
 ) -> Map<String, Value> {
     let request = case.native.request;
     let views = case.selection.observations;
@@ -85,14 +84,16 @@ pub(crate) fn expected_members(
         TlInput::Past(history) => ("past", history.bytes()),
     };
     let occurrence = case.native.occurrence;
-    let positions: Vec<Value> = stamps
-        .iter()
-        .enumerate()
-        .map(|(index, stamp)| {
+    // TL order is ascending stamp order; each entry keeps its request index.
+    let mut order: Vec<usize> = (0..request.positions.len()).collect();
+    order.sort_by_key(|&index| request.positions[index].position);
+    let positions: Vec<Value> = order
+        .into_iter()
+        .map(|index| {
             let position = &request.positions[index];
             json!({
                 "index": dec(index),
-                "stamp": dec(stamp),
+                "stamp": dec(position.position),
                 "observation": evidence_ref(&position.observation),
                 "orderKey": position.order_key.as_ref().map_or(Value::Null, |key| {
                     json!({"authority": key.authority, "key": dec(key.key)})

@@ -337,9 +337,6 @@ pub enum TlProjectionError {
     /// Original exact-number constructor failure.
     #[error("TL clock number refused: {0}")]
     ExactNumber(#[source] tl_mltl::ExactNumberError),
-    /// Original native immutable-instance contradiction admission.
-    #[error("native activation refused: {0}")]
-    NativeActivation(qsl_eval::temporal::evidence::Contradiction),
     /// An IR value in the record holds a non-integer JSON number.
     #[error("correspondence encoding refused a non-integer number")]
     NonIntegerNumber,
@@ -371,7 +368,7 @@ impl TlProjectionError {
             Self::Binding(_) => TlProjectionCode::Binding,
             Self::Unsupported(_) => TlProjectionCode::Unsupported,
             Self::Incomplete(_) => TlProjectionCode::Incomplete,
-            Self::NativePremise(_) | Self::NativeActivation(_) => TlProjectionCode::NativePremise,
+            Self::NativePremise(_) => TlProjectionCode::NativePremise,
             Self::Valuation { .. } => TlProjectionCode::Valuation,
             Self::NativeClock(_) => TlProjectionCode::NativeClock,
             Self::Formula(_) => TlProjectionCode::Formula,

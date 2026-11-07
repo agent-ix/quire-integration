@@ -180,12 +180,12 @@ fn retained_instance_payload_contradiction_refuses_before_projection() {
                 TlLimits::default(),
             )
             .expect_err("retained owner contradiction must refuse");
-            let TlProjectionError::NativeActivation(contradiction) = error else {
-                panic!("original native contradiction is retained: {error:?}")
-            };
-            assert_eq!(
-                &contradiction.contradicted_identity,
-                case.native.request.trigger.as_ref().unwrap()
+            assert!(
+                matches!(
+                    error,
+                    TlProjectionError::NativePremise(TlProjectionPremise::Activation)
+                ),
+                "an activation contradiction is native-premise activation: {error:?}"
             );
             assert_eq!(ledger, &saved);
         },
@@ -644,21 +644,12 @@ fn expected_members(
                 && entry.ordinal == occurrence.ordinal
         })
         .expect("source entry");
-    let mut stamps: Vec<u64> = case
-        .native
-        .request
-        .positions
-        .iter()
-        .map(|position| position.position)
-        .collect();
-    stamps.sort_unstable();
     expected::expected_members(
         case,
         projection,
         &captures,
         origin.payload.as_bytes(),
         source,
-        &stamps,
     )
 }
 
@@ -729,7 +720,7 @@ fn each_mutated_source_input_changes_exactly_its_member_and_the_original_bytes_m
         let original = case.project(TlLimits::default()).expect("projection");
         let base = expected_members(&case, &original);
         type Mutation = fn(&mut qsl_eval::temporal::evidence::EvidenceRequest);
-        let mutations: [(&str, Mutation, &[&str]); 6] = [
+        let mutations: Vec<(&str, Mutation, &[&str])> = vec![
             (
                 "trigger scope",
                 |r| r.trigger_scope = qsl_eval::temporal::ProgressClosure::Open,
@@ -765,6 +756,53 @@ fn each_mutated_source_input_changes_exactly_its_member_and_the_original_bytes_m
                 |r| r.completeness.as_mut().unwrap().facts.push("fact".into()),
                 &["native"],
             ),
+            (
+                "trigger",
+                |r| {
+                    let other = qsl_eval::temporal::evidence::EvidenceRequest::trigger_of(
+                        b"whole-execution:other",
+                    )
+                    .unwrap();
+                    r.origins[0].identity = other.clone();
+                    r.trigger = Some(other);
+                },
+                &["trigger"],
+            ),
+            (
+                "payload",
+                |r| r.origins[0].payload = Payload::new(b"another-origin".as_slice()),
+                &["triggerPayload"],
+            ),
+            (
+                "completeness reference",
+                |r| r.completeness.as_mut().unwrap().reference.scope = "another".into(),
+                &["native"],
+            ),
+            (
+                "position population",
+                |r| r.positions[0].observation.population = "another".into(),
+                &["positions"],
+            ),
+            (
+                "position digest",
+                |r| r.positions[0].observation.digest = vec![1, 2, 3],
+                &["positions"],
+            ),
+            (
+                "correspondence revision",
+                |r| r.correspondence.authority_revision = "2".into(),
+                &["native"],
+            ),
+            (
+                "correspondence digest",
+                |r| r.correspondence.digest = vec![9],
+                &["native"],
+            ),
+            (
+                "unknown origin",
+                |r| r.authoritative_origin = None,
+                &["authoritativeOrigin"],
+            ),
         ];
         for (name, mutate, members) in mutations {
             let mut request = case.native.request.clone();
@@ -797,4 +835,56 @@ fn each_mutated_source_input_changes_exactly_its_member_and_the_original_bytes_m
             );
         }
     });
+}
+
+/// Inputs that live in the package or the independent QObs views change the
+/// members that record them, and the original bytes then mismatch.
+#[trace("IT-022-SC-10", "FR-350-AC-3", "FR-350-AC-11")]
+#[test]
+fn package_and_view_inputs_change_their_members() {
+    use qsl_package::checked_views::Closure;
+    use quire_observation::authority::OpenClosed;
+    let members = |formula: &str,
+                   sample: bool,
+                   surrounding: Closure,
+                   decision: OpenClosed|
+     -> serde_json::Map<String, Value> {
+        let mut out = None;
+        projection_support::with_case_scopes(formula, sample, surrounding, decision, |case| {
+            let projection = case.project(TlLimits::default()).expect("projection");
+            out = Some(expected_members(&case, &projection));
+        });
+        out.expect("members")
+    };
+    let base = members("holds(true)", false, Closure::Complete, OpenClosed::Closed);
+    let contains = |changed: &serde_json::Map<String, Value>, names: &[&str]| {
+        let differing = expected::differing(&base, changed);
+        for name in names {
+            assert!(
+                differing.iter().any(|d| d == name),
+                "{name} in {differing:?}"
+            );
+        }
+    };
+    contains(
+        &members("holds(true)", false, Closure::Open, OpenClosed::Closed),
+        &["surrounding", "surroundingClosure", "native"],
+    );
+    contains(
+        &members("holds(true)", false, Closure::Complete, OpenClosed::Open),
+        &["decisionClosure", "native"],
+    );
+    contains(
+        &members(
+            "not holds(true)",
+            false,
+            Closure::Complete,
+            OpenClosed::Closed,
+        ),
+        &["formula", "intervals"],
+    );
+    contains(
+        &members("holds(true)", true, Closure::Complete, OpenClosed::Closed),
+        &["clock", "observation", "clockView", "subjectProfile"],
+    );
 }
