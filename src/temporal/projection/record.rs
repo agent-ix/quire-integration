@@ -231,7 +231,9 @@ pub(super) fn encode(
         quire_canonical::Limits::new(budget.limits.max_bytes),
     )
     .map_err(|error| match error {
-        quire_canonical::Error::Limit(_) => limit(TlProjectionLimit::Bytes, budget.limits.max_bytes),
+        quire_canonical::Error::Limit(_) => {
+            limit(TlProjectionLimit::Bytes, budget.limits.max_bytes)
+        }
         error => Error::Canonical(error),
     })?;
     budget.bytes(bytes.len())?;

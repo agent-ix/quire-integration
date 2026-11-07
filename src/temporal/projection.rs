@@ -25,6 +25,8 @@ mod native;
 mod owners;
 mod record;
 
+pub(in crate::temporal) use record::hex;
+
 /// Public bridge profile name supplied directly to the request owner.
 pub const PROFILE: &str = "quire.native-temporal-correspondence/v1";
 
@@ -319,7 +321,7 @@ pub enum TlProjectionError {
     Formula(#[source] TlFormulaError),
     /// Original typed TL producer/reader failure.
     #[error("TL owner admission refused: {0}")]
-    Owner(#[source] OwnerReadError),
+    Owner(#[source] Box<OwnerReadError>),
     /// Preserve original syntax-owner refusals without a copied wire record.
     #[error("TL proposition map refused: {0}")]
     PropositionMap(tl_syntax::PropositionMapError),
@@ -358,7 +360,7 @@ pub enum TlProjectionError {
         setting: u64,
         /// The owner refusal when an owner stopped at a lowered byte ceiling.
         #[source]
-        owner: Option<OwnerReadError>,
+        owner: Option<Box<OwnerReadError>>,
     },
 }
 
@@ -667,7 +669,8 @@ fn project_with<'a>(
     let owner_error = |error| owners::error(error, selection.owner_limits, limits.max_bytes);
     let document = request::derive(request_input, owner_limits).map_err(owner_error)?;
     budget.bytes(document.bytes().len())?;
-    let request = request::read(document.bytes(), request_input, owner_limits).map_err(owner_error)?;
+    let request =
+        request::read(document.bytes(), request_input, owner_limits).map_err(owner_error)?;
     let bytes = record::encode(
         package,
         subject,
@@ -735,4 +738,12 @@ pub fn read_tl_projection<'a>(
         return Err(TlProjectionError::Correspondence);
     }
     Ok(projection)
+}
+
+/// Owner limits with every byte ceiling lowered to the bridge's `max_bytes`.
+pub(in crate::temporal) fn lowered_owner_limits(
+    original: OwnerLimits,
+    max_bytes: u64,
+) -> OwnerLimits {
+    owners::limits(original, max_bytes)
 }

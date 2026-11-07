@@ -42,7 +42,7 @@ pub(super) fn error(error: OwnerReadError, original: OwnerLimits, max_bytes: u64
     let cap = match error.field() {
         "outputBytes" => original.max_output_bytes,
         "inputBytes" => original.max_input_bytes,
-        _ => return Error::Owner(error),
+        _ => return Error::Owner(Box::new(error)),
     };
     if error.code() == OwnerReadErrorCode::ResourceIncomplete
         && u64::try_from(cap).is_ok_and(|cap| max_bytes <= cap)
@@ -51,10 +51,10 @@ pub(super) fn error(error: OwnerReadError, original: OwnerLimits, max_bytes: u64
             limit: Limit::Bytes,
             value: max_bytes.saturating_add(1),
             setting: max_bytes,
-            owner: Some(error),
+            owner: Some(Box::new(error)),
         };
     }
-    Error::Owner(error)
+    Error::Owner(Box::new(error))
 }
 
 pub(super) fn formula_error(error: TlFormulaError) -> Error {

@@ -41,13 +41,13 @@ pub(super) struct Facts<'subject, 'input> {
     pub captures: Vec<&'input [u8]>,
     pub trigger_payload: &'input [u8],
     /// Agreed Boolean per (request index, operand).
-    pub values: BTreeMap<(usize, &'input CheckedNodeId), bool>,
+    pub values: BTreeMap<(usize, &'subject CheckedNodeId), bool>,
 }
 
 #[allow(clippy::too_many_arguments)] // All inputs are independent original owner values at this boundary.
 pub(super) fn check<'subject, 'input>(
     package: &CheckedPackageV2,
-    subject: &TemporalSubjectView<'subject>,
+    subject: &'subject TemporalSubjectView<'_>,
     classification: &Classification,
     surrounding: Closure,
     native: NativeProjectionInput<'input>,
@@ -97,10 +97,7 @@ pub(super) fn check<'subject, 'input>(
         return Err(Error::NativePremise(Premise::Occurrence));
     }
     if native.request.control.as_ref().is_some_and(|control| {
-        !subject
-            .requirements()
-            .iter()
-            .any(|required| *required == control)
+        !subject.requirements().contains(&control)
     }) {
         return Err(Error::NativePremise(Premise::Control));
     }
@@ -184,7 +181,13 @@ pub(super) fn check<'subject, 'input>(
         {
             return Err(Error::NativePremise(Premise::Position));
         }
-        check_owner_anchor(&binding, record.anchor(), position.position, target, selection)?;
+        check_owner_anchor(
+            &binding,
+            record.anchor(),
+            position.position,
+            target,
+            selection,
+        )?;
         if position.observation.identity == opaque_anchor {
             anchor_matches += 1;
             anchor_stamp = Some(position.position);
@@ -242,7 +245,8 @@ pub(super) fn check<'subject, 'input>(
         Closure::Open => ProgressClosure::Open,
     };
     if native.request.surrounding_closure != Some(supplied_surrounding)
-        || closed(supplied_surrounding) != observations.surrounding_execution_closure.payload().state()
+        || closed(supplied_surrounding)
+            != observations.surrounding_execution_closure.payload().state()
     {
         return Err(Error::NativePremise(Premise::SurroundingClosure));
     }
@@ -462,28 +466,26 @@ fn check_captures<'a>(
             .sum::<usize>();
     visits += native.request.evicted.len();
     budget.charge(visits, None)?;
-    let activation = ActivationInput {
-        scope: TriggerScope {
-            closure: native.request.trigger_scope,
-            evidence: native.request.trigger_evidence,
-            record: if native
-                .request
-                .completeness
-                .as_ref()
-                .is_some_and(|record| matches!(record.state, ProgressCompleteness::Complete { .. }))
-            {
-                TriggerRecord::Complete
-            } else {
-                TriggerRecord::Incomplete
+    let activation =
+        ActivationInput {
+            scope: TriggerScope {
+                closure: native.request.trigger_scope,
+                evidence: native.request.trigger_evidence,
+                record: if native.request.completeness.as_ref().is_some_and(|record| {
+                    matches!(record.state, ProgressCompleteness::Complete { .. })
+                }) {
+                    TriggerRecord::Complete
+                } else {
+                    TriggerRecord::Incomplete
+                },
             },
-        },
-        deliveries: native.request.deliveries.clone(),
-        origins: native.request.origins.clone(),
-        anchor: native.instance.anchor.to_owned(),
-        evicted: native.request.evicted.clone(),
-        ledger: native.request.ledger.clone(),
-        execution: native.request.execution,
-    };
+            deliveries: native.request.deliveries.clone(),
+            origins: native.request.origins.clone(),
+            anchor: native.instance.anchor.to_owned(),
+            evicted: native.request.evicted.clone(),
+            ledger: native.request.ledger.clone(),
+            execution: native.request.execution,
+        };
     if let Some(contradiction) = activation.contradiction(&obligation) {
         return Err(Error::NativeActivation(contradiction));
     }
@@ -526,7 +528,8 @@ fn check_captures<'a>(
             }
             Activation::Each { guard, .. } => {
                 if let Some(delivery) = native.request.deliveries.iter().find(|delivery| {
-                    &delivery.identity == selected && (guard.is_none() || delivery.guard == Some(true))
+                    &delivery.identity == selected
+                        && (guard.is_none() || delivery.guard == Some(true))
                 }) {
                     if delivery.anchor != native.instance.anchor {
                         return Err(Error::NativePremise(Premise::Anchor));

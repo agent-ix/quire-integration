@@ -1,15 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! FR-350: non-evaluating admission and comparison of original owner results.
 
-use qsl_eval::temporal::evidence::{Settlement, Truth};
+use std::collections::BTreeSet;
+
+use qsl_eval::temporal::{
+    evidence::{ExecutionDisposition, Settlement, Truth},
+    ProgressClosure,
+};
 use qsl_package::NativeJoinBudget;
-use quire_mltl::{contract_ir::ValidatedMappedResult, report::ValidatedTemporalResult};
-use quire_spec_language::temporal::{Report, ReportPredecessorUsage, ReportRefusal};
+use quire_mltl::{
+    contract_ir::{MappedOutcome, MappingSelection, NonValueKind, ValidatedMappedResult},
+    report::{AssessmentExecution, ResultRelationKind, SettlementBasis, TemporalTruth},
+};
+use quire_observation::authority::{availability, completeness, OpenClosed};
+use quire_spec_language::temporal::{
+    CheckedSubject, Report, ReportOutcome, ReportPredecessorUsage, ReportRefusal,
+};
+use serde_json::{json, Value};
 
-use super::{TlLimits, TlProjectionLimit, TlProjectionUsage, ValidatedTlProjection};
-
-mod compare;
-mod wire;
+use super::{
+    projection::{hex, lowered_owner_limits},
+    TlLimits, TlProjectionLimit, TlProjectionUsage, ValidatedTlProjection,
+};
 
 /// The public version of an admitted native/TL join.
 pub const VERSION: &str = "quire.native-temporal-join/v1";
@@ -101,18 +113,14 @@ impl TlJoinCause {
 /// Stable refusal discriminator of a whole join operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TlJoinCode {
-    /// Canonical bytes do not equal the supplied exact expected owner values.
+    /// Supplied bytes differ from the rebuilt join.
     ExpectedMismatch,
-    /// No decision-table row matches the owner pair.
-    ResultMismatch,
-    /// The next named bridge action exceeds its caller ceiling.
+    /// A bridge limit, or a native owner resource denial, stopped the operation.
     LimitReached,
-    /// Canonical encoding refuses the whole record.
+    /// The canonical writer refused the join record.
     Encoding,
-    /// The native report owner denied a bounded operation.
+    /// Another native bounded-writer refusal.
     NativeReport,
-    /// The selected owner cannot attest an exact correction predecessor.
-    PredecessorAuthority,
 }
 
 impl TlJoinCode {
@@ -120,22 +128,18 @@ impl TlJoinCode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ExpectedMismatch => "tl-join-expected-mismatch",
-            Self::ResultMismatch => "tl-join-result-mismatch",
             Self::LimitReached => "tl-join-limit-reached",
             Self::Encoding => "tl-join-encoding",
             Self::NativeReport => "tl-join-native-report",
-            Self::PredecessorAuthority => "tl-join-predecessor-authority",
         }
     }
     /// The complete closed code catalog.
     pub const fn all() -> &'static [Self] {
         &[
             Self::ExpectedMismatch,
-            Self::ResultMismatch,
             Self::LimitReached,
             Self::Encoding,
             Self::NativeReport,
-            Self::PredecessorAuthority,
         ]
     }
     /// Parse one exact public spelling, without accepting aliases.
@@ -147,36 +151,26 @@ impl TlJoinCode {
     }
 }
 
-/// An atomic join or strict-read refusal, exposing no partial join.
+/// A whole-operation refusal; no partial join is observable.
 #[derive(Debug, thiserror::Error)]
 pub enum TlJoinError {
-    /// The complete canonical expected join differs.
+    /// The supplied join bytes differ from the rebuilt join.
     #[error("the supplied join is not the complete canonical expected join")]
     ExpectedMismatch,
-    /// None of the independently evaluated table rows matched.
-    #[error("the original result pair matches no join decision row")]
-    ResultMismatch,
-    /// The owner has no non-evaluating exact predecessor-value validation entry.
-    #[error("the TL owner cannot authenticate the exact correction predecessor value")]
-    PredecessorAuthority {
-        /// Actual bounded native writer receipt before the TL-side stop.
-        native_encoding_usage: Option<ReportPredecessorUsage>,
-        /// Actual successful native full-predecessor validation, if that side admitted.
-        native_predecessor_usage: Option<ReportPredecessorUsage>,
-    },
-    /// Original bounded native report-owner denial; no partial join is returned.
-    #[error("native report owner refused: {0:?}")]
-    NativeReport(ReportRefusal),
     /// First excess unit, refused before the named action.
     #[error("join {limit:?} limit reached: {value} > {setting}")]
     LimitReached {
         /// The configured caller counter.
         limit: TlProjectionLimit,
-        /// The first excess count.
+        /// The first excess count, `setting + 1`.
         value: u64,
-        /// The original caller ceiling.
+        /// The caller ceiling.
         setting: u64,
     },
+    /// A native bounded operation denied its resource or budget; the owner's
+    /// resource and attempted charge are retained.
+    #[error("native report owner refused: {0:?}")]
+    NativeReport(ReportRefusal),
     /// Original canonical encoder refusal.
     #[error("join canonical encoding refused: {0}")]
     Encoding(#[source] quire_canonical::Error),
@@ -187,11 +181,11 @@ impl TlJoinError {
     pub const fn code(&self) -> TlJoinCode {
         match self {
             Self::ExpectedMismatch => TlJoinCode::ExpectedMismatch,
-            Self::ResultMismatch => TlJoinCode::ResultMismatch,
-            Self::PredecessorAuthority { .. } => TlJoinCode::PredecessorAuthority,
-            Self::NativeReport(ReportRefusal::PredecessorLimit { .. }) => TlJoinCode::LimitReached,
+            Self::NativeReport(
+                ReportRefusal::PredecessorLimit { .. } | ReportRefusal::NativeBudget(_),
+            )
+            | Self::LimitReached { .. } => TlJoinCode::LimitReached,
             Self::NativeReport(_) => TlJoinCode::NativeReport,
-            Self::LimitReached { .. } => TlJoinCode::LimitReached,
             Self::Encoding(_) => TlJoinCode::Encoding,
         }
     }
@@ -201,18 +195,13 @@ impl TlJoinError {
 #[derive(Debug)]
 pub struct TlJoinOwnerRefusals {
     native: Option<ReportRefusal>,
-    native_predecessor: Option<ReportRefusal>,
     mapped: Option<tl_mltl::wire::OwnerReadError>,
 }
 
 impl TlJoinOwnerRefusals {
-    /// Original native owner refusal, if that read refused.
+    /// Original native owner refusal, if that read or predecessor check refused.
     pub fn native(&self) -> Option<&ReportRefusal> {
         self.native.as_ref()
-    }
-    /// Original full-predecessor mismatch, separate from a strict report-reader refusal.
-    pub fn native_predecessor(&self) -> Option<&ReportRefusal> {
-        self.native_predecessor.as_ref()
     }
     /// Original non-evaluating TL mapped-result owner refusal.
     pub fn mapped(&self) -> Option<&tl_mltl::wire::OwnerReadError> {
@@ -224,6 +213,7 @@ impl TlJoinOwnerRefusals {
 pub struct ValidatedTlJoin<'a> {
     projection: &'a ValidatedTlProjection<'a>,
     native: Option<Report>,
+    native_bytes: Option<Vec<u8>>,
     native_admitted: bool,
     mapped: Option<ValidatedMappedResult>,
     previous: Option<&'a ValidatedTlJoin<'a>>,
@@ -258,7 +248,7 @@ impl<'a> ValidatedTlJoin<'a> {
     pub fn native(&self) -> Option<&Report> {
         self.native.as_ref()
     }
-    /// Whether strict native admission succeeded in this exact join context.
+    /// Whether strict native admission, including predecessor validation, succeeded.
     pub fn native_admitted(&self) -> bool {
         self.native_admitted
     }
@@ -270,15 +260,15 @@ impl<'a> ValidatedTlJoin<'a> {
     pub fn previous(&self) -> Option<&'a ValidatedTlJoin<'a>> {
         self.previous
     }
-    /// The first matching decision-table row.
+    /// The decision.
     pub fn decision(&self) -> TlJoinDecision {
         self.decision
     }
-    /// Every independently matching non-final cause, in table order.
+    /// Every holding R1 to R6 cause in row order, then `result-pending` for R8.
     pub fn causes(&self) -> &[TlJoinCause] {
         &self.causes
     }
-    /// Present only for an equal final pair with no earlier non-final row.
+    /// Present only for an R7 decision.
     pub fn value(&self) -> Option<bool> {
         self.value
     }
@@ -290,7 +280,7 @@ impl<'a> ValidatedTlJoin<'a> {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
-    /// Actual bounded native writer receipt, separate from bridge and IR accounting.
+    /// Actual bounded native writer receipt, separate from bridge accounting.
     pub fn native_encoding_usage(&self) -> Option<ReportPredecessorUsage> {
         self.native_encoding_usage
     }
@@ -298,7 +288,7 @@ impl<'a> ValidatedTlJoin<'a> {
     pub fn native_predecessor_usage(&self) -> Option<ReportPredecessorUsage> {
         self.native_predecessor_usage
     }
-    /// Fresh actual bridge counters for this join or strict-read call.
+    /// Fresh bridge counters for this join or strict-read call.
     pub fn usage(&self) -> TlProjectionUsage {
         self.usage
     }
@@ -333,28 +323,25 @@ impl Budget {
             native_predecessor_usage: None,
         }
     }
-    fn charge(&mut self, counter: TlProjectionLimit) -> Result<(), TlJoinError> {
+    /// Charge `count` units to a counter and then to work, before they are visited.
+    fn charge(&mut self, counter: TlProjectionLimit, count: usize) -> Result<(), TlJoinError> {
+        let count = u64::try_from(count).unwrap_or(u64::MAX);
         let (used, setting) = match counter {
             TlProjectionLimit::Support => (&mut self.usage.support, self.limits.max_support),
             TlProjectionLimit::Causes => (&mut self.usage.causes, self.limits.max_causes),
-            TlProjectionLimit::Work => (&mut self.usage.work, self.limits.max_work),
-            TlProjectionLimit::Bytes
-            | TlProjectionLimit::Nodes
-            | TlProjectionLimit::Positions
-            | TlProjectionLimit::Valuations => unreachable!("join only visits support and causes"),
+            _ => unreachable!("join charges only support and causes"),
         };
-        if *used >= setting {
+        if used.saturating_add(count) > setting {
             return Err(limit(counter, setting));
         }
-        *used += 1;
+        *used += count;
+        if counter == TlProjectionLimit::Support {
+            if self.usage.work.saturating_add(count) > self.limits.max_work {
+                return Err(limit(TlProjectionLimit::Work, self.limits.max_work));
+            }
+            self.usage.work += count;
+        }
         Ok(())
-    }
-    fn support(&mut self) -> Result<(), TlJoinError> {
-        self.charge(TlProjectionLimit::Support)?;
-        self.charge(TlProjectionLimit::Work)
-    }
-    fn cause(&mut self) -> Result<(), TlJoinError> {
-        self.charge(TlProjectionLimit::Causes)
     }
     fn bytes(&mut self, length: usize) -> Result<(), TlJoinError> {
         let value = u64::try_from(length).unwrap_or(u64::MAX);
@@ -374,7 +361,7 @@ fn limit(counter: TlProjectionLimit, setting: u64) -> TlJoinError {
     }
 }
 
-/// Owner-read both supplied results and evaluate every decision row independently.
+/// Owner-read both supplied results and decide by the FR-350 table.
 /// Neither this operation nor either reader it invokes executes a temporal evaluator.
 pub fn join_tl<'a>(
     projection: &'a ValidatedTlProjection<'a>,
@@ -384,20 +371,19 @@ pub fn join_tl<'a>(
     limits: TlLimits,
     native_budget: &mut NativeJoinBudget,
 ) -> Result<ValidatedTlJoin<'a>, TlJoinError> {
-    let mut budget = Budget::new(limits);
     build(
         projection,
         native,
         mapped,
         previous,
-        &mut budget,
+        Budget::new(limits),
         native_budget,
     )
 }
 
-/// Strict-read one exact expected join, including every source and predecessor value.
-/// Comparing complete expected canonical bytes rejects every alternate field spelling,
-/// unknown/duplicate/missing/order violation, trailing input or cross-wired source.
+/// Rebuild the expected join from its independent inputs and require byte equality.
+/// This rejects every alternate spelling, unknown, duplicate, missing or reordered
+/// member, trailing input and cross-wired source or predecessor.
 pub fn read_tl_join<'a>(
     bytes: &[u8],
     expected: ExpectedTlJoin<'a>,
@@ -411,7 +397,7 @@ pub fn read_tl_join<'a>(
         expected.native,
         expected.mapped,
         expected.previous,
-        &mut budget,
+        budget,
         native_budget,
     )?;
     if result.bytes != bytes {
@@ -420,7 +406,29 @@ pub fn read_tl_join<'a>(
     Ok(result)
 }
 
-fn final_truth(truth: Truth, settlement: Option<Settlement>) -> Option<bool> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NativeState {
+    Refused,
+    Lineage,
+    Unavailable,
+    Incomplete,
+    Final(bool),
+    Pending,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TlState {
+    Refused,
+    Failed,
+    Unavailable,
+    Unsupported,
+    Incomplete,
+    Contradicted,
+    Final(bool),
+    Pending,
+}
+
+fn native_final(truth: Option<Truth>, settlement: Option<Settlement>) -> Option<bool> {
     if !matches!(
         settlement,
         Some(
@@ -432,14 +440,117 @@ fn final_truth(truth: Truth, settlement: Option<Settlement>) -> Option<bool> {
         return None;
     }
     match truth {
-        Truth::True => Some(true),
-        Truth::False => Some(false),
-        Truth::Pending => None,
+        Some(Truth::True) => Some(true),
+        Some(Truth::False) => Some(false),
+        Some(Truth::Pending) | None => None,
     }
 }
 
-fn source_result(mapped: Option<&ValidatedMappedResult>) -> Option<&ValidatedTemporalResult> {
-    mapped.map(ValidatedMappedResult::source)
+fn native_state(report: &Report) -> NativeState {
+    match report.outcome() {
+        ReportOutcome::Refused => NativeState::Refused,
+        ReportOutcome::Inactive | ReportOutcome::Unactivated | ReportOutcome::ActivationUnknown => {
+            NativeState::Unavailable
+        }
+        ReportOutcome::Missing
+        | ReportOutcome::Indeterminate
+        | ReportOutcome::Limit
+        | ReportOutcome::Meter
+        | ReportOutcome::CoveredPositions
+        | ReportOutcome::WindowLimit
+        | ReportOutcome::EvictedValuation => NativeState::Incomplete,
+        _ => native_final(report.truth(), report.settlement())
+            .map_or(NativeState::Pending, NativeState::Final),
+    }
+}
+
+fn tl_state(mapped: &ValidatedMappedResult) -> TlState {
+    let source = mapped.source();
+    if source.execution() == AssessmentExecution::Refused {
+        TlState::Refused
+    } else if source.execution() == AssessmentExecution::Failed {
+        TlState::Failed
+    } else if matches!(
+        mapped.outcome(),
+        MappedOutcome::NonValue {
+            reason: NonValueKind::Unavailable
+        }
+    ) || source.availability().state() != availability::State::Available
+    {
+        TlState::Unavailable
+    } else if source.execution() == AssessmentExecution::Unsupported {
+        TlState::Unsupported
+    } else if source.execution() == AssessmentExecution::ResourceIncomplete
+        || source.completeness().state() == completeness::State::Incomplete
+    {
+        TlState::Incomplete
+    } else if source.completeness().state() == completeness::State::Contradicted {
+        TlState::Contradicted
+    } else {
+        match mapped.outcome() {
+            MappedOutcome::Value { value } if source.is_final() => TlState::Final(value),
+            _ => TlState::Pending,
+        }
+    }
+}
+
+fn settlement_equal(native: Option<Settlement>, tl: SettlementBasis) -> bool {
+    matches!(
+        (native, tl),
+        (Some(Settlement::ClosedScope), SettlementBasis::ClosedScope)
+            | (
+                Some(Settlement::DecisiveWitness),
+                SettlementBasis::DecisiveWitness
+            )
+            | (
+                Some(Settlement::DecisiveCounterexample),
+                SettlementBasis::DecisiveCounterexample
+            )
+            | (Some(Settlement::Unsettled), SettlementBasis::Unsettled)
+            | (
+                Some(Settlement::Unavailable) | None,
+                SettlementBasis::Unavailable
+            )
+    )
+}
+
+/// Premise equality `P` over two admitted results.
+fn premises_equal(
+    projection: &ValidatedTlProjection<'_>,
+    native: &Report,
+    mapped: &ValidatedMappedResult,
+) -> bool {
+    let source = mapped.source();
+    let expected = projection.request();
+    let execution = match projection.native().request.execution {
+        ExecutionDisposition::Completed => AssessmentExecution::Completed,
+        ExecutionDisposition::Failed => AssessmentExecution::Failed,
+    };
+    let positions = &projection.native().request.positions;
+    let native_support: Option<BTreeSet<&str>> = native
+        .support()
+        .iter()
+        .map(|support| {
+            positions
+                .get(support.row.position)
+                .map(|position| position.observation.identity.as_str())
+        })
+        .collect();
+    let tl_support: BTreeSet<&str> = source
+        .decision_support()
+        .iter()
+        .map(String::as_str)
+        .collect();
+    source.request() == expected
+        && source.execution() == execution
+        && source.decision_scope_progress() == expected.decision_scope_progress()
+        && source.decision_scope_closure() == expected.decision_scope_closure()
+        && source.surrounding_execution_progress() == expected.surrounding_execution_progress()
+        && source.surrounding_execution_closure() == expected.surrounding_execution_closure()
+        && source.completeness() == expected.completeness()
+        && source.availability() == expected.availability()
+        && settlement_equal(native.settlement(), source.settlement())
+        && native_support.is_some_and(|identities| identities == tl_support)
 }
 
 fn build<'a>(
@@ -447,7 +558,7 @@ fn build<'a>(
     native: Option<&Report>,
     mapped: Option<&ValidatedMappedResult>,
     previous: Option<&'a ValidatedTlJoin<'a>>,
-    budget: &mut Budget,
+    mut budget: Budget,
     native_budget: &mut NativeJoinBudget,
 ) -> Result<ValidatedTlJoin<'a>, TlJoinError> {
     let native_limits = projection.selection().native_report_limits;
@@ -472,111 +583,248 @@ fn build<'a>(
     let input = projection.native();
     let mut refusals = TlJoinOwnerRefusals {
         native: None,
-        native_predecessor: None,
         mapped: None,
     };
-    let mut predecessor_conflict = false;
+
+    // Native side: strict read, then full predecessor validation for a correction.
     let prior_native = previous
         .filter(|join| join.native_admitted())
         .and_then(ValidatedTlJoin::native);
-    let read_native = match native_bytes.as_deref() {
-        None => None,
-        Some(bytes) => {
-            let read = quire_spec_language::temporal::CheckedSubject::new(
-                projection.package(),
-                input.occurrence,
-                input.valuations,
-                input.request,
-            )
-            .and_then(|subject| {
-                let subject = match (native, prior_native) {
-                    (Some(current), Some(prior)) if current.predecessor().is_some() => {
-                        subject.with_predecessor(prior, native_limits)
+    let mut native_side = NativeState::Unavailable;
+    let mut read_native = None;
+    if let Some(bytes) = native_bytes.as_deref() {
+        let read = CheckedSubject::new(
+            projection.package(),
+            input.occurrence,
+            input.valuations,
+            input.request,
+        )
+        .and_then(|subject| {
+            let subject = match (native, prior_native) {
+                (Some(current), Some(prior)) if current.predecessor().is_some() => {
+                    subject.with_predecessor(prior, native_limits)
+                }
+                _ => subject,
+            };
+            Report::from_owner_bytes(bytes, &subject, input.observation, native_budget)
+        });
+        let read = match read {
+            Ok(report) => match prior_native.filter(|_| report.predecessor().is_some()) {
+                Some(prior) => match report.validate_predecessor(prior, native_limits) {
+                    Ok(usage) => {
+                        budget.native_predecessor_usage = Some(usage);
+                        Ok(report)
                     }
-                    _ => subject,
+                    Err(error) => Err(error),
+                },
+                None => Ok(report),
+            },
+            Err(error) => Err(error),
+        };
+        match read {
+            Ok(report) => {
+                native_side = native_state(&report);
+                read_native = Some(report);
+            }
+            Err(error @ ReportRefusal::InvalidPredecessor) => {
+                native_side = NativeState::Lineage;
+                refusals.native = Some(error);
+            }
+            Err(
+                error @ (ReportRefusal::PredecessorLimit { .. } | ReportRefusal::NativeBudget(_)),
+            ) => return Err(TlJoinError::NativeReport(error)),
+            Err(error) => {
+                native_side = NativeState::Refused;
+                refusals.native = Some(error);
+            }
+        }
+    }
+
+    // TL side: non-evaluating re-read through the owner's selection.
+    let mut tl_side = TlState::Unavailable;
+    let mut read_mapped = None;
+    if let Some(result) = mapped {
+        let selection = MappingSelection::for_result(result.source());
+        let owner_limits =
+            lowered_owner_limits(projection.selection().owner_limits, budget.limits.max_bytes);
+        match quire_mltl::contract_ir::read(
+            result.bytes(),
+            result.source(),
+            &selection,
+            owner_limits,
+        ) {
+            Ok(read) => {
+                let source = read.source();
+                let request = projection.request();
+                tl_side = if source.request() != request
+                    || source.subject_identity() != request.subject_identity()
+                    || source.correspondence_identity() != request.correspondence_identity()
+                {
+                    TlState::Refused
+                } else {
+                    tl_state(&read)
                 };
-                Report::from_owner_bytes(bytes, &subject, input.observation, native_budget)
-            });
-            match read {
-                Ok(result) => {
-                    let mut full_prior_admitted = true;
-                    if let Some(prior) = prior_native.filter(|_| result.predecessor().is_some()) {
-                        match result.validate_predecessor(prior, native_limits) {
-                            Ok(usage) => budget.native_predecessor_usage = Some(usage),
-                            Err(error @ ReportRefusal::InvalidPredecessor) => {
-                                predecessor_conflict = true;
-                                refusals.native_predecessor = Some(error);
-                                full_prior_admitted = false;
-                            }
-                            Err(error) => return Err(TlJoinError::NativeReport(error)),
-                        }
-                    }
-                    full_prior_admitted.then_some(result)
-                }
-                Err(error @ ReportRefusal::InvalidPredecessor) => {
-                    predecessor_conflict = true;
-                    refusals.native_predecessor = Some(error);
-                    None
-                }
-                Err(error @ ReportRefusal::PredecessorLimit { .. }) => {
-                    return Err(TlJoinError::NativeReport(error))
-                }
-                Err(error) => {
-                    refusals.native = Some(error);
-                    None
-                }
+                read_mapped = Some(read);
+            }
+            Err(error) => {
+                tl_side = TlState::Refused;
+                refusals.mapped = Some(error);
             }
         }
-    };
-    let read_mapped = match mapped {
-        None => None,
-        Some(result) => {
-            let selection = quire_mltl::contract_ir::MappingSelection::for_result(result.source());
-            match quire_mltl::contract_ir::read(
-                result.bytes(),
-                result.source(),
-                &selection,
-                projection.selection().owner_limits,
-            ) {
-                Ok(result) => Some(result),
-                Err(error) => {
-                    refusals.mapped = Some(error);
-                    None
-                }
-            }
+    }
+
+    // Both strict reads admitted: charge the compared support.
+    let admitted_pair = match (&read_native, &read_mapped) {
+        (Some(report), Some(result)) => {
+            budget.charge(
+                TlProjectionLimit::Support,
+                report.support().len() + result.source().decision_support().len(),
+            )?;
+            Some((report, result))
         }
+        _ => None,
     };
-    let compared = compare::rows(
-        projection,
-        read_native.as_ref(),
-        read_mapped.as_ref(),
-        native.is_none() || mapped.is_none(),
-        &refusals,
-        predecessor_conflict,
-        previous,
-        budget,
-    )?;
-    let bytes = wire::encode(
-        projection,
-        native_bytes.as_deref(),
-        read_native.is_some(),
-        mapped,
-        previous,
-        compared.decision,
-        &compared.causes,
-        compared.value,
-        budget,
-    )?;
+
+    // Lineage conflict L.
+    let lineage_conflict = match (native, mapped) {
+        (Some(report), Some(result)) => {
+            let native_correction = report.predecessor().is_some();
+            let tl_correction = result.source().relation_kind() != ResultRelationKind::Original;
+            (native_correction != tl_correction)
+                || (!native_correction && !tl_correction && previous.is_some())
+                || (native_correction
+                    && tl_correction
+                    && previous.is_none_or(|join| !join.native_admitted()))
+                || result
+                    .source()
+                    .validate_supplied_predecessor(
+                        previous
+                            .and_then(ValidatedTlJoin::mapped)
+                            .map(|prior| prior.source().bytes()),
+                    )
+                    .is_err()
+        }
+        _ => false,
+    };
+
+    let both_settled = matches!(native_side, NativeState::Final(_) | NativeState::Pending)
+        && matches!(tl_side, TlState::Final(_) | TlState::Pending);
+    let premises = both_settled
+        && admitted_pair.is_some_and(|(report, result)| premises_equal(projection, report, result));
+    let r7 = match (native_side, tl_side) {
+        (NativeState::Final(left), TlState::Final(right)) => {
+            left == right && premises && !lineage_conflict
+        }
+        _ => false,
+    };
+    let r8 = both_settled
+        && native_side == NativeState::Pending
+        && tl_side == TlState::Pending
+        && premises
+        && !lineage_conflict
+        && admitted_pair.is_some_and(|(report, result)| {
+            report.truth() == Some(Truth::Pending)
+                && report.settlement() == Some(Settlement::Unsettled)
+                && result.source().truth() == TemporalTruth::Pending
+                && result.source().settlement() == SettlementBasis::Unsettled
+                && input.request.decision_closure == Some(ProgressClosure::Open)
+                && result.source().decision_scope_closure().state() == OpenClosed::Open
+        });
+    let rows = [
+        (
+            native_side == NativeState::Refused || tl_side == TlState::Refused,
+            TlJoinDecision::Refused,
+            TlJoinCause::ResultRefused,
+        ),
+        (
+            input.request.execution == ExecutionDisposition::Failed || tl_side == TlState::Failed,
+            TlJoinDecision::Failed,
+            TlJoinCause::ResultFailed,
+        ),
+        (
+            native_side == NativeState::Unavailable || tl_side == TlState::Unavailable,
+            TlJoinDecision::Unavailable,
+            TlJoinCause::ResultUnavailable,
+        ),
+        (
+            tl_side == TlState::Unsupported,
+            TlJoinDecision::Unsupported,
+            TlJoinCause::ResultUnsupported,
+        ),
+        (
+            native_side == NativeState::Incomplete || tl_side == TlState::Incomplete,
+            TlJoinDecision::Incomplete,
+            TlJoinCause::ResultIncomplete,
+        ),
+        (
+            lineage_conflict
+                || native_side == NativeState::Lineage
+                || tl_side == TlState::Contradicted
+                || (both_settled && !r7 && !r8),
+            TlJoinDecision::Conflict,
+            TlJoinCause::ResultMismatch,
+        ),
+    ];
+    let mut decision = None;
+    let mut causes = Vec::new();
+    for (holds, row, cause) in rows {
+        if holds {
+            decision.get_or_insert(row);
+            causes.push(cause);
+        }
+    }
+    let decision = match decision {
+        Some(row) => row,
+        None if r7 => TlJoinDecision::EqualFinal,
+        None => TlJoinDecision::EqualPending,
+    };
+    if decision == TlJoinDecision::EqualPending {
+        causes.push(TlJoinCause::ResultPending);
+    }
+    let value = match (decision, native_side) {
+        (TlJoinDecision::EqualFinal, NativeState::Final(value)) => Some(value),
+        _ => None,
+    };
+    budget.charge(TlProjectionLimit::Causes, causes.len())?;
+
+    let record = json!({
+        "version": VERSION,
+        "correspondence": hex(projection.bytes()),
+        "native": native_bytes.as_deref().map(hex),
+        "nativeAdmitted": read_native.is_some(),
+        "mapped": mapped.map(|result| hex(result.bytes())),
+        "tlResult": mapped.map(|result| hex(result.source().bytes())),
+        "previous": previous.map(|join| json!({
+            "native": join.native_bytes.as_deref().map(hex),
+            "tlResult": join.mapped.as_ref().map(|result| hex(result.source().bytes())),
+        })),
+        "decision": decision.as_str(),
+        "comparison": decision.comparison(),
+        "causes": causes.iter().map(|cause| Value::from(cause.as_str())).collect::<Vec<_>>(),
+        "value": value,
+    });
+    let bytes = quire_canonical::to_vec(
+        &record,
+        quire_canonical::Limits::new(budget.limits.max_bytes),
+    )
+    .map_err(|error| match error {
+        quire_canonical::Error::Limit(_) => {
+            limit(TlProjectionLimit::Bytes, budget.limits.max_bytes)
+        }
+        error => TlJoinError::Encoding(error),
+    })?;
+    budget.bytes(bytes.len())?;
     Ok(ValidatedTlJoin {
         projection,
         native: native.cloned(),
+        native_bytes,
         native_admitted: read_native.is_some(),
         mapped: mapped.cloned(),
         previous,
         refusals,
-        decision: compared.decision,
-        causes: compared.causes,
-        value: compared.value,
+        decision,
+        causes,
+        value,
         bytes,
         usage: budget.usage,
         native_encoding_usage: budget.native_encoding_usage,
