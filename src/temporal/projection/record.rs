@@ -102,7 +102,7 @@ pub(super) fn encode(
         budget.work()?;
         valuations.push((
             &row.subject.node,
-            row.subject.role,
+            &row.subject.role,
             row.subject.ordinal,
             row.position,
             &row.anchor,
@@ -157,7 +157,7 @@ pub(super) fn encode(
         source: subject.source_span(),
         declaration: (
             &native.occurrence.node,
-            native.occurrence.role,
+            &native.occurrence.role,
             native.occurrence.ordinal,
             facts.name,
         ),

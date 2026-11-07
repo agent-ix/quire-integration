@@ -1591,6 +1591,7 @@ dependencies = [
  "qsl-replay",
  "qsl-route",
  "qsl-semantics",
+ "quire-canonical 0.3.0 (git+https://github.com/agent-ix/quire-canonical?branch=main)",
  "quire-checked",
  "quire-contract-codegen",
  "quire-contract-model",
