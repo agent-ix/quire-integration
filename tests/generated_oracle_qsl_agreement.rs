@@ -47,7 +47,11 @@ fn admit(source: &str) -> Admitted {
     .check(CheckingLimits::default())
     .expect("the source checks");
     let qsl = CheckedPackage::link(graph);
-    let emission = emit_checked(&qsl).expect("the real checked source emits");
+    let emission = emit_checked(
+        &qsl,
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("the real checked source emits");
     assert!(
         emission.omitted().is_empty(),
         "no selected claim is omitted"
@@ -144,9 +148,15 @@ fn generated_boolean_negation_matches_the_actual_qsl_body() {
         .function_by_identity(identity)
         .expect("the admitted function body");
     let mut qsl_meter = quire_exact::Meter::new(limits());
-    let qsl =
-        qsl_eval::value::evaluate_closed(&admitted.qsl, body.body, body.slots, &mut qsl_meter)
-            .expect("the actual closed QSL body evaluates");
+    let qsl = qsl_eval::value::evaluate_closed_with_frame(
+        &admitted.qsl,
+        body.body,
+        body.slots,
+        Vec::new(),
+        body.formed_units,
+        &mut qsl_meter,
+    )
+    .expect("the actual closed QSL body evaluates");
     let quire_eval::FamilyOutcome::Evaluated(qsl_outcome) = qsl.outcome else {
         panic!("the actual QSL body must reach its value family");
     };
@@ -212,10 +222,10 @@ fn unbounded_qsl_integer_source_retains_the_codegen_bound_refusal() {
 #[trace("TC-099")]
 #[test]
 fn bounded_integer_source_executes_its_generated_oracle_and_observed_qsl_operation() {
-    use qsl_eval::value::{ApplicationObservation, CheckedPackageEvaluation, QualifiedName};
+    use qsl_eval::value::{ApplicationObservationOptions, CheckedPackageEvaluation, QualifiedName};
     use qsl_semantics::model::object_environment::ObjectEnvironment;
     use quire_exact::{Integer, Meter, Outcome, Value};
-    let admitted = admit("function step using v(x: Int[0, 9]): Integer pure { x + 1 }");
+    let admitted = admit("function step using v(x: Int[0, 9]): Int[0,10] pure { x + 1 }");
     let nodes = operation_nodes(&admitted.ir, "quire.op.integer.add");
     assert_eq!(
         nodes.len(),
@@ -265,39 +275,41 @@ fn bounded_integer_source_executes_its_generated_oracle_and_observed_qsl_operati
         1,
         "the selected emitted node has one actual source occurrence"
     );
-    let mut observed = Vec::new();
-    let mut unavailable_imported_call = false;
-    let mut function_evaluations = 0;
-    let mut function_case_limit_reached = false;
     let mut qsl_meter = Meter::new(limits());
-    let evaluation = admitted
-        .qsl
-        .call_observing_applications(
-            &QualifiedName::unqualified("step").expect("declared source name"),
-            vec![Value::Integer(Integer::from(4_i64))],
-            &ObjectEnvironment::default(),
-            &mut qsl_meter,
-            ApplicationObservation {
-                observed: &mut observed,
-                unavailable_imported_call: &mut unavailable_imported_call,
-                function_case_limit: 1,
-                function_evaluations: &mut function_evaluations,
-                function_case_limit_reached: &mut function_case_limit_reached,
-            },
-        )
+    let observation = admitted.qsl.call_observing_applications(
+        &QualifiedName::unqualified("step").expect("declared source name"),
+        vec![Value::Integer(Integer::from(4_i64))],
+        &ObjectEnvironment::default(),
+        &mut qsl_meter,
+        ApplicationObservationOptions {
+            function_case_limit: 1,
+            max_events: 16,
+            max_size_requests: 16,
+        },
+    );
+    let evaluation = observation
+        .evaluation
+        .as_ref()
         .expect("the real bounded QSL call executes");
-    assert!(!unavailable_imported_call);
-    assert!(!function_case_limit_reached);
-    assert_eq!(function_evaluations, 1);
-    let selected = observed
+    assert!(!observation.unavailable_imported_call);
+    assert!(!observation.function_case_limit_reached);
+    assert_eq!(observation.function_evaluations, 1);
+    assert!(
+        observation.ledger.is_ok(),
+        "selected bounded call retains its complete ledger"
+    );
+    let selected = observation
+        .observed
         .iter()
         .filter(|(location, _)| locations.contains(location))
         .map(|(_, value)| value)
         .collect::<Vec<_>>();
-    let [Value::Integer(selected_value)] = selected.as_slice() else {
-        panic!("the exact selected application completed an Integer: {selected:?}");
+    let [Value::Integer(selected_value), Value::Integer(narrowed_value)] = selected.as_slice()
+    else {
+        panic!("the selected add and its result narrowing complete: {selected:?}");
     };
     assert_eq!(selected_value, &Integer::from(5_i64));
+    assert_eq!(narrowed_value, selected_value);
     let quire_eval::FamilyOutcome::Evaluated(Outcome::Completed(Value::Integer(returned))) =
         &evaluation.outcome
     else {
@@ -430,10 +442,12 @@ fn generated_boolean_truth_tables_preserve_typed_values_and_ordered_accounting()
                     let mut allowance = limits();
                     allowance.work_units = work;
                     let mut meter = quire_exact::Meter::new(allowance);
-                    let result = qsl_eval::value::evaluate_closed(
+                    let result = qsl_eval::value::evaluate_closed_with_frame(
                         &admitted.qsl,
                         function.body,
                         function.slots,
+                        Vec::new(),
+                        function.formed_units,
                         &mut meter,
                     )
                     .expect("genuine closed Boolean body");

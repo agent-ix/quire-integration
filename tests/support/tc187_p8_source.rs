@@ -47,7 +47,11 @@ pub fn parsed(name: &str, text: &str) -> (RawSourceRef, qsl_forms::ParsedUnit) {
 
 /// Link and emit the original checked graph, then strictly admit its bytes.
 pub fn emitted(graph: CheckedGraph, model: Option<(&str, &[u8])>) -> CheckedPackageV2 {
-    let emission = emit_checked(&CheckedPackage::link(graph)).expect("checked source emits");
+    let emission = emit_checked(
+        &CheckedPackage::link(graph),
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("checked source emits");
     assert!(emission.omitted().is_empty(), "{:?}", emission.omitted());
     let bytes = emission.package().bytes();
     let wire: Value = serde_json::from_slice(bytes).expect("original emitted JSON");

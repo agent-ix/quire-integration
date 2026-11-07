@@ -174,7 +174,11 @@ temporal Construction using timed over (candidate: Selected::ConfigVersion) cloc
         )
         .unwrap()
         .into_value();
-        let emitted = emit_checked(checked.package()).unwrap();
+        let emitted = emit_checked(
+            checked.package(),
+            qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+        )
+        .unwrap();
         let mut evidence = emitted.evidence().clone();
         evidence
             .insert_domain_package_document(self.identity.as_str(), self.document.clone())
@@ -214,6 +218,10 @@ temporal Construction using timed over (candidate: Selected::ConfigVersion) cloc
                 renamed_records: &["Instance", "Activation", "LimitReached"],
                 renames: &WIRE_FIELD_NAMES,
             },
+            qsl_package::V2ReadLimits::bounded(
+                qsl_replay::spine::I2_NATIVE_JOIN_STORAGE_DEFAULT,
+            ),
+            qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
         )
         .expect("the producer rekeys the real checked entry and its retained witnesses");
         let package = read(&emission, &self.identity, &self.document);

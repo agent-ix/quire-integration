@@ -387,7 +387,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
     );
     assert_eq!(
         generated_oracle::execute(&output.artifacts, &driver),
-        ["SC05 function equality: 78 envelopes, 32 input refusals, 10 owner refusals"]
+        ["SC05 function equality: 96 envelopes, 38 input refusals, 12 owner refusals"]
     );
 }
 
@@ -449,7 +449,11 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
         ));
     }
     let producer = family_checked_source::checked(&source);
-    let emission = qsl_package::emit_checked(&producer).expect("actual equality source emits");
+    let emission = qsl_package::emit_checked(
+        &producer,
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("actual equality source emits");
     assert!(emission.omitted().is_empty());
     let mut evidence = CheckedPackageEvidence::new();
     evidence.support_feature("quire.value.complete/v1");
@@ -662,10 +666,12 @@ fn observe() {
             .expect("original checked body");
         for work in [1024, 0, 1] {
             let mut meter = Meter::new(limits(work));
-            let evaluation = qsl_eval::value::evaluate_closed(
+            let evaluation = qsl_eval::value::evaluate_closed_with_frame(
                 &authority,
                 function.body,
                 function.slots,
+                Vec::new(),
+                function.formed_units,
                 &mut meter,
             )
             .expect("independent public checked-body evaluation");

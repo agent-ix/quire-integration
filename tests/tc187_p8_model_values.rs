@@ -242,25 +242,36 @@ fn u36_native_incompatibility_refuses_before_every_charge() {
 fn selected(
     package: &CheckedPackage,
     whole: bool,
-) -> (qsl_semantics::check::CheckedNode<'_>, usize) {
+) -> (
+    qsl_semantics::check::CheckedNode<'_>,
+    usize,
+    &qsl_semantics::check::FormedUnits,
+) {
     let function = package.graph().function_state(0).expect("original observe");
     assert_eq!(function.name, "observe");
     if whole {
-        (function.body, function.slots)
+        (function.body, function.slots, function.formed_units)
     } else {
         let children = function.body.children();
         let [left, _] = children.as_slice() else {
             panic!("original Boolean equality wrapper");
         };
-        (*left, function.slots)
+        (*left, function.slots, function.formed_units)
     }
 }
 
 fn agree(package: &CheckedPackage, whole: bool, native: &Outcome<Quantity>, native_meter: &Meter) {
-    let (node, slots) = selected(package, whole);
+    let (node, slots, formed_units) = selected(package, whole);
     let mut meter = Meter::new(limits());
-    let evaluation = qsl_eval::value::evaluate_closed(package, node, slots, &mut meter)
-        .expect("original closed QSL stage");
+    let evaluation = qsl_eval::value::evaluate_closed_with_frame(
+        package,
+        node,
+        slots,
+        Vec::new(),
+        formed_units,
+        &mut meter,
+    )
+    .expect("original closed QSL stage");
     let FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
         panic!("original value stage");
     };

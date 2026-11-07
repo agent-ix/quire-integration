@@ -167,8 +167,11 @@ fn public_u11r_imported_root_checks_and_emits_with_exact_scale() {
         &Rational::from_integer(Integer::zero())
     );
 
-    let emission =
-        emit_checked(&CheckedPackage::link(checked)).expect("the checked imported unit emits");
+    let emission = emit_checked(
+        &CheckedPackage::link(checked),
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("the checked imported unit emits");
     assert!(emission.omitted().is_empty());
     let wire: Value =
         serde_json::from_slice(emission.package().bytes()).expect("emitted checked package JSON");

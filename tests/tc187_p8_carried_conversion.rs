@@ -161,9 +161,15 @@ fn compare(
         }
     }
     let mut source_meter = Meter::new(limits);
-    let evaluation =
-        qsl_eval::value::evaluate_closed(package, function.body, function.slots, &mut source_meter)
-            .expect("original closed conversion evaluates");
+    let evaluation = qsl_eval::value::evaluate_closed_with_frame(
+        package,
+        function.body,
+        function.slots,
+        Vec::new(),
+        function.formed_units,
+        &mut source_meter,
+    )
+    .expect("original closed conversion evaluates");
     let FamilyOutcome::Evaluated(source) = evaluation.outcome else {
         panic!("conversion must reach value evaluation");
     };
