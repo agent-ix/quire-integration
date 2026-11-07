@@ -1,0 +1,43 @@
+---
+id: SR-2026110705000801
+title: "IR-1005 PR 88 IT-022 spec-review-base"
+type: SpecReview
+analysis: base
+scope: "agent-ix/quire-integration; IR-1005; PR 88 head f07cb34; spec/integration/IT-022-native-temporal-projection.md"
+review_set: subset
+---
+
+## Summary
+
+Ticket: IR-1005. Review of agent-ix/quire-integration PR 88 (one added file, IT-022). No applicable AssuranceProfile exists under spec/. Owner APIs read at origin/main of quire-spec-language, quire-mltl, quire-observation and quire-contract-ir. quire validate over spec passes. No build, test or gate was run.
+
+## Verdict
+
+FAIL. IT-022 is meant to be the single canonical full-chain IT, but only the projection half carries scenario ids, and the projection half narrows FR-350-AC-5 and FR-350-AC-8. No hash, digest, pin or vendored owner schema is introduced; content comparison of complete canonical bytes is used throughout, which is correct.
+
+## Findings
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-001 | high | Correspondence reading, join, join reading, bridge definition admission, retained activation and native full-predecessor sections carry obligations but no IT-022-SC id, so no test can trace them and none is required | spec/integration/IT-022-native-temporal-projection.md:117-278 |
+| FND-002 | high | Test procedure narrows FR-350: SC-06 excludes support and cause counters and Expected Results leaves join, supersession and seven-counter qualification open, so AC-5 and AC-8 have no scenario in the canonical IT | spec/integration/IT-022-native-temporal-projection.md:104-114 |
+| FND-003 | medium | No TC artifact verifies IT-022 (IT-020 has TC-101, IT-021 has TC-114); no test target or procedure is named | spec/test-cases/ |
+| FND-004 | medium | SC-06 names no limit, setting, default, cause shape or multi-limit tie-break; FR-350 defines seven TlLimits with defaults and limit-reached{limit,value,setting} | spec/integration/IT-022-native-temporal-projection.md:98-105 |
+
+## Coverage
+
+Checked ID format, relationships, scenario coverage of FR-350-AC-1..AC-9, error paths, limit boundaries and the hash/pin antipattern.
+
+## Examined units
+
+```yaml
+scope:
+- {id: IT-022-SC-01, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Emit original source once and admit the bytes twice. Require a local subject and local classification to pass; substitute only the foreign classification ... require a named admission refusal before formula construction."}
+- {id: IT-022-SC-02, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Construct every required position/proposition value from the request's shared or selected instance-bound valuation cells. ... Missing cells are incomplete; duplicate, swapped, foreign or conflicting bindings refuse before a TL request exists."}
+- {id: IT-022-SC-03, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Construct closed and prefix future requests, and individually supported bounded-past requests with complete origin history. ... A history cutoff is incomplete, not a new origin."}
+- {id: IT-022-SC-04, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Retain fixed-sample epoch, period and unit ... If an owner cannot represent an otherwise authored supported selection, preserve its typed refusal and record the exact upstream limitation"}
+- {id: IT-022-SC-05, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Supply independent admitted clock, decision and surrounding progress/closure, completeness and availability views. ... No evaluator or result reader is invoked."}
+- {id: IT-022-SC-06, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Precharge bridge node, position and cell visits ... Support and cause counters belong to the later join and are not qualified by projection tests."}
+- {id: IT-022, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Sections: Objective, Target Integration, Preconditions, Inputs, Expected Results, Correspondence and strict reading, Remaining owner prerequisites, Result joining and strict join reading, Original bridge definition admission, Retained activation and exact source occurrence, Native full-predecessor admission"}
+- {id: FR-350, path: "quire-contract-ir spec/temporal/functional/FR-350-native-temporal-tl-correspondence.md", role: context_only, excerpt: "project_tl/read_tl_projection/join_tl/read_tl_join signatures, seven TlLimits, AC-1..AC-9"}
+```
