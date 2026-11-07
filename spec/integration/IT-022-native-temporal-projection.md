@@ -201,3 +201,11 @@ The currently retained structural model-root values do not expose the authored
 model aliases or their alias order. That mandatory FR-350 correspondence axis
 remains blocked on actual owner-retained facts or an owner contract correction
 (IR-1005 comment `ba739c71`); root-node order is not presented as alias order.
+
+A retained capture's original owner anchor must equal the supplied native
+instance anchor; a previously captured value cannot be replayed as a capture at
+a different admitted observation. A retained `ActivationFault` preserves the
+native owner's complete subject (`Guard`, `Anchor` or named `Capture`) and kind.
+`Missing` remains incomplete and `Refused` remains refused; neither is replaced
+with a generic missing-capture result. Regressions obtain those retained faults
+through genuine native evaluation before calling the non-evaluating bridge.

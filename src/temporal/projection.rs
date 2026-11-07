@@ -334,6 +334,9 @@ pub enum TlProjectionError {
     /// Original native immutable-instance contradiction admission.
     #[error("native activation refused: {0}")]
     NativeActivation(qsl_eval::temporal::evidence::Contradiction),
+    /// Original retained activation fault, including its exact kind and subject.
+    #[error("retained native activation fault: {0:?}")]
+    NativeActivationFault(qsl_eval::temporal::evidence::ActivationFault),
     /// An explicit cell is absent, never an implicit false.
     #[error("no admitted valuation at position {position} for {operand:?}")]
     MissingValuation {
@@ -364,6 +367,10 @@ impl TlProjectionError {
     /// Stable machine discriminator; callers need not branch on error text.
     pub const fn code(&self) -> TlProjectionCode {
         match self {
+            Self::NativeActivationFault(fault) => match fault.kind {
+                qsl_eval::temporal::evidence::FaultKind::Missing => TlProjectionCode::Incomplete,
+                qsl_eval::temporal::evidence::FaultKind::Refused => TlProjectionCode::NativePremise,
+            },
             Self::Binding(_) => TlProjectionCode::Binding,
             Self::Unsupported(_) => TlProjectionCode::Unsupported,
             Self::Incomplete(_) | Self::MissingValuation { .. } => TlProjectionCode::Incomplete,

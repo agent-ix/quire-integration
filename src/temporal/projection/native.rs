@@ -459,8 +459,8 @@ fn check_captures<'a>(
         .as_ref()
         .and_then(|ledger| ledger.instance(&obligation, selected));
     let (values, payload) = if let Some(retained) = retained {
-        if retained.fault().is_some() {
-            return Err(Error::Incomplete(Missing::Capture));
+        if let Some(fault) = retained.fault() {
+            return Err(Error::NativeActivationFault(fault.clone()));
         }
         let captures = retained.environment().entries();
         if captures.len() != subject.capture_names().len() {
@@ -469,7 +469,7 @@ fn check_captures<'a>(
         let mut values = Vec::with_capacity(captures.len());
         for (capture, name) in captures.iter().zip(subject.capture_names()) {
             budget.work()?;
-            if capture.name() != name {
+            if capture.name() != name || capture.anchor() != native.instance.anchor {
                 return Err(Error::NativePremise(Premise::Capture));
             }
             values.push(capture.value().as_bytes());

@@ -18,7 +18,8 @@ constructors; it copies no producer output or owner schema.
 
 ## Test Procedure
 
-Run `temporal_mapping_binding`, `temporal_projection` and `temporal_join`. Check owner admission
+Run `temporal_mapping_binding`, `temporal_projection`, `temporal_binding_axes`,
+`temporal_bridge_definition` and `temporal_join`. Check owner admission
 membership independently from semantic equality; native row population, explicit
 false, duplicate and changed bindings; future/past target selection and independent
 closure axes; origin history and fixed sampling; exact subject/profile names;

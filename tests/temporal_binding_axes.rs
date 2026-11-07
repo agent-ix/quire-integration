@@ -19,9 +19,15 @@ use quire_spec_language::temporal::{self as native, CheckedSubject, Report};
 use serde_json::{json, Value};
 
 fn evaluate(projection: &ValidatedTlProjection<'_>) -> Report {
-    let native = projection.native();
+    evaluate_input(projection.package(), projection.native())
+}
+
+fn evaluate_input(
+    package: &quire_contract_ir::CheckedPackageV2,
+    native: NativeProjectionInput<'_>,
+) -> Report {
     let subject = CheckedSubject::new(
-        projection.package(),
+        package,
         native.occurrence,
         native.valuations,
         native.request,
@@ -374,4 +380,235 @@ fn predicate_and_declared_type_mutations_preserve_their_actual_owner_bindings() 
     );
     assert_ne!(original["declaration"], typed["declaration"]);
     assert_ne!(original["bindings"], typed["bindings"]);
+}
+
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[test]
+fn a_genuine_retained_capture_cannot_be_replayed_under_another_admitted_anchor() {
+    fixture::with_source(
+        &fixture::declarations("capture saved: Boolean = true; holds(saved)"),
+        "Due",
+        &[b"true"],
+        |case| {
+            let prior_anchor = "earlier-native-observation";
+            assert_ne!(prior_anchor, case.native.instance.anchor);
+            let mut request = case.native.request.clone();
+            request.anchor = Some(prior_anchor.into());
+            request.positions[0].observation.identity = prior_anchor.into();
+            request.origins[0].captures[0] = CaptureFact::Value {
+                anchor: prior_anchor.into(),
+                value: CapturedValue::new(b"true".as_slice()),
+            };
+            let instance = native::ValuationInstance {
+                anchor: prior_anchor,
+                capture_instance: case.native.instance.capture_instance,
+            };
+            let rows = case
+                .native
+                .valuations
+                .rows()
+                .iter()
+                .cloned()
+                .map(|mut row| {
+                    row.anchor = prior_anchor.into();
+                    row
+                })
+                .collect();
+            let evidence = native::ValuationEvidence::admit(
+                case.subject,
+                &projection_support::native_trace(projection_support::EVENT, prior_anchor),
+                instance,
+                &case.native.observation.revision,
+                rows,
+            )
+            .expect("actual native prior-anchor row admission");
+            let prior_input = NativeProjectionInput {
+                request: &request,
+                valuations: &evidence,
+                instance,
+                ..case.native
+            };
+            let prior = evaluate_input(case.package, prior_input);
+            let ledger = prior.ledger().expect("actual prior native ledger");
+            let key = ObligationKey::new(
+                case.native.occurrence.node.package.clone(),
+                serde_json::to_vec(&(
+                    &case.native.occurrence.node,
+                    quire_contract_ir::CheckedOccurrence {
+                        role: case.native.occurrence.role.clone(),
+                        ordinal: case.native.occurrence.ordinal,
+                    },
+                ))
+                .unwrap(),
+                case.native.occurrence.ordinal,
+            );
+            let retained = ledger
+                .instance(&key, case.native.request.trigger.as_ref().unwrap())
+                .unwrap();
+            assert_eq!(
+                retained.environment().get("saved").unwrap().anchor(),
+                prior_anchor
+            );
+            // The current input remains bound to the genuine current QObs observation.
+            let mut current = case.native.request.clone();
+            current.ledger = Some(ledger.clone());
+            let result = project_tl(
+                case.package,
+                case.subject,
+                case.classification,
+                case.surrounding,
+                NativeProjectionInput {
+                    request: &current,
+                    ..case.native
+                },
+                case.selection,
+                TlLimits::default(),
+            );
+            assert!(matches!(
+                result,
+                Err(TlProjectionError::NativePremise(
+                    TlProjectionPremise::Capture
+                ))
+            ));
+        },
+    );
+}
+
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[test]
+fn retained_native_capture_faults_preserve_original_kind_and_named_subject() {
+    use qsl_eval::temporal::evidence::{FaultKind, FaultSubject};
+    use quire_integration::temporal::TlProjectionCode;
+    fixture::with_source(
+        &fixture::declarations("capture saved: Boolean = true; holds(saved)"),
+        "Due",
+        &[b"true"],
+        |case| {
+            for (fact, kind, code) in [
+                (
+                    CaptureFact::Missing,
+                    FaultKind::Missing,
+                    TlProjectionCode::Incomplete,
+                ),
+                (
+                    CaptureFact::WrongType,
+                    FaultKind::Refused,
+                    TlProjectionCode::NativePremise,
+                ),
+                (
+                    CaptureFact::Value {
+                        anchor: "another-capture-anchor".into(),
+                        value: CapturedValue::new(b"true".as_slice()),
+                    },
+                    FaultKind::Refused,
+                    TlProjectionCode::NativePremise,
+                ),
+            ] {
+                let mut faulty = case.native.request.clone();
+                faulty.origins[0].captures[0] = fact;
+                let prior = evaluate_input(
+                    case.package,
+                    NativeProjectionInput {
+                        request: &faulty,
+                        ..case.native
+                    },
+                );
+                let ledger = prior
+                    .ledger()
+                    .expect("genuine native faulted-instance ledger");
+                let mut current = case.native.request.clone();
+                current.ledger = Some(ledger.clone());
+                let error = project_tl(
+                    case.package,
+                    case.subject,
+                    case.classification,
+                    case.surrounding,
+                    NativeProjectionInput {
+                        request: &current,
+                        ..case.native
+                    },
+                    case.selection,
+                    TlLimits::default(),
+                )
+                .err()
+                .expect("retained owner fault");
+                assert_eq!(error.code(), code);
+                let TlProjectionError::NativeActivationFault(fault) = error else {
+                    panic!("original retained fault");
+                };
+                assert_eq!(fault.kind, kind);
+                assert_eq!(fault.subject, FaultSubject::Capture("saved".into()));
+            }
+        },
+    );
+}
+
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
+#[test]
+fn retained_native_guard_and_delivery_anchor_faults_keep_distinct_subjects() {
+    use qsl_eval::temporal::evidence::{FaultKind, FaultSubject, Receipt, TriggerDelivery};
+    use quire_integration::temporal::TlProjectionCode;
+    let source = "temporal Due using t over (g: M::Gadget) clock \"events\" on each (trigger: M::Gadget) when (true) { holds(true) }";
+    fixture::with_source(source, "Due", &[], |case| {
+        for (guard, anchor, kind, subject, code) in [
+            (
+                None,
+                case.native.instance.anchor,
+                FaultKind::Missing,
+                FaultSubject::Guard,
+                TlProjectionCode::Incomplete,
+            ),
+            (
+                Some(true),
+                "another-delivery-anchor",
+                FaultKind::Refused,
+                FaultSubject::Anchor,
+                TlProjectionCode::NativePremise,
+            ),
+        ] {
+            let mut request = case.native.request.clone();
+            let origin = request.origins.remove(0);
+            request.deliveries = vec![TriggerDelivery {
+                identity: origin.identity,
+                receipt: Receipt::new(b"real-fault-fixture-receipt".as_slice()),
+                anchor: anchor.into(),
+                payload: origin.payload,
+                guard,
+                captures: vec![],
+            }];
+            let prior = evaluate_input(
+                case.package,
+                NativeProjectionInput {
+                    request: &request,
+                    ..case.native
+                },
+            );
+            let ledger = prior
+                .ledger()
+                .expect("actual guarded delivery fault ledger");
+            request.ledger = Some(ledger.clone());
+            request.deliveries[0].guard = Some(true);
+            request.deliveries[0].anchor = case.native.instance.anchor.into();
+            let error = project_tl(
+                case.package,
+                case.subject,
+                case.classification,
+                case.surrounding,
+                NativeProjectionInput {
+                    request: &request,
+                    ..case.native
+                },
+                case.selection,
+                TlLimits::default(),
+            )
+            .err()
+            .expect("retained original delivery fault");
+            assert_eq!(error.code(), code);
+            let TlProjectionError::NativeActivationFault(fault) = error else {
+                panic!("actual owner fault preserved");
+            };
+            assert_eq!(fault.kind, kind);
+            assert_eq!(fault.subject, subject);
+        }
+    });
 }
