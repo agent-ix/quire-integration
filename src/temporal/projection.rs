@@ -407,6 +407,7 @@ impl TlInput {
 pub struct ValidatedTlProjection<'a> {
     package: &'a CheckedPackageV2,
     bytes: Vec<u8>,
+    source: &'a quire_contract_ir::CheckedSourceMapEntry,
     formula: TlFormulaComponent,
     propositions: PropositionMapDocument,
     input: TlInput,
@@ -427,6 +428,10 @@ impl<'a> ValidatedTlProjection<'a> {
     /// Complete canonical bridge correspondence, retaining original owner bytes.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
+    }
+    /// Original admitted source occurrence and all exact half-open source spans.
+    pub fn source(&self) -> &'a quire_contract_ir::CheckedSourceMapEntry {
+        self.source
     }
     /// Actual owner-admitted formula and original predicate relation.
     pub fn formula(&self) -> &TlFormulaComponent {
@@ -532,7 +537,7 @@ fn limit(counter: TlProjectionLimit, setting: u64) -> TlProjectionError {
 /// No evaluator, callback, mirror record or content-derived identity is used.
 pub fn project_tl<'a>(
     package: &'a CheckedPackageV2,
-    subject: &TemporalSubjectView<'_>,
+    subject: &TemporalSubjectView<'a>,
     classification: &Classification,
     surrounding: Closure,
     native: NativeProjectionInput<'a>,
@@ -591,6 +596,7 @@ pub fn project_tl<'a>(
     Ok(ValidatedTlProjection {
         package,
         bytes,
+        source: subject.source_span(),
         formula: built.formula,
         propositions: built.propositions,
         input: built.input,
