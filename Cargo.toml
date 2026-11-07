@@ -19,6 +19,7 @@ path = "src/lib.rs"
 [dependencies]
 quire-observation = { git = "https://github.com/agent-ix/quire-observation", branch = "main" }
 qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
+qsl-eval = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
 
 tl-syntax = { git = "https://github.com/agent-ix/tl-syntax", branch = "main", features = ["serde"] }
@@ -34,7 +35,6 @@ quire-spec-language = { git = "https://github.com/agent-ix/quire-spec-language",
 qsl-foundation = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-replay = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-cst = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
-qsl-eval = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-forms = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-route = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-semantics = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }

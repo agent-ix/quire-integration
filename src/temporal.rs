@@ -44,6 +44,11 @@ pub fn validate_mapping_binding(
 }
 
 mod formula;
+mod native_input;
+
+pub use native_input::{
+    admit_native_tl_input, NativeInputCode, NativeInputError, NativeInputLimits, NativeTlInput,
+};
 
 pub use formula::{
     construct_tl_formula, TlFormulaCode, TlFormulaComponent, TlFormulaError, TlFormulaLeaf,

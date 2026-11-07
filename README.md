@@ -36,6 +36,7 @@ not author an abstraction relation.
 | `tests/ir914_bound_export.rs` | QSL compilation, the driver's relationless skip and real per-item binding export, CG generation, and a separate real Kani scalar path | The skip sends every item to CG; a real QSL refusal is withheld with its original index; the integer proof verifies and its arithmetic mutant falsifies |
 | `tests/qsl_model_owner_admission.rs` | A QSL unit emitted as `checked-package/v2` bytes, read by contract IR and passed to CG's scalar claim API | Model ownership stays content based; integer addition and Boolean negation produce checked CG claims |
 | `tests/integration.rs` | The placeholder library | It links |
+| `tests/temporal_mapping_binding.rs` | Strict checked-package subject, native QSL evidence request, and independently admitted QObs observation | Exact occurrence and binding authentication; opaque observation identity selects one numeric anchor while retaining original valuation cells |
 
 The temporal formula component accepts an instance-bound QSL checked subject and
 classification, preserves occurrence order and original checked predicate handles,
@@ -46,6 +47,13 @@ runs neither evaluator. Full projection, valuation/history/request admission,
 correspondence, result joins, bridge readers and the remaining limits stay Planned.
 `tests/temporal_formula.rs` covers this narrow IT-020/TC-101 boundary; none of the
 whole FR-350 criteria is claimed complete by this component.
+
+The native temporal input component accepts the actual QSL `EvidenceRequest` and
+`TraceBinding`, authenticates the selected clause occurrence and profile/clock,
+and retains the original trigger and position valuations. A present opaque anchor
+must match one request position and an independently admitted QObs observation
+before its numeric position is exposed. `tests/temporal_mapping_binding.rs` covers
+this IT-022 prerequisite. It does not construct a TL request or invoke an evaluator.
 
 The observation revision component strictly admits genuine QObs v1 historical bundle
 bytes, verifies exact selected observation membership including envelope revision, and

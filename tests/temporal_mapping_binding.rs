@@ -3,6 +3,10 @@
 
 mod support;
 
+#[path = "support/observation_revision/mod.rs"]
+#[allow(dead_code)] // This test uses only the observation slice of the shared fixture.
+mod observation_support;
+
 use ix_trace_rs::trace;
 use qsl_package::checked_views::{mapping_support, temporal_subject, Closure, Support, Target};
 use qsl_semantics::{
@@ -17,11 +21,24 @@ use quire_contract_ir::{
     CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, ClockConfiguration,
     TemporalForm,
 };
+use quire_integration::temporal::{admit_native_tl_input, NativeInputCode, NativeInputLimits};
 use quire_integration::temporal::{validate_mapping_binding, MappingBindingRefusal};
 use quire_semantic_value::checking::CheckingLimits;
 
 /// Emit once and admit twice: the packages have equal contents and distinct owners.
 fn packages() -> (CheckedPackageV2, CheckedPackageV2, CheckedNodeId) {
+    packages_with_clock(
+        "quire.temporal.event-position.false-extension/v1",
+        ClockConfiguration::EventPosition {
+            sequence_authority: "events".into(),
+        },
+    )
+}
+
+fn packages_with_clock(
+    profile: &str,
+    clock: ClockConfiguration,
+) -> (CheckedPackageV2, CheckedPackageV2, CheckedNodeId) {
     let document =
         std::fs::read(support::qsl_root().join("tests/fixtures/spine-model.semantic-ir.json"))
             .expect("the selected QSL owner fixture exists");
@@ -32,7 +49,8 @@ model M = "acme/orders";
 temporal Due using t over (g: M::Gadget) clock "events" on origin {
     eventually[0,2] holds(true)
 }
-"#;
+"#
+    .replace("quire.temporal.event-position.false-extension/v1", profile);
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "test:temporal-binding"),
         "temporal-binding.native",
@@ -65,9 +83,7 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
         .map(|clause| qsl_package::TemporalClockSelection {
             source: graph.source().clone(),
             declaration_span: clause.clause().span(),
-            clock: ClockConfiguration::EventPosition {
-                sequence_authority: "events".into(),
-            },
+            clock: clock.clone(),
         })
         .collect();
     let emitted = qsl_package::emit_checked_with_temporal_selections(
@@ -160,4 +176,206 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
             ..
         }
     ));
+}
+
+/// IR-1378: the native request is retained and its opaque anchor is matched
+/// to an independently admitted observation before exposing a numeric anchor.
+#[trace(
+    "TC-461",
+    "IT-022-SC-01",
+    "IT-022-SC-02",
+    "IT-022-SC-03",
+    "IT-022-SC-04",
+    "IT-022-SC-05"
+)]
+#[test]
+fn native_request_selects_exact_observation_and_keeps_valuations() {
+    use qsl_eval::temporal::evidence::{
+        EvidencePosition, EvidenceRef, EvidenceRequest, ExecutionDisposition, Relation,
+        SemanticTriggerIdentity, TemporalEvidenceLimits, TraceBinding, TriggerEvidence,
+    };
+    use qsl_eval::temporal::{ClockCover, ProgressClosure, Valuation};
+
+    let (package, foreign, clause) = packages_with_clock(
+        "quire.temporal.timestamped-event.finite-window/v1",
+        ClockConfiguration::TimestampedEvent {
+            timestamp_unit: "nanosecond".into(),
+        },
+    );
+    let subject = temporal_subject(&package, &clause).unwrap();
+    let fixture = observation_support::Fixture::new();
+    let observation = fixture.observation(fixture.observation_document(), 1, None);
+    let identity = observation.payload().observation_identity().to_owned();
+    let trigger = SemanticTriggerIdentity::new(b"instance-a".as_slice()).unwrap();
+    let position = EvidencePosition {
+        observation: EvidenceRef::named(identity.clone()),
+        position: 5,
+        valuations: [(7, Valuation::False)].into(),
+        instance_valuations: [(trigger.clone(), [(9, Valuation::True)].into())].into(),
+        ..EvidencePosition::default()
+    };
+    let clock = subject.clock().unwrap();
+    let request = EvidenceRequest {
+        trigger: Some(trigger.clone()),
+        correspondence: EvidenceRef::named("correspondence"),
+        positions: vec![position],
+        anchor: Some(identity.clone()),
+        deliveries: vec![],
+        origins: vec![],
+        trigger_evidence: TriggerEvidence::Admitted,
+        trigger_scope: ProgressClosure::Closed,
+        decision_progress: None,
+        decision_closure: None,
+        surrounding_progress: None,
+        surrounding_closure: None,
+        execution: ExecutionDisposition::Completed,
+        completeness: None,
+        authoritative_origin: None,
+        evicted: vec![],
+        cover: ClockCover::Exact,
+        progress_ledger: None,
+        ledger: None,
+        relation: Relation::Original,
+        control: None,
+        binding: TraceBinding {
+            profile: subject.profile().definition.identity.clone(),
+            clock_name: clock.clock_name.clone(),
+            parameters: clock.clock.clone(),
+        },
+        occurrence: None,
+        limits: TemporalEvidenceLimits::default(),
+    };
+
+    let limits = NativeInputLimits::default();
+    let admitted =
+        admit_native_tl_input(&package, &subject, &request, &observation, limits).unwrap();
+    assert_eq!(admitted.limits(), limits);
+    assert_eq!(
+        admit_native_tl_input(
+            &package,
+            &subject,
+            &request,
+            &observation,
+            NativeInputLimits { max_positions: 1 },
+        )
+        .unwrap()
+        .anchor(),
+        Some(5)
+    );
+    assert_eq!(
+        admit_native_tl_input(
+            &package,
+            &subject,
+            &request,
+            &observation,
+            NativeInputLimits { max_positions: 0 },
+        )
+        .unwrap_err()
+        .code(),
+        NativeInputCode::LimitReached
+    );
+    assert_eq!(admitted.anchor(), Some(5));
+    assert_eq!(admitted.occurrence(), &subject.occurrences()[0]);
+    assert!(std::ptr::eq(admitted.request(), &request));
+    assert!(std::ptr::eq(admitted.observation(), &observation));
+    assert_eq!(admitted.trigger(), Some(&trigger));
+    assert_eq!(
+        admitted.positions()[0].valuations.get(&7),
+        Some(&Valuation::False)
+    );
+    assert_eq!(
+        admitted.positions()[0].instance_valuations[&trigger].get(&9),
+        Some(&Valuation::True)
+    );
+    let mut explicit = request.clone();
+    explicit.occurrence = Some(quire_contract_ir::CheckedOccurrence {
+        role: subject.occurrences()[0].role.clone(),
+        ordinal: subject.occurrences()[0].ordinal,
+    });
+    assert_eq!(
+        admit_native_tl_input(&package, &subject, &explicit, &observation, limits)
+            .unwrap()
+            .occurrence(),
+        &subject.occurrences()[0]
+    );
+    assert_eq!(
+        admit_native_tl_input(&foreign, &subject, &request, &observation, limits)
+            .unwrap_err()
+            .code(),
+        NativeInputCode::ForeignSubject
+    );
+
+    let mut changed = request.clone();
+    changed.anchor = Some("another-observation".into());
+    assert_eq!(
+        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
+            .unwrap_err()
+            .code(),
+        NativeInputCode::Anchor
+    );
+    changed = request.clone();
+    changed.positions[0].observation.identity = "another-observation".into();
+    assert_eq!(
+        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
+            .unwrap_err()
+            .code(),
+        NativeInputCode::Anchor
+    );
+    changed = request.clone();
+    changed.positions.push(changed.positions[0].clone());
+    assert_eq!(
+        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
+            .unwrap_err()
+            .code(),
+        NativeInputCode::Anchor
+    );
+    changed = request.clone();
+    changed.positions[0].position = 6;
+    assert_eq!(
+        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
+            .unwrap_err()
+            .code(),
+        NativeInputCode::ObservationAnchor
+    );
+    changed = request.clone();
+    changed.binding.profile = "foreign-profile".into();
+    assert_eq!(
+        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
+            .unwrap_err()
+            .code(),
+        NativeInputCode::Binding
+    );
+    changed = request.clone();
+    changed.occurrence = Some(quire_contract_ir::CheckedOccurrence {
+        role: subject.occurrences()[0].role.clone(),
+        ordinal: subject.occurrences()[0].ordinal + 1,
+    });
+    assert_eq!(
+        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
+            .unwrap_err()
+            .code(),
+        NativeInputCode::Occurrence
+    );
+
+    let (event_package, _, event_clause) = packages();
+    let event_subject = temporal_subject(&event_package, &event_clause).unwrap();
+    let event_clock = event_subject.clock().unwrap();
+    let mut event_request = request.clone();
+    event_request.binding = TraceBinding {
+        profile: event_subject.profile().definition.identity.clone(),
+        clock_name: event_clock.clock_name.clone(),
+        parameters: event_clock.clock.clone(),
+    };
+    assert_eq!(
+        admit_native_tl_input(
+            &event_package,
+            &event_subject,
+            &event_request,
+            &observation,
+            limits,
+        )
+        .unwrap_err()
+        .code(),
+        NativeInputCode::ObservationAnchor
+    );
 }
