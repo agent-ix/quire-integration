@@ -121,12 +121,33 @@ pub fn limits(integer_bits: u64, work_units: u64) -> ScalarLimits {
     }
 }
 
+/// Generous limits for evaluating operands whose own cost is not under test.
+fn operand_limits() -> ScalarLimits {
+    ScalarLimits {
+        unit_edges: 16,
+        value_occurrences: 16,
+        result_units: 16,
+        ..limits(1024, 1024)
+    }
+}
+
 /// Evaluate the original closed body or its actual left checked child.
 pub fn evaluate(
     original: &Original,
     name: &str,
     equality_child: bool,
     limits: ScalarLimits,
+) -> (quire_eval::Evaluation, Meter) {
+    evaluate_denied(original, name, equality_child, limits, None)
+}
+
+/// Evaluate as [`evaluate`], optionally denying one named charge occurrence.
+pub fn evaluate_denied(
+    original: &Original,
+    name: &str,
+    equality_child: bool,
+    limits: ScalarLimits,
+    denial: Option<quire_exact::InjectedDenial>,
 ) -> (quire_eval::Evaluation, Meter) {
     let graph = original.package.graph();
     let function = graph
@@ -145,7 +166,7 @@ pub fn evaluate(
     } else {
         function.body
     };
-    let mut meter = Meter::new(limits);
+    let mut meter = denied_meter(limits, denial);
     let evaluation = qsl_eval::value::evaluate_closed_with_frame(
         &original.package,
         node,
@@ -156,6 +177,14 @@ pub fn evaluate(
     )
     .expect("original closed body evaluates");
     (evaluation, meter)
+}
+
+fn denied_meter(limits: ScalarLimits, denial: Option<quire_exact::InjectedDenial>) -> Meter {
+    let meter = Meter::new(limits);
+    match denial {
+        Some(denial) => meter.with_injected_denial(denial),
+        None => meter,
+    }
 }
 
 /// Compare real generated symbols to fresh original checked operations.
@@ -181,6 +210,33 @@ pub fn generation_with(
     integer_bound_refusals: &[&str],
     compound_result_refusals: &[&str],
     carried_refusals: &[&str],
+) -> usize {
+    generation_core(
+        original,
+        cases,
+        integer_bound_refusals,
+        compound_result_refusals,
+        carried_refusals,
+        None,
+    )
+}
+
+/// Execute original quantity cases while both sides deny one named charge occurrence.
+pub fn generation_denied(
+    original: &Original,
+    cases: &[(&str, bool, ScalarLimits)],
+    denial: quire_exact::InjectedDenial,
+) -> usize {
+    generation_core(original, cases, &[], &[], &[], Some(denial))
+}
+
+fn generation_core(
+    original: &Original,
+    cases: &[(&str, bool, ScalarLimits)],
+    integer_bound_refusals: &[&str],
+    compound_result_refusals: &[&str],
+    carried_refusals: &[&str],
+    denial: Option<quire_exact::InjectedDenial>,
 ) -> usize {
     use quire_contract_codegen::{ClaimDisposition, ExactScalarRefusal, OperationProvenance};
     let emission = qsl_package::emit_checked(
@@ -348,9 +404,11 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
         );
         assert_eq!(operands.len(), if conversion { 1 } else { 2 });
         let mut arguments = Vec::new();
+        let mut preparation = String::new();
+        let mut formed = 0_usize;
         driver.push_str("{\n");
         for (index, operand) in operands.into_iter().enumerate() {
-            let mut input_meter = Meter::new(self::limits(1024, 1024));
+            let mut input_meter = Meter::new(operand_limits());
             let input = qsl_eval::value::evaluate_closed_with_frame(
                 &authority.package,
                 operand,
@@ -366,19 +424,51 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
             else {
                 panic!("closed operand completes");
             };
+            if !input_meter.admitted_charges().is_empty() {
+                // A computed operand is charged on the operation's own meter, so the
+                // native side replays its owner operations before the generated one.
+                let prepared = prepare_operand(
+                    operand,
+                    &|node| {
+                        let mut leaf_meter = Meter::new(operand_limits());
+                        let leaf = qsl_eval::value::evaluate_closed_with_frame(
+                            &authority.package,
+                            node,
+                            function.slots,
+                            Vec::new(),
+                            function.formed_units,
+                            &mut leaf_meter,
+                        )
+                        .expect("authentic leaf operand");
+                        let quire_eval::FamilyOutcome::Evaluated(quire_exact::Outcome::Completed(
+                            value,
+                        )) = leaf.outcome
+                        else {
+                            panic!("leaf operand completes");
+                        };
+                        value
+                    },
+                    &mut preparation,
+                    &mut formed,
+                );
+                arguments.push(format!(
+                    "scope.resolve(&{prepared}).expect(\"formed operand unit\")"
+                ));
+                continue;
+            }
             match value {
                 quire_exact::Value::Quantity(quantity) => {
-                    let key = quantity
-                        .unit()
-                        .declared_key()
-                        .expect("original literal uses declared unit");
-                    // The emitted declared quantity type must join the original QSL key.
-                    assert!(package
-                        .graph()
-                        .nodes
-                        .iter()
-                        .any(|node| same_key(&node.node_id, key)));
-                    driver.push_str(&format!("let input{index}=Quantity::new({},quire_exact::UnitId::declared({})); let arg{index}=table.resolve(&input{index}).expect(\"original operand unit\");\n",native_rational(quantity.magnitude()),native_key(key)));
+                    if let Some(key) = quantity.unit().declared_key() {
+                        // The emitted declared quantity type must join the original QSL key.
+                        assert!(package
+                            .graph()
+                            .nodes
+                            .iter()
+                            .any(|node| same_key(&node.node_id, key)));
+                        driver.push_str(&format!("let input{index}=Quantity::new({},quire_exact::UnitId::declared({})); let arg{index}=table.resolve(&input{index}).expect(\"original operand unit\");\n",native_rational(quantity.magnitude()),native_key(key)));
+                    } else {
+                        panic!("computed operands are replayed, not transported");
+                    }
                     arguments.push(format!("arg{index}"));
                 }
                 quire_exact::Value::Integer(integer) => {
@@ -388,7 +478,7 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
                 other => panic!("original quantity operand: {other:?}"),
             }
         }
-        let (evaluation, meter) = evaluate(&authority, name, *child, *limits);
+        let (evaluation, meter) = evaluate_denied(&authority, name, *child, *limits, denial);
         let quire_eval::FamilyOutcome::Evaluated(outcome) = evaluation.outcome else {
             panic!("original quantity operation family");
         };
@@ -411,14 +501,21 @@ fn observe() {{ let graph={}; let table=UnitTable::declared(&graph);
             driver.push_str(&format!("let target=quire_semantic_value::quantity::IdentifiedUnit::new(table.get(quire_exact::UnitId::declared({})).expect(\"original target\").clone()).expect(\"admitted target identity\");\n",native_key(key)));
             arguments.push("&target".to_owned());
         }
-        driver.push_str(&format!("let mut meter=Meter::new({limits:?});\n"));
+        let native_denial = denial.map_or_else(String::new, |denial| {
+            format!(
+                ".with_injected_denial(quire_exact::InjectedDenial{{point:quire_exact::ChargePoint::{:?},occurrence:std::num::NonZeroU64::new({}).expect(\"occurrence\")}})",
+                denial.point, denial.occurrence
+            )
+        });
+        driver.push_str(&format!("let mut meter=Meter::new({limits:?}){native_denial}; let mut scope=quire_semantic_value::quantity::UnitScope::new(&table);\nlet actual:Outcome<Value>='case: {{\n{preparation}"));
         if comparison {
-            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated comparison\"); let actual=lift(actual,Value::Boolean);\n",generated.symbol,arguments.join(",")));
+            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated comparison\"); lift(actual,Value::Boolean)\n",generated.symbol,arguments.join(",")));
         } else if conversion {
-            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated conversion\"); let actual=lift(actual,Value::Quantity);\n",generated.symbol,arguments.join(",")));
+            driver.push_str(&format!("let actual=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated conversion\"); lift(actual,Value::Quantity)\n",generated.symbol,arguments.join(",")));
         } else {
-            driver.push_str(&format!("let (actual,identified)=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated arithmetic\"); if let Outcome::Completed(ref quantity)=actual {{ assert_eq!(quantity.unit(),&identified.id()); }} let actual=lift(actual,Value::Quantity);\n",generated.symbol,arguments.join(",")));
+            driver.push_str(&format!("let (actual,identified)=quire_exact_scalar_oracles::{}({},&mut meter).expect(\"generated arithmetic\"); if let Outcome::Completed(ref quantity)=actual {{ assert_eq!(quantity.unit(),&identified.id()); }} lift(actual,Value::Quantity)\n",generated.symbol,arguments.join(",")));
         }
+        driver.push_str("};\n");
         driver.push_str("let losses=Vec::<quire_semantic_value::loss::ValueLoss>::new(); println!(\"IT019_OBSERVATION {}\",oracle_observation::snapshot(&actual,&losses,&meter)); }\n");
     }
     driver.push_str("}\n");
@@ -624,4 +721,59 @@ pub fn accounting(meter: &Meter, events: &[quire_exact::AdmittedCharge], totals:
 pub fn source_text(extra: &str, functions: &str) -> String {
     let source = format!("language \"ix:native\" edition \"1-draft\";\nprofile v = \"quire.value.complete/v1\";\n{UNITS}\n{extra}\n{functions}");
     source
+}
+
+/// Replay a computed operand's owner operations on the case's own meter; the
+/// returned name is the native quantity in `scope`, or the case stops there.
+fn prepare_operand(
+    node: qsl_semantics::check::CheckedNode<'_>,
+    leaf: &dyn Fn(qsl_semantics::check::CheckedNode<'_>) -> quire_exact::Value,
+    out: &mut String,
+    count: &mut usize,
+) -> String {
+    use quire_checked::node::NodeKind;
+    use quire_exact::ArithmeticOperator;
+    *count += 1;
+    let id = *count;
+    let children = node.children();
+    match node.kind() {
+        NodeKind::QuantityPower(_, _) => {
+            let [base, exponent] = children.as_slice() else {
+                panic!("power has a base and an exponent");
+            };
+            let base = prepare_operand(*base, leaf, out, count);
+            let quire_exact::Value::Integer(exponent) = leaf(*exponent) else {
+                panic!("power exponent is an Integer");
+            };
+            out.push_str(&format!("let exp{id}:quire_exact::Integer={:?}.parse().expect(\"original exponent\"); let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::Power(scope.resolve(&{base}).expect(\"prepared base\"),&exp{id}),&mut meter).expect(\"native power\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case lift(other,Value::Quantity) }};\n",exponent.to_string()));
+        }
+        NodeKind::Quantity(operator, _, _) => {
+            let [left, right] = children.as_slice() else {
+                panic!("quantity operation has two operands");
+            };
+            let left = prepare_operand(*left, leaf, out, count);
+            let right = prepare_operand(*right, leaf, out, count);
+            let constructor = match operator {
+                ArithmeticOperator::Multiply => "Multiply",
+                ArithmeticOperator::Divide => "Divide",
+                other => panic!("unsupported prepared quantity operator {other:?}"),
+            };
+            out.push_str(&format!("let (outcome{id},unit{id})=quire_semantic_value::quantity::evaluate_quantity_unit(quire_semantic_value::quantity::QuantityOperation::{constructor}(scope.resolve(&{left}).expect(\"prepared left\"),scope.resolve(&{right}).expect(\"prepared right\")),&mut meter).expect(\"native operation\"); let q{id}=match outcome{id} {{ Outcome::Completed(q)=>{{ scope.form(unit{id}); q }}, other=>break 'case lift(other,Value::Quantity) }};\n"));
+        }
+        _ => {
+            let quire_exact::Value::Quantity(quantity) = leaf(node) else {
+                panic!("prepared leaf is a quantity literal");
+            };
+            let key = quantity
+                .unit()
+                .declared_key()
+                .expect("prepared leaf uses a declared unit");
+            out.push_str(&format!(
+                "let q{id}=Quantity::new({},quire_exact::UnitId::declared({}));\n",
+                native_rational(quantity.magnitude()),
+                native_key(key)
+            ));
+        }
+    }
+    format!("q{id}")
 }

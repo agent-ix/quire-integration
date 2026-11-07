@@ -54,6 +54,8 @@ enum RowDispatch {
         tickets: &'static [&'static str],
         missing: &'static str,
     },
+    /// Public IDs that no FR-014 acceptance criterion selects.
+    OutsideRequiredSet,
 }
 
 // This is dispatch over public IDs, not a copy of QSpec's inputs or expected
@@ -211,11 +213,8 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
             tickets: &["QSL-1738"],
             missing: "semantic-value derived dimension N = L / L must have an empty map, not N^1",
         }),
-        "U32" => pending("duplicate linked ms must refuse at Quantity<ms>, not the second unit declaration; IR-842 QSL owner routing"),
-        "U34" => pending("unitless imported Length refusal lacks the required checked-graph owner pointer; IR-842 owner routing"),
-        "U35" => pending("duplicate model Dimension.identity currently returns malformed-declaration, not required conflicting-binding; IR-842 owner routing"),
+        "U32" | "U34" | "U35" | "U39" => Some(RowDispatch::OutsideRequiredSet),
         "U38" | "U40" => pending("intended equivalent-unit positive conversions and dependent operations are unexecuted; IR-842 QSL owner routing"),
-        "U39" => pending("QSL model/namespace admission and generated operation dispatch"),
         _ => None,
     }
 }
@@ -516,19 +515,13 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
                 if vector.id == "U11g3" {
                     assert!(missing.contains("empty map"));
                 }
-                if vector.id == "U32" {
-                    assert!(missing.contains("Quantity<ms>"));
-                }
-                if vector.id == "U34" {
-                    assert!(missing.contains("owner pointer"));
-                }
-                if vector.id == "U35" {
-                    assert!(missing.contains("conflicting-binding"));
-                }
                 if matches!(vector.id, "U38" | "U40") {
                     assert!(missing.contains("positive conversions"));
                 }
                 planned += 1;
+            }
+            RowDispatch::OutsideRequiredSet => {
+                assert!(matches!(vector.id, "U32" | "U34" | "U35" | "U39"));
             }
         }
     }
