@@ -55,6 +55,13 @@ Neither evaluator is reproduced.
    these pairs cover equality, inequality and ordering at both endpoints.
    Require independent Boolean answers, source locations on exhausted work and the
    complete native/QSL comparison observations.
+7. Evaluate genuine parameterized Rational Add, Subtract, Multiply and Negate
+   bodies with `Rational[-9,9;1,9]` operands and a separately declared
+   `Rational[-200,200;1,200]` result. Use noninteger fractions, including
+   `1/2 + 1/3 = 5/6`, `4/3 - 7/2 = -13/6`, `2/3 * 3/4 = 1/2` and
+   `-(7/3) = -7/3`. Require the actual derived RationalArithmetic claim and
+   complete native/QSL agreement at work 0, 1 and 1024.
+
 Other operand kinds, further Text input boundaries and supplied-stop Boolean
 paths remain Planned under IR-842; division/modulo remain Planned behind
 IR-1391's CG result-bound derivation. These selected cases make no
@@ -70,7 +77,7 @@ At work zero, connectives stop at BooleanResultRetain with next charge 1;
 equality stops at EqualityPlanForm with next charge 2. Work one completes every
 connective and still stops equality at EqualityPlanForm. Those Boolean stops
 have their real locations, no losses, no admitted charges and zero consumption
-in every LimitKind counter. All 106 selected cases execute at work 0, 1 and 1024: 318
+in every LimitKind counter. All 110 selected cases execute at work 0, 1 and 1024: 330
 operation observations. Any row
 that does not genuinely derive is reported separately and receives no agreement
 credit. Full IT-019-SC-05 and family closure remain Planned under IR-842.
