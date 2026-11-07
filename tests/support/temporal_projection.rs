@@ -222,6 +222,11 @@ pub(crate) fn with_case_scopes(
     let subject = temporal_subject(&package, &clause).expect("checked temporal subject");
     let classification = mapping_support(&subject, surrounding).expect("classification");
     let occurrence = &subject.occurrences()[0];
+    let bridge_definition = quire_integration::temporal::read_tl_bridge_definition(
+        quire_integration::temporal::TL_BRIDGE_DEFINITION,
+        TlLimits::default().max_bytes,
+    )
+    .expect("original integration bridge definition");
     let f = observation::Fixture::new(sample);
     let context = f.context(1, None);
     let owner_limits = Limits::owner_max();
@@ -420,6 +425,7 @@ pub(crate) fn with_case_scopes(
             observation: &revision,
         },
         selection: TlProjectionSelection {
+            bridge_definition: &bridge_definition,
             observation: &observation,
             clock: &clock,
             observations: ObservationInputs {

@@ -76,3 +76,9 @@ pub use join::{
     join_tl, read_tl_join, ExpectedTlJoin, TlJoinCause, TlJoinCode, TlJoinDecision, TlJoinError,
     TlJoinOwnerRefusals, ValidatedTlJoin, VERSION as TL_JOIN_VERSION,
 };
+
+mod definition;
+pub use definition::{
+    read_tl_bridge_definition, TlBridgeDefinitionRefusal, ValidatedTlBridgeDefinition,
+    TL_BRIDGE_DEFINITION,
+};

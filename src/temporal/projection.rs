@@ -46,6 +46,8 @@ pub struct NativeProjectionInput<'a> {
 /// Independently selected genuine observation and TL owner inputs.
 #[derive(Clone, Copy)]
 pub struct TlProjectionSelection<'a> {
+    /// Actual strict admission to the original integration-owned bridge definition.
+    pub bridge_definition: &'a super::ValidatedTlBridgeDefinition,
     /// The actual admitted observation revision, including the complete bundle.
     pub observation: &'a AdmittedObservationRevision<'a>,
     /// Independently admitted clock binding.

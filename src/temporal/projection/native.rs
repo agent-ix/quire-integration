@@ -30,6 +30,7 @@ pub(super) struct Facts<'subject, 'input> {
     pub positions: Vec<usize>,
     pub anchor: u64,
     pub captures: Vec<&'input [u8]>,
+    pub trigger_payload: &'input [u8],
     pub values: BTreeMap<(usize, &'input CheckedNodeId), bool>,
 }
 
@@ -47,6 +48,7 @@ pub(super) fn check<'subject, 'input>(
         .map_err(Error::Binding)?;
     let observations = selection.observations;
     for bytes in [
+        selection.bridge_definition.bytes(),
         selection.observation.bundle().bytes(),
         selection.clock.bytes(),
         observations.decision_scope_progress.bytes(),
@@ -183,7 +185,7 @@ pub(super) fn check<'subject, 'input>(
             return Err(Error::NativePremise(Premise::Completeness))
         }
     }
-    let captures = check_captures(subject, native, budget)?;
+    let (captures, trigger_payload) = check_captures(subject, native, budget)?;
     let (start, end) = range(selection.clock)?;
     if target == Target::OriginCompleteHistory
         && (start != 0 || native.request.authoritative_origin != Some(true))
@@ -326,6 +328,7 @@ pub(super) fn check<'subject, 'input>(
     Ok(Facts {
         name,
         captures,
+        trigger_payload,
         binding,
         positions,
         anchor,
@@ -371,7 +374,7 @@ fn check_captures<'a>(
     subject: &TemporalSubjectView<'_>,
     native: NativeProjectionInput<'a>,
     budget: &mut Budget,
-) -> Result<Vec<&'a [u8]>, Error> {
+) -> Result<(Vec<&'a [u8]>, &'a [u8]), Error> {
     if native.request.trigger_evidence != TriggerEvidence::Admitted {
         return Err(Error::Incomplete(Missing::Instance));
     }
@@ -381,9 +384,9 @@ fn check_captures<'a>(
         .as_ref()
         .ok_or(Error::Incomplete(Missing::Instance))?;
     let mut captures = None;
+    let mut payload = None;
     match subject.activation() {
         Activation::Origin => {
-            let mut payload = None;
             for origin in &native.request.origins {
                 budget.work()?;
                 if &origin.identity != selected {
@@ -399,7 +402,6 @@ fn check_captures<'a>(
             }
         }
         Activation::Each { guard, .. } => {
-            let mut payload = None;
             for delivery in &native.request.deliveries {
                 budget.work()?;
                 if &delivery.identity != selected {
@@ -455,13 +457,18 @@ fn check_captures<'a>(
             Evicted::Capture { .. } | Evicted::Valuation { .. } => {}
         }
     }
-    Ok(captures
-        .iter()
-        .filter_map(|capture| match capture {
-            CaptureFact::Value { value, .. } => Some(value.as_bytes()),
-            _ => None,
-        })
-        .collect())
+    Ok((
+        captures
+            .iter()
+            .filter_map(|capture| match capture {
+                CaptureFact::Value { value, .. } => Some(value.as_bytes()),
+                _ => None,
+            })
+            .collect(),
+        payload
+            .ok_or(Error::Incomplete(Missing::Instance))?
+            .as_bytes(),
+    ))
 }
 
 fn watermark(boundary: BoundaryRef<'_>) -> Result<u64, Error> {

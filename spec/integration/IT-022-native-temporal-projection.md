@@ -161,3 +161,16 @@ blocked on the original owners' full direct-predecessor admission capability;
 this does not waive FR-350-AC-5. Rows unreachable through sealed owner producers
 must have concrete owner evidence and must not be reported as tested by direct
 construction of a fake result.
+
+## Original bridge definition admission
+
+The integration owns `definitions/native-temporal-correspondence-v1.json`, whose
+literal authority `agent-ix/quire-integration`, definition identity
+`native-temporal-correspondence/v1`, public profile and version are original
+published domain values. No identity is computed from bytes or inferred from a
+profile name. `read_tl_bridge_definition` strictly checks the closed canonical
+record and exact membership in that authored definition. Its constructor-private
+result is required by projection selection and retained as complete bytes in
+the correspondence. Changed authority, identity, profile and version each have
+a named refusal. Unknown, duplicate, missing, trailing and noncanonical members
+refuse; the exact record byte bound admits and one byte short refuses.

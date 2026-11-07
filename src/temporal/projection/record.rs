@@ -12,6 +12,7 @@ use crate::temporal::{Closure, TemporalSubjectView};
 struct Record<'a, S, D, L, B, I, V, A, M> {
     profile: &'static str,
     version: u32,
+    bridge_definition: &'a [u8],
     package: &'a str,
     source: S,
     declaration: D,
@@ -22,6 +23,8 @@ struct Record<'a, S, D, L, B, I, V, A, M> {
     anchor: &'a str,
     capture_instance: &'a str,
     captures: &'a [&'a [u8]],
+    trigger: Option<&'a [u8]>,
+    trigger_payload: &'a [u8],
     clock: &'a quire_contract_ir::ClockConfiguration,
     observation: &'a [u8],
     clock_record: &'a [u8],
@@ -138,6 +141,7 @@ pub(super) fn encode(
     let record = Record {
         profile: super::PROFILE,
         version: 1,
+        bridge_definition: selection.bridge_definition.bytes(),
         package: package.name(),
         source: subject.source_span(),
         declaration: (
@@ -153,6 +157,12 @@ pub(super) fn encode(
         anchor: native.instance.anchor,
         capture_instance: native.instance.capture_instance,
         captures: &facts.captures,
+        trigger: native
+            .request
+            .trigger
+            .as_ref()
+            .map(|value| value.as_bytes()),
+        trigger_payload: facts.trigger_payload,
         clock: &facts.binding.clock,
         observation: selection.observation.bundle().bytes(),
         clock_record: selection.clock.bytes(),
