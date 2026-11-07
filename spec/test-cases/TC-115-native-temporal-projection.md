@@ -28,7 +28,7 @@ scenario's FR-350 criterion ids:
 | Test target | IT-022 trace tags | FR-350 trace tags |
 | --- | --- | --- |
 | `temporal_mapping_binding` | `IT-022-SC-01` | `FR-350-AC-2` |
-| `temporal_projection` | `IT-022-SC-02`, `IT-022-SC-03`, `IT-022-SC-04`, `IT-022-SC-05`, `IT-022-SC-06`, `IT-022-SC-07`, `IT-022-SC-08`, `IT-022-SC-11` | `FR-350-AC-1`, `FR-350-AC-2`, `FR-350-AC-3`, `FR-350-AC-4`, `FR-350-AC-6`, `FR-350-AC-9` |
+| `temporal_projection` | `IT-022-SC-02`, `IT-022-SC-03`, `IT-022-SC-04`, `IT-022-SC-05`, `IT-022-SC-06`, `IT-022-SC-07`, `IT-022-SC-08`, `IT-022-SC-11`, `IT-022-SC-16` | `FR-350-AC-1`, `FR-350-AC-2`, `FR-350-AC-3`, `FR-350-AC-4`, `FR-350-AC-6`, `FR-350-AC-9` |
 | `temporal_bridge_definition` | `IT-022-SC-09` | `FR-350-AC-3`, `FR-350-AC-11` |
 | `temporal_binding_axes` | `IT-022-SC-10` | `FR-350-AC-3`, `FR-350-AC-10`, `FR-350-AC-11` |
 | `temporal_join` | `IT-022-SC-11`, `IT-022-SC-12`, `IT-022-SC-13`, `IT-022-SC-15` | `FR-350-AC-5`, `FR-350-AC-6`, `FR-350-AC-10` |

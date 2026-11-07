@@ -235,6 +235,72 @@ identity and clock revision.
     supplied one with unchanged owner usage; no bridge operation has a call
     path to `evaluate_v2`, `quire_mltl::report::evaluate` or
     `quire_mltl::report::read`.
+16. IT-022-SC-16 (FR-350-AC-2, AC-6, AC-9): For each case below, supply one
+    input exhibiting only that failure and require exactly the stated code
+    and premise (NP = `tl-projection-native-premise`, INC =
+    `tl-projection-incomplete`) with no TL artifact:
+    - Admission (step 1): subject of another admission, classification of
+      another admission, reclassification mismatch: `tl-projection-binding`;
+      `Unsupported` classification: `tl-projection-unsupported`.
+    - Occurrence (step 2): `arena_of` failure, request occurrence key unequal
+      to the occurrence, absent key with zero or several occurrences: NP
+      `occurrence`; control not among the requirements: NP `control`; absent
+      `name_of(occurrence)`: NP `subject-name`.
+    - Binding and cover (step 3): `TraceBinding::authenticate` failure:
+      `tl-projection-native-clock`; cover other than `Exact`: NP
+      `clock-cover`.
+    - Correspondence reference (step 4): wrong identity, wrong authority
+      identity: NP `correspondence-reference`.
+    - Anchor, instance and captures (step 5): absent `request.anchor`: INC
+      `anchor`; `request.anchor` unequal to the instance anchor, empty capture
+      instance: NP `anchor`; trigger evidence not `Admitted`, absent trigger:
+      INC `instance`; activation contradiction: NP `activation`; retained
+      `Missing` fault: INC `activation`; retained `Refused` fault: NP
+      `activation`; retained capture count unequal to the declared captures:
+      INC `capture`; retained capture with another name, retained capture at
+      another anchor: NP `capture`; no matching origin or guarded delivery:
+      INC `instance`; delivery anchor unequal to the instance anchor: NP
+      `anchor`; delivered capture count mismatch, `Missing`, `Null` and
+      `Stale` captures: INC `capture`; `WrongType` capture, capture value at
+      another anchor: NP `capture`; eviction of a selected capture: INC
+      `capture`; eviction of a valuation of the selected instance, eviction
+      of an unattributed valuation: INC `complete-input`.
+    - Observation (step 6): observation reference or revision unequal to the
+      bundle's: NP `observation-revision`; two bundle records with one
+      observation identity: NP `observation`; no record for a position's
+      observation identity: INC `observation`; record of another clock
+      identity, record of another clock revision, stamp above the
+      completeness `through`: NP `position`; owner anchor of the wrong form
+      (event-position sequence authority or position mismatch, fixed-sample
+      index mismatch, nanosecond epoch or period mismatch): NP `clock`; epoch
+      or period rational with denominator other than 1: NP
+      `clock-representation`; non-nanosecond unit for a future target: NP
+      `clock-representation`; non-nanosecond unit for a past target:
+      `tl-projection-owner`; `request.anchor` matching no position: INC
+      `anchor`; matching several positions: NP `anchor`.
+    - Positions (step 7): timestamped range: NP `clock`; range bound that is
+      not a decimal `u64`: NP `clock-representation`; stamp outside
+      `[start, end)`, repeated stamp: NP `position`; range length unequal to
+      the position count, gap in ascending stamps: INC `position`; past
+      target with range start other than 0, `authoritative_origin` other than
+      `Some(true)`: INC `history`.
+    - Progress, closure and completeness (step 8): absent decision closure:
+      INC `complete-input`; differing decision closure: NP `decision-closure`;
+      surrounding closure unequal to the supplied closure, unequal to the
+      QObs view: NP `surrounding-closure`; absent progress, differing
+      progress, unparsable watermark, timestamped boundary: NP `progress`;
+      absent or `Incomplete` request completeness, QObs completeness
+      `Incomplete`: INC `complete-input`; QObs completeness `Contradicted`: NP
+      `completeness`.
+    - Valuations (step 9): each of the six `ValuationCause` values:
+      `tl-projection-valuation` with that cause and row index; disagreeing
+      rows, missing row: INC `valuation{position, operand}`.
+    - Construction: timed interval, integer interval without upper bound,
+      bound above `u32::MAX`: NP `interval`; non-`holds` atom and formula
+      constructor refusal: `tl-projection-formula`; owner producer or reader
+      refusal: `tl-projection-owner`; zero or several matching source-map
+      entries: NP `source`; an IR value with a non-integer number:
+      `tl-projection-encoding`.
 
 ## Expected Results
 

@@ -48,6 +48,12 @@ scope:
 | --- | --- | --- | --- |
 | FND-005 | low | TC-115 says tests carry FR-350 criterion trace tags, departing from this repo's IT-0xx-SC-NN tag convention (tests/temporal_formula.rs); the SC-to-test link then rests on TC prose only | spec/test-cases/TC-115-native-temporal-projection.md:28-29 |
 
+## New findings (disposition pass 4)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-006 | medium | FR-350-AC-6 (e0477e6) requires every binding-step failure to return its assigned code and premise, but SC-02, SC-07 and SC-08 enumerate only some; unlisted are subject-name, rational epoch/period and non-u64 range bound (clock-representation), out-of-range, repeated and above-completeness stamps (position), request.anchor matching no or several positions (anchor), owner anchor of the wrong form (clock), valuation eviction (complete-input), capture-count and delivery-anchor mismatches, surrounding closure unequal to the supplied closure, absent progress, unparsable watermark and timestamped boundary (progress), timed interval and several source entries | spec/integration/IT-022-native-temporal-projection.md:94-158 |
+
 ## Dispositions
 
 Round 1, verified at be2d39d against IT-022, TC-115 and FR-350 in quire-contract-ir#944 (40ac6f9).
@@ -65,3 +71,9 @@ Round 2, verified at 279faba.
 | FND | outcome | reason |
 | --- | --- | --- |
 | FND-005 | fixed | TC-115 table maps each test target to its IT-022-SC and FR-350 trace tags in #[trace(...)] |
+
+Round 4, verified at 880a385 against FR-350 in quire-contract-ir#944 (e0477e6).
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-006 | still-open | new this round; list every FR-350 binding-step failure in SC-02, SC-07 and SC-08, or state that each step failure is tested and name the omitted ones |
