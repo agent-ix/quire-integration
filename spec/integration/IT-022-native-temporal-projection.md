@@ -246,3 +246,15 @@ acceptance. Tests use real evaluated and precharged-Meter native reports sharing
 one result identity to prove complete-prior substitution fails both validation
 and strict reading, together with wrong-prior join/reader contexts, exact and
 one-short native owner limits and preservation of an already charged IR budget.
+
+Native binding/source/observation/support admission always runs through the
+actual strict owner reader before correction classification. Only its specific
+`InvalidPredecessor` result becomes correction conflict; a foreign corrected
+report cannot hide its earlier `BindingMismatch` behind a missing or different
+prior join. Successful full native admission is followed by the public bounded
+predecessor validator for its original usage receipt. The unavailable full TL
+predecessor authority stops potential corrected agreement only after independent
+decision predicates are classified; it cannot suppress an already established
+refused, failed, unavailable, unsupported, incomplete or conflicting decision.
+Genuine foreign corrected native and TL reports exercise both supplied-prior
+and missing-prior contexts, retaining refusal priority and no Boolean.

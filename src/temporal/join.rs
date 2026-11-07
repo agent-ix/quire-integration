@@ -479,23 +479,8 @@ fn build<'a>(
     let prior_native = previous
         .filter(|join| join.native_admitted())
         .and_then(ValidatedTlJoin::native);
-    if let Some(current) = native.filter(|report| report.predecessor().is_some()) {
-        if let Some(prior) = prior_native {
-            match current.validate_predecessor(prior, native_limits) {
-                Ok(usage) => budget.native_predecessor_usage = Some(usage),
-                Err(error @ ReportRefusal::InvalidPredecessor) => {
-                    predecessor_conflict = true;
-                    refusals.native_predecessor = Some(error);
-                }
-                Err(error) => return Err(TlJoinError::NativeReport(error)),
-            }
-        } else {
-            predecessor_conflict = true;
-        }
-    }
     let read_native = match native_bytes.as_deref() {
         None => None,
-        Some(_) if predecessor_conflict => None,
         Some(bytes) => {
             let read = quire_spec_language::temporal::CheckedSubject::new(
                 projection.package(),
@@ -513,7 +498,29 @@ fn build<'a>(
                 Report::from_owner_bytes(bytes, &subject, input.observation, native_budget)
             });
             match read {
-                Ok(result) => Some(result),
+                Ok(result) => {
+                    let mut full_prior_admitted = true;
+                    if let Some(prior) = prior_native.filter(|_| result.predecessor().is_some()) {
+                        match result.validate_predecessor(prior, native_limits) {
+                            Ok(usage) => budget.native_predecessor_usage = Some(usage),
+                            Err(error @ ReportRefusal::InvalidPredecessor) => {
+                                predecessor_conflict = true;
+                                refusals.native_predecessor = Some(error);
+                                full_prior_admitted = false;
+                            }
+                            Err(error) => return Err(TlJoinError::NativeReport(error)),
+                        }
+                    }
+                    full_prior_admitted.then_some(result)
+                }
+                Err(error @ ReportRefusal::InvalidPredecessor) => {
+                    predecessor_conflict = true;
+                    refusals.native_predecessor = Some(error);
+                    None
+                }
+                Err(error @ ReportRefusal::PredecessorLimit { .. }) => {
+                    return Err(TlJoinError::NativeReport(error))
+                }
                 Err(error) => {
                     refusals.native = Some(error);
                     None

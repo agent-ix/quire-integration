@@ -89,6 +89,7 @@ pub(super) fn rows(
     let mut equal_final = None;
     let mut equal_pending = false;
     let mut mismatch = predecessor_conflict;
+    let mut tl_predecessor_authority_pending = false;
     if let (Some(native), Some(mapped)) = (native, mapped) {
         let result = mapped.source();
         let original_native = native.predecessor().is_none();
@@ -99,12 +100,9 @@ pub(super) fn rows(
             if previous.is_none() {
                 mismatch = true;
             } else {
-                // The current owner exposes only a predecessor identity. A label
-                // cannot authenticate the complete prior result value.
-                return Err(TlJoinError::PredecessorAuthority {
-                    native_encoding_usage: budget.native_encoding_usage,
-                    native_predecessor_usage: budget.native_predecessor_usage,
-                });
+                // Successful corrected agreement still needs full TL authority,
+                // but it cannot mask an independently established decision row.
+                tl_predecessor_authority_pending = true;
             }
         }
         let support_equal = support_equal(projection, native, result.decision_support(), budget)?;
@@ -157,6 +155,12 @@ pub(super) fn rows(
     if equal_pending {
         budget.cause()?;
         causes.push(Cause::ResultPending);
+    }
+    if tl_predecessor_authority_pending && decision.is_none() {
+        return Err(TlJoinError::PredecessorAuthority {
+            native_encoding_usage: budget.native_encoding_usage,
+            native_predecessor_usage: budget.native_predecessor_usage,
+        });
     }
     let decision = decision
         .or_else(|| equal_final.map(|_| Decision::EqualFinal))
