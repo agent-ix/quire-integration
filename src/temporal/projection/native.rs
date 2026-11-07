@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use qsl_eval::temporal::{
     evidence::{AuthenticatedBinding, CaptureFact, ClauseSelection, Evicted, TriggerEvidence},
-    ledger::{ProgressClosure, ProgressCompleteness},
+    ProgressClosure, ProgressCompleteness,
 };
 use qsl_package::checked_views::{
     Activation, Classification, Closure, Support, Target, TemporalSubjectView,

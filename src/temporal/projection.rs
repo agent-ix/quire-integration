@@ -224,6 +224,8 @@ pub enum TlProjectionPremise {
     Position,
     /// Actual source clock and selected observation clock differ.
     Clock,
+    /// Original interval cannot be represented in the selected formula domain.
+    Interval,
     /// Owner number domain cannot encode the selected exact clock.
     ClockRepresentation,
     /// Independent decision closure differs.
@@ -314,10 +316,10 @@ pub enum TlProjectionError {
     },
     /// Preserve original syntax-owner refusals without a copied wire record.
     #[error("TL proposition map refused: {0}")]
-    PropositionMap(#[source] tl_syntax::PropositionMapError),
+    PropositionMap(tl_syntax::PropositionMapError),
     /// Original strict syntax reader failure.
     #[error("TL syntax reader refused: {0}")]
-    SyntaxRead(#[source] tl_syntax::StrictDocumentReadError),
+    SyntaxRead(tl_syntax::StrictDocumentReadError),
     /// Original owner canonical encoding failure.
     #[error("TL syntax encoding refused: {0}")]
     SyntaxEncoding(#[source] serde_json::Error),

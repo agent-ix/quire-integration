@@ -80,7 +80,18 @@ pub(super) fn encode(
     let mut intervals = Vec::with_capacity(subject.formula_graph().len());
     for node in subject.formula_graph() {
         budget.work()?;
-        intervals.push((node.node, node.operation, &node.interval));
+        let interval = match &node.interval {
+            Some(quire_contract_ir::CheckedOperationInterval::Integer { lower, upper }) => {
+                Some((lower.to_string(), upper.as_ref().map(ToString::to_string)))
+            }
+            None => None,
+            Some(quire_contract_ir::CheckedOperationInterval::Timed { .. }) => {
+                return Err(TlProjectionError::NativePremise(
+                    super::TlProjectionPremise::Interval,
+                ))
+            }
+        };
+        intervals.push((node.node, node.operation, interval));
     }
     let propositions = built
         .propositions
@@ -128,14 +139,14 @@ pub(super) fn encode(
     let decision_closed = native
         .request
         .decision_closure
-        .map(|value| value == qsl_eval::temporal::ledger::ProgressClosure::Closed);
+        .map(|value| value == qsl_eval::temporal::ProgressClosure::Closed);
     let surrounding_closed = native
         .request
         .surrounding_closure
-        .map(|value| value == qsl_eval::temporal::ledger::ProgressClosure::Closed);
+        .map(|value| value == qsl_eval::temporal::ProgressClosure::Closed);
     let complete_through = match completeness.state {
-        qsl_eval::temporal::ledger::ProgressCompleteness::Complete { through } => Some(through),
-        qsl_eval::temporal::ledger::ProgressCompleteness::Incomplete => None,
+        qsl_eval::temporal::ProgressCompleteness::Complete { through } => Some(through),
+        qsl_eval::temporal::ProgressCompleteness::Incomplete => None,
     };
     let observations = selection.observations;
     let record = Record {

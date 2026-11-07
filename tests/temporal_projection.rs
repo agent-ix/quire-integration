@@ -10,8 +10,7 @@ use qsl_eval::temporal::{
         ExecutionOrigin, Payload, Relation, SemanticTriggerIdentity, TemporalEvidenceLimits,
         TraceBinding, TriggerEvidence,
     },
-    finite_window::ClockCover,
-    ledger::{ProgressClosure, ProgressCompleteness},
+    ClockCover, ProgressClosure, ProgressCompleteness,
 };
 use qsl_package::checked_views::{
     mapping_support, temporal_subject, Classification, Closure, TemporalSubjectView,
