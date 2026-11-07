@@ -23,6 +23,14 @@ relationships:
     type: depends_on
   - target: ix://agent-ix/quire-mltl/FR-003
     type: depends_on
+  - target: ix://agent-ix/quire-mltl/FR-001-AC-11
+    type: depends_on
+  - target: ix://agent-ix/quire-mltl/FR-001-AC-12
+    type: depends_on
+  - target: ix://agent-ix/quire-contract-ir/FR-350-AC-9
+    type: depends_on
+  - target: ix://agent-ix/quire-contract-ir/FR-350-AC-11
+    type: depends_on
 ---
 # IT-022: Project, record and join native temporal results through genuine TL owners
 
@@ -64,7 +72,8 @@ values.
 
 ## Inputs
 
-The operations and their inputs are exactly FR-350's: `read_tl_bridge_definition`,
+The operations and their inputs are exactly those of Contract IR FR-350's
+Boundary and interface section: `read_tl_bridge_definition`,
 `project_tl` with `NativeProjectionInput { request, valuations, occurrence,
 instance, observation }` and `TlProjectionSelection { bridge_definition,
 observation, clock, observations, owner_limits, native_report_limits }`,
@@ -88,10 +97,11 @@ identity and clock revision.
    subject projects and a two-occurrence subject refuses. Supply a
    `ClauseOccurrence` with a wrong node, role and ordinal, a request occurrence
    key unequal to it, and a control outside the subject's requirements; each
-   refuses with `tl-projection-native-premise` premise `occurrence`. Supply a
-   request trigger with no admitted delivery or origin and an instance anchor
-   unequal to `request.anchor`; require `incomplete` premise `instance` and
-   premise `anchor`. Use an opaque `request.anchor` spelled like another
+   refuses with `tl-projection-native-premise` premise `occurrence`. A
+   request trigger with no admitted delivery or origin returns
+   `tl-projection-incomplete` with missing premise `instance`. An instance
+   anchor unequal to `request.anchor`, and an empty capture instance, each
+   refuse with `tl-projection-native-premise` premise `anchor`. Use an opaque `request.anchor` spelled like another
    position's stamp and require the numeric anchor of the position whose
    observation identity equals it. Absent, duplicate and foreign observation
    identities, and a position record with another clock identity or clock
@@ -162,7 +172,9 @@ identity and clock revision.
     execution with an evaluated Boolean report reaches R2, not R7. Compute the
     expected join record by FR-350's rules and require byte equality;
     `read_tl_join` with any other expected input refuses.
-13. IT-022-SC-13 (FR-350-AC-5, AC-10): Advance a real QObs progress watermark
+13. IT-022-SC-13 (FR-350-AC-5, AC-10): This scenario requires the owner
+    operation quire-mltl `ValidatedTemporalResult::validate_supplied_predecessor`
+    with its public `direct_predecessor_bytes` (quire-mltl FR-001). Advance a real QObs progress watermark
     from 1 to 2 over one carrier to create genuine native and TL corrections;
     first show a relation-only change is rejected by the native owner. With
     `previous` holding both direct predecessors, the correction reaches R7.

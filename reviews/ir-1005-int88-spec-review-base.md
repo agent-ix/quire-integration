@@ -41,3 +41,21 @@ scope:
 - {id: IT-022, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Sections: Objective, Target Integration, Preconditions, Inputs, Expected Results, Correspondence and strict reading, Remaining owner prerequisites, Result joining and strict join reading, Original bridge definition admission, Retained activation and exact source occurrence, Native full-predecessor admission"}
 - {id: FR-350, path: "quire-contract-ir spec/temporal/functional/FR-350-native-temporal-tl-correspondence.md", role: context_only, excerpt: "project_tl/read_tl_projection/join_tl/read_tl_join signatures, seven TlLimits, AC-1..AC-9"}
 ```
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-005 | low | TC-115 says tests carry FR-350 criterion trace tags, departing from this repo's IT-0xx-SC-NN tag convention (tests/temporal_formula.rs); the SC-to-test link then rests on TC prose only | spec/test-cases/TC-115-native-temporal-projection.md:28-29 |
+
+## Dispositions
+
+Round 1, verified at be2d39d against IT-022, TC-115 and FR-350 in quire-contract-ir#944 (40ac6f9).
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | SC-08 to SC-15 now carry activation, bridge definition, correspondence, malformed bytes, join rows, corrections, limits and no-evaluator obligations |
+| FND-002 | fixed | SC-12 reaches R1 to R8 and row pairs, SC-13 reaches R7 for a correction, SC-14 covers max_support and max_causes; open wording removed |
+| FND-003 | fixed | TC-115 verifies IT-022 and names its test targets |
+| FND-004 | fixed | SC-14 names all seven settings, defaults, limit-reached{limit, value, setting} and table-order tie-break |
+| FND-005 | still-open | new this round; not yet addressed |

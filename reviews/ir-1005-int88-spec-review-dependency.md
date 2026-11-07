@@ -40,3 +40,20 @@ scope:
 - {id: IT-022, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Sections: Objective, Target Integration, Preconditions, Inputs, Expected Results, Correspondence and strict reading, Remaining owner prerequisites, Result joining and strict join reading, Original bridge definition admission, Retained activation and exact source occurrence, Native full-predecessor admission"}
 - {id: FR-350, path: "quire-contract-ir spec/temporal/functional/FR-350-native-temporal-tl-correspondence.md", role: context_only, excerpt: "project_tl/read_tl_projection/join_tl/read_tl_join signatures, seven TlLimits, AC-1..AC-9"}
 ```
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-004 | medium | IT-022 states its inputs are exactly FR-350's NativeProjectionInput and TlProjectionSelection and SC-13 calls validate_supplied_predecessor; these exist only in unmerged quire-contract-ir#944 and quire-mltl#18, so merging #88 first leaves IT-022 contradicting the FR-350 it verifies and naming an absent owner operation | spec/integration/IT-022-native-temporal-projection.md:65-75,165-178 |
+
+## Dispositions
+
+Round 1, verified at be2d39d against IT-022, TC-115 and FR-350 in quire-contract-ir#944 (40ac6f9).
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Inputs name the FR-350 #944 signature; SC-02 covers wrong node/role/ordinal, request key, foreign control and instance refusals |
+| FND-002 | fixed | depends_on edges added for QSL FR-043/052/516/527, QObs FR-004 and quire-mltl FR-001/003 |
+| FND-003 | fixed | Stale owner status prose removed |
+| FND-004 | still-open | new this round; not yet addressed |

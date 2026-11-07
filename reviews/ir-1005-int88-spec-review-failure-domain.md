@@ -42,3 +42,22 @@ scope:
 - {id: IT-022, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Sections: Objective, Target Integration, Preconditions, Inputs, Expected Results, Correspondence and strict reading, Remaining owner prerequisites, Result joining and strict join reading, Original bridge definition admission, Retained activation and exact source occurrence, Native full-predecessor admission"}
 - {id: FR-350, path: "quire-contract-ir spec/temporal/functional/FR-350-native-temporal-tl-correspondence.md", role: context_only, excerpt: "project_tl/read_tl_projection/join_tl/read_tl_join signatures, seven TlLimits, AC-1..AC-9"}
 ```
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-006 | medium | SC-02 requires incomplete for an instance anchor unequal to request.anchor, but FR-350-AC-9 in quire-contract-ir#944 says a mismatched instance refuses with its typed error; a coder following one fails the other | spec/integration/IT-022-native-temporal-projection.md:92-94 |
+
+## Dispositions
+
+Round 1, verified at be2d39d against IT-022, TC-115 and FR-350 in quire-contract-ir#944 (40ac6f9).
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Inputs take valuations only from ValuationEvidence; SC-03 proves contradicting request maps leave the projection unchanged |
+| FND-002 | fixed | SC-03 covers Missing, Undefined and aggregate request maps as ignored; SC-05 refuses aggregate and non-holds leaves with tl-projection-formula |
+| FND-003 | fixed | SC-03 defines a duplicate as two rows with equal (position, operand), with equal and opposite values |
+| FND-004 | fixed | SC-06 limits the owner refusal to the refusal clause of FR-350-AC-4 and requires passing positive cases; SC-13 requires a correction to reach R7 |
+| FND-005 | fixed | Clock identified by QObs clock identity and clock revision (Inputs, SC-02) |
+| FND-006 | still-open | new this round; not yet addressed |

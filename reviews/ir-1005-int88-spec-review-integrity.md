@@ -39,3 +39,12 @@ scope:
 - {id: IT-022, path: spec/integration/IT-022-native-temporal-projection.md, role: examined, excerpt: "Sections: Objective, Target Integration, Preconditions, Inputs, Expected Results, Correspondence and strict reading, Remaining owner prerequisites, Result joining and strict join reading, Original bridge definition admission, Retained activation and exact source occurrence, Native full-predecessor admission"}
 - {id: FR-350, path: "quire-contract-ir spec/temporal/functional/FR-350-native-temporal-tl-correspondence.md", role: context_only, excerpt: "project_tl/read_tl_projection/join_tl/read_tl_join signatures, seven TlLimits, AC-1..AC-9"}
 ```
+
+## Dispositions
+
+Round 1, verified at be2d39d against IT-022 and TC-115.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Objective now qualifies the complete bridge and every scenario is required; Expected Results matches |
+| FND-002 | fixed | Single Test Procedure and Expected Results; appended sections, stray blank lines and long lines removed |
