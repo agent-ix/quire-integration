@@ -47,3 +47,11 @@ Examined:
   pair, which it does not contradict.
 
 Semantic review: done inline in the code-review SR (SR-2026110720500001).
+
+## Dispositions
+
+Round 1, verified at #90 head ea142805937d0ebf3951fb3065ef3e0a40de5a00.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | The temporal_formula test is now tagged #[trace("IT-020-SC-04")] only. The IT-022-SC-05 and FR-350-AC-3 tags moved to an_aggregate_atom_is_reported_as_tl_projection_formula in temporal_projection, the target TC-115 assigns them to |

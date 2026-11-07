@@ -80,3 +80,15 @@ IR-842/IT-019 tags): see Test results below.
 ## Test results
 
 cargo test --locked, own CARGO_TARGET_DIR, at 823e1817: exit 0 across 27 targets, 107 passed and 0 failed. The TC-115 targets plus the temporal_formula and temporal_observation_revision regressions: 75 passed (projection 22, binding_axes 12, join 18, limits 5, bridge_definition 1, mapping_binding 1, formula 10, observation_revision 6). The 19 IR-842 targets: 32 passed (tc187_ir842_conversions 9/9, tc187_vector_dispatch 1/1, and all generated_oracle_* targets). The build dir and the throwaway worktree were deleted afterwards.
+
+## Dispositions
+
+Round 1, verified at #90 fix-round head ea142805937d0ebf3951fb3065ef3e0a40de5a00. Touched targets were run once: temporal_projection 23/23, temporal_formula 10/10, temporal_join 18/18 and tc187_vector_dispatch 1/1.
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | reviews/ir-1005-code-review.md and reviews/ir-1005-gap-analysis.md are byte-identical to main 61e2cd8 (SR-2026110414560009 and 0010 restored). #86's SRs are now reviews/ir-1005-pr86-code-review.md and ir-1005-pr86-gap-analysis.md |
+| FND-002 | fixed | Both ir-1005-pr86-* files carry a Dispositions section with an outcome for every finding, matching IR-1005 comments c7ed96a8 and 08ea6832 |
+| FND-003 | fixed | tests/temporal_projection.rs an_aggregate_atom_is_reported_as_tl_projection_formula drives the aggregate subject through project_tl (via run) and asserts TlProjectionError::Formula and TlProjectionCode::Formula. The hand-built wrap is removed from temporal_formula |
+| FND-004 | fixed | The R1+R6 test now asserts joined.native_admitted() and that owner_refusals().native() and mapped() are none, so the refusal comes from the TL request mismatch |
+| FND-005 | fixed | planned_remainder(id) returns a RowDispatch::Planned entry. Every executed row is queried, the executed rows with a remainder must be exactly [U21, U25], and U25's remainder must be Planned with tickets ["IR-1403"] |

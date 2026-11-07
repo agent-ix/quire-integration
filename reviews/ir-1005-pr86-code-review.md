@@ -74,3 +74,4 @@ Round 1, verified against the code at quire-integration#86 final head 92f80d8a a
 | FND-008 | fixed | The NativeActivation variant is removed; an activation contradiction returns NativePremise(Activation) |
 | FND-009 | fixed | native_state matches every ReportOutcome variant explicitly (src/temporal/join.rs native_state), with no wildcard arm |
 | FND-010 | fixed | tests/temporal_projection/observation.rs is deleted, and tests/support/observation_revision/mod.rs is parameterized instead (cb94167) |
+| FND-002 | fixed | Round 2, at #90 head ea142805: tests/temporal_projection.rs an_aggregate_atom_is_reported_as_tl_projection_formula projects an aggregate-atom subject through project_tl and asserts TlProjectionError::Formula with code TlProjectionCode::Formula (temporal_projection 23/23 pass). The remaining premises were fixed in round 1 |
