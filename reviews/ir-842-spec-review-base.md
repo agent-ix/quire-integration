@@ -42,3 +42,14 @@ that.
 | FND-004 | low | The TC-106 Planned rows for U25's first step and U01 name no owner ticket ("remains Planned", "Planned: CG's operand check ..."). IT-019 names IR-1403 and IR-1401 | spec/test-cases/TC-106-quantity-static-admission.md:133, 142 |
 | FND-005 | low | The Enum Planned row names its seam (QSpec acme/shapes fixture versus QSL intake) but no ticket. SC-04 says "ticketless Planned entries fail" | spec/integration/IT-019-generated-oracle-qsl-agreement.md:266 |
 | FND-006 | low | TC-102 Expected Results says "All 110 selected cases execute at work 0, 1 and 1024: 330 operation observations". That matches no cohort in the procedure: Boolean 25 + Integer 35 + Text 72 is already 132, Decimal runs at five work levels, and IEEE is 1584 observations | spec/test-cases/TC-102-generated-scalar-operation-agreement.md:97-98 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Rows 238 and 253 are removed; the single U21/U27 row reads Planned (QSL, unreachable) as a typed control, which matches the ruling |
+| FND-002 | fixed | The catch-all row keeps only the Text boundaries and points each other entry to its own owner (IR-1401/1402/1403/1391, QSL); TC-102 matches |
+| FND-003 | fixed | The U25, U22 and U02 rows in IT-019 and TC-106 now state that every operation runs as generated code; IT-019 adds the rule that only observations where every operation ran generated count |
+| FND-004 | fixed | TC-106 U25 names IR-1403 and U01 names IR-1401 |
+| FND-005 | still-open | The Enum row now names a real measured seam: CG derivation returns BlockedOnUpstream{node_tag: model} on variant_type, executed by tests/generated_oracle_enum_equality.rs. But it still says "ticket to be assigned by the IR code lead", and SC-04 rejects ticketless Planned entries. The lead decision names IR-1401; cite it in the row (IT-019:264) |
+| FND-006 | fixed | TC-102 states the per-cohort counts: 483, 195 and 1584 observations |

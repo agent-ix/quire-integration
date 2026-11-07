@@ -164,6 +164,28 @@ fn dispatch(id: &str) -> Option<RowDispatch> {
     }
 }
 
+/// Planned remainders of executed rows: the owner ticket and the exact missing path.
+const PLANNED_REMAINDERS: &[(&str, &str, &str)] = &[
+    (
+        "U25",
+        "IR-1403",
+        "nominal-to-compound first step has no source form: the compound unit target grammar",
+    ),
+    (
+        "U21",
+        "QSL",
+        "zero-to-negative power is refused as Unproved(Nonzero) before emission, so no claim exists",
+    ),
+];
+
+fn planned_remainder_owner(id: &str) -> Option<&'static str> {
+    match id {
+        "U25" => Some("IR-1403"),
+        "U21" => Some("QSL"),
+        _ => None,
+    }
+}
+
 fn assemble_refusal(declarations: &str) -> (String, AssemblyRefusal) {
     let source = format!(
         "language \"ix:native\" edition \"1-draft\";\n\
@@ -446,14 +468,16 @@ fn public_tc187_ids_fail_closed_and_real_admission_controls_refuse() {
             "U08", "U09", "U09b", "U10", "U33", "U36", "U37",
         ])
     );
-    // Rows executed above that keep a Planned remainder with its own owner: U25's nominal-to-compound
-    // first step (IR-1403, compound unit grammar) and U21's zero-to-negative power, which QSL
-    // refuses as Unproved(Nonzero) before emission.
-    for (id, owner) in [("U25", "IR-1403"), ("U21", "QSL")] {
-        assert!(
-            observed.contains(id),
-            "{id} is executed and keeps a Planned remainder on {owner}"
+    // Rows executed above that keep a Planned remainder with its own owner.
+    for (id, owner, missing) in PLANNED_REMAINDERS {
+        assert!(observed.contains(id), "{id} is executed");
+        assert_eq!(
+            planned_remainder_owner(id),
+            Some(*owner),
+            "{id} remainder owner"
         );
+        assert!(!missing.is_empty(), "{id} remainder reason");
+        planned += 1;
     }
     assert!(planned > 0, "SC-04 is not yet complete");
     assert!(

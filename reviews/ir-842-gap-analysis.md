@@ -47,3 +47,10 @@ without a generated execution, or without the grid AC-6 names.
 | --- | --- | --- | --- |
 | FND-001 | medium | FR-014-AC-6 requires "the generated grid of quantity arithmetic, comparisons and powers over `m`, `cm`, `in`, `rev`, `u2` and `s`". The grid tests use m, cm, inch, kg and s for arithmetic, m, cm and kg for powers, and m, cm, inch, s, kg, K, degC, degF, J, m2 and cm2 for comparisons. `rev` and `u2` never appear, `s` and `inch` get no power, and there is no affine refusal row in the grid. IT-019 nevertheless marks "FR-014 Quantity ... over the declared unit grid" Passed | tests/tc187_ir842_conversions.rs:217-306; spec/integration/IT-019-generated-oracle-qsl-agreement.md:265 |
 | FND-002 | medium | The U02 product normalization `(L*T)` is never a generated cell. In `(1 m * 1 s) / 1 s` only the Divide is generated; the product is computed by the replayed QSV owner `evaluate_quantity_unit(Multiply)`. AC-6 asks for normalization "through a product and a quotient", and IT-019 credits U02 as Passed (21 observations with U22) | tests/tc187_ir842_conversions.rs:201-210; tests/support/tc187_p9_source.rs:732-744; spec/integration/IT-019-generated-oracle-qsl-agreement.md:256 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | The arithmetic grid adds rev and u2 (Add/Subtract) and powers over m, cm, inch, s and kg. The comparison grid, split in two for the reader limit, adds rev and u2. IT-019 records offset-unit arithmetic as an ill-typed control; tc187_ir842_conversions passes |
+| FND-002 | fixed | The product inside (1 m * 1 s) / 1 s now gets its own CG Multiply claim and runs as a generated symbol before the generated Divide; QSL's value 1 m is asserted |

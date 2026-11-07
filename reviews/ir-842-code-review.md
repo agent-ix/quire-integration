@@ -65,3 +65,19 @@ fails at head under the PR's own cohort bump.
 | FND-003 | medium | The vector dispatcher contradicts the IT-019 owner rows and the planner rulings. U01 is Planned under ["IR-842"], not IR-1401. U13/U21 are still `QslValue` with "IR-842 ... generated quantity power ... missing", although U13 huge and U21 0^0 now execute. U27 keeps remaining_owner IR-1348. U28 says "IR-1348 CG compound-result generation" missing, while IT-019 records three passed native observations. U25 is `GeneratedAgreement` with no Planned entry for its first step (IR-1403). IT-019-SC-04 needs one exact classification and owner per selected operation, and the machine-checked dispatcher is the ledger that enforces it | tests/tc187_vector_dispatch.rs:108, 110-118, 144-148, 165-168, 353-360, 440-444, 455-458 |
 | FND-004 | medium | The new quantity generated cells assert only mutual QSL/native agreement. `source::bind` checks that the vector text contains "5463/20", "1 m", "40000", "1 J" and so on, but it never compares the observed outcome with them. Both sides call the same QSV owner conversion and arithmetic, so a shared owner defect (for example a wrong affine offset) passes. IT-019 step 4 requires the QSpec-stated expected result as an additional oracle. IT-019 states values such as "5463/20 K twice, 7 m" as if they were asserted | tests/support/tc187_p9_source.rs:22-32, 506-509; tests/tc187_ir842_conversions.rs:72-84, 93-120, 153-176, 179-197 |
 | FND-005 | low | New deprecated `/// Trace:` doc lines were added alongside `#[trace]` | tests/generated_oracle_integer_operations.rs:164; tests/generated_oracle_text_comparison.rs:134; tests/tc187_u13_u21_power.rs:262 |
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-006 | low | The dispatcher's new record of the U25 first-step (IR-1403) and U21 zero-to-negative (QSL) Planned remainders is a loop that only asserts `observed.contains(id)`. The owner string goes only into the panic message and is never compared, so the check passes whatever the owner or remainder is. U25 step 1 still has no `Planned` dispatch entry with a ticket | tests/tc187_vector_dispatch.rs:449-457 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | b33d374: computed_operations derives a CG claim for every computed operand node, and prepare_operand calls each one's generated symbol on the case meter; the owner-API replay is gone. U25 at L(1,0,0,1,3,1) and work 0/1/2 now stop inside generated code. tc187_ir842_conversions passes 9/9 at b33d374 |
+| FND-002 | fixed | DECLARATIONS = [Gadget, Rock, Widget] per QSL FR-094; qsl_model_owner_admission passes 6/6 at b33d374 |
+| FND-003 | fixed | QslValue variant removed; U13/U21/U28 are GeneratedAgreement, U01 is Planned under IR-1401, U27 is a QSL typed control. The U25 first-step residue is recorded as FND-006 |
+| FND-004 | fixed | assert_value requires QSL's completed magnitude and unit at a generous allowance for U04, U09b, U10, U22, U25 and U02 before generation. It caught the 4 m ^ 2 source (16 m2), which was corrected to 2 m ^ 2 |
+| FND-005 | fixed | the three new /// Trace: lines are removed; the remaining ones at tc187_u13_u21_power.rs:133/202 predate this PR |
