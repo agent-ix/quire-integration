@@ -26,6 +26,7 @@ pub(super) struct Compared {
     pub value: Option<bool>,
 }
 
+#[allow(clippy::too_many_arguments)] // Independent original owner inputs and their admission outcomes.
 pub(super) fn rows(
     projection: &ValidatedTlProjection<'_>,
     native: Option<&Report>,

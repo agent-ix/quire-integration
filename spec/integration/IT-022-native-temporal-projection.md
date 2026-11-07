@@ -226,8 +226,9 @@ usage receipt.
 The join writes native values only through `Report::to_owner_bytes_bounded`.
 For a correction it obtains the actual prior `Report` from the supplied previous
 join only when that join's native source was strictly admitted in its exact
-context. It calls `validate_predecessor` on that full owner value and supplies it
-to `CheckedSubject::with_predecessor` before strict native reading. Embedded
+context. It supplies that actual full owner value to `CheckedSubject::with_predecessor`
+before strict native reading. After that succeeds, it calls the public
+`validate_predecessor` operation for its bounded owner usage receipt. Embedded
 predecessor bytes are retained by the owner and may be inspected, but the bridge
 never reads them a second time to manufacture the expected prior authority.
 
