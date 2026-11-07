@@ -77,3 +77,9 @@ Round 4, verified at 880a385 against FR-350 in quire-contract-ir#944 (e0477e6).
 | FND | outcome | reason |
 | --- | --- | --- |
 | FND-006 | still-open | new this round; list every FR-350 binding-step failure in SC-02, SC-07 and SC-08, or state that each step failure is tested and name the omitted ones |
+
+Round 5, verified at 4213531 against FR-350 in quire-contract-ir#944 (e0477e6).
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-006 | fixed | SC-16 lists every FR-350 binding-step and construction failure with its exact code and premise, one input each; checked both ways against steps 1 to 9 and construction, nothing missing and nothing invented; TC-115 temporal_projection carries IT-022-SC-16 |
