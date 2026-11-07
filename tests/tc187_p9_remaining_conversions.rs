@@ -29,8 +29,8 @@ const FUNCTIONS:&str="
  function decimalRounded using v(): Quantity<m,Decimal[-100,100;2,2;nearest-even]> pure { convert<Quantity<m,Decimal[-100,100;2,2;nearest-even]>>(1 inch) }
  function decimalOutside using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(3 m) }
  function hugeScale using v(): Quantity<m,Decimal[0,1;0,4294967295;exact]> pure { convert<Quantity<m,Decimal[0,1;0,4294967295;exact]>>(1 m) }
- function decimalBelow using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(0 m - 3 m) }
- function decimalLowEdge using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(0 m - 2 m) }
+ function decimalBelow using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(rational(-3,1) m) }
+ function decimalLowEdge using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(rational(-2,1) m) }
  function decimalHighEdge using v(): Quantity<m,Decimal[-2,2;0,0;exact]> pure { convert<Quantity<m,Decimal[-2,2;0,0;exact]>>(2 m) }
  function integerExact using v(): Quantity<m,Int[-2,2]> pure { convert<Quantity<m,Int[-2,2]>>(1 inch) }
  function integerRounded using v(): Quantity<m,Int[-2,2;nearest-even]> pure { convert<Quantity<m,Int[-2,2;nearest-even]>>(1 inch) }
