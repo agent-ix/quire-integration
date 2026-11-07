@@ -80,7 +80,7 @@ pub(super) fn package(declarations: &str) -> CheckedPackageV2 {
     let emitted = qsl_package::emit_checked_with_temporal_selections(
         &qsl_package::CheckedPackage::link(graph),
         &clocks,
-        qsl_package::EmitLimits::new(16 * 1024 * 1024),
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
     )
     .expect("actual native emitter");
     assert!(emitted.omitted().is_empty());

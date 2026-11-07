@@ -1643,3 +1643,49 @@ fn reachable_row_pairs_return_the_first_decision_and_both_causes() {
         );
     });
 }
+
+/// A native correction against a foreign original TL result: the TL side is refused
+/// (R1) and exactly one side is a correction (R6).
+#[trace("IT-022-SC-12", "IT-022-SC-13", "FR-350-AC-5")]
+#[test]
+fn a_native_correction_against_a_foreign_original_tl_result_is_refused_and_conflicting() {
+    with_case("holds(true)", false, |case| {
+        let original = case.project(TlLimits::default()).expect("projection");
+        let native0 = evaluate_native(&original);
+        let mapped0 = evaluate_mapped(&original);
+        let prior = join_tl(
+            &original,
+            Some(&native0),
+            Some(&mapped0),
+            None,
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .expect("original join");
+        let mut foreign = None;
+        with_case("not holds(true)", false, |other| {
+            let projection = other
+                .project(TlLimits::default())
+                .expect("other projection");
+            foreign = Some(evaluate_mapped(&projection));
+        });
+        let foreign = foreign.expect("genuine result for another request");
+        with_progress_correction(&original, &native0, |corrected, native1| {
+            let joined = join_tl(
+                corrected,
+                Some(&native1),
+                Some(&foreign),
+                Some(&prior),
+                TlLimits::default(),
+                &mut native_budget(),
+            )
+            .expect("join");
+            assert_eq!(joined.decision(), TlJoinDecision::Refused);
+            assert_eq!(
+                joined.causes(),
+                &[TlJoinCause::ResultRefused, TlJoinCause::ResultMismatch]
+            );
+            assert_eq!(joined.value(), None);
+        });
+    });
+}

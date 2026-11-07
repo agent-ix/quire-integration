@@ -33,8 +33,21 @@ fn checked_formula(
     profile: &str,
     document: &[u8],
 ) -> Result<CheckedGraph, Vec<CheckRefusal>> {
-    let source = format!(
-        r#"language "ix:native" edition "1-draft";
+    // A formula marked `@value` ranges over an integer subject, the only subject a
+    // window aggregate atom accepts.
+    let source = if let Some(body) = formula.strip_prefix("@value ") {
+        format!(
+            r#"language "ix:native" edition "1-draft";
+profile v = "quire.value.complete/v1";
+profile t = "{profile}";
+temporal Due using t over (e: Int[0, 9]) clock "events" on origin {{
+    {body}
+}}
+"#
+        )
+    } else {
+        format!(
+            r#"language "ix:native" edition "1-draft";
 profile v = "quire.model.complete/v1";
 profile t = "{profile}";
 model M = "acme/orders";
@@ -42,7 +55,8 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {{
     {formula}
 }}
 "#
-    );
+        )
+    };
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "test:temporal-binding"),
         "temporal-binding.native",
@@ -653,4 +667,29 @@ fn bounded_profiles_refuse_missing_intervals_before_any_checked_package_exists()
         };
         assert_eq!(span.end - span.start, "eventually".len());
     }
+}
+
+#[trace("IT-020-SC-04", "IT-022-SC-05", "FR-350-AC-3")]
+#[test]
+fn an_aggregate_atom_is_a_representation_refusal_that_projection_reports_as_formula() {
+    use quire_integration::temporal::{TlProjectionCode, TlProjectionError};
+    let (package, _, clause) = packages(
+        "@value capture n: Int[0, 9] = e; always[0,5] (sum of n over past[0,2] <= 15)",
+        EVENT,
+    );
+    let subject = temporal_subject(&package, &clause).expect("aggregate is a readable atom");
+    let classification = mapping_support(&subject, Closure::Complete).expect("classification");
+    let error = construct_tl_formula(
+        &package,
+        &subject,
+        &classification,
+        Closure::Complete,
+        TlFormulaLimits::default(),
+    )
+    .expect_err("an aggregate atom has no proposition");
+    assert_eq!(error.code(), TlFormulaCode::Representation);
+    assert_eq!(
+        TlProjectionError::Formula(error).code(),
+        TlProjectionCode::Formula
+    );
 }
