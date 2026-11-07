@@ -22,7 +22,8 @@ admit it with the strict IR reader, and obtain every source identity from the
 admitted package. Exercise the retained owner, exact premises, malformed closure,
 shared-DAG and compatible-entry controls specified by IT-018.
 
-For IT-018-SC-16, run the dedicated fallible-type-construction allocator target as well.
+For IT-018-SC-16, run the fallible-type-construction cases in the dedicated
+`monitor_program` test binary, which uses the owner's thread-local failing allocator.
 Compile the authored QSL fixture and strictly admit its unchanged emission before arming
 denial. Obtain every declaration, field, source location and type identity through the
 existing checked-package lookup; unavailable or refused lookup fails the test. Construct

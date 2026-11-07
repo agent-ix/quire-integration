@@ -3,19 +3,21 @@
 //! The controlled executable parts exercise construction, not temporal producer/executor qualification.
 
 use ix_trace_rs::{string_edge, trace};
+use qsv_failing_allocator::{arm, disarm, FailingAllocator};
 use quire_contract_runtime::monitor::{
     build, Buffer, BuildPlan, Entries, Expression, ExpressionId, Function, FunctionId, Layout,
     LocalId, MonitorFailureCode, Operation, Program, ProgramParts, ProgramRefusalCode, StepBudget,
     StepResource, TypeBinding,
 };
 use quire_exact::{
-    CollectionKind, CollectionType, FieldValue, Identifier, Integer, IntegerInterval, MemberId,
-    MemberOwner, NodeKey, OrderingOperator, Presence, Rational, ScalarLimits, TextProfile,
-    TextType, UnionMember, Value, ValueType,
+    CollectionKind, CollectionType, FieldValue, FloatType, Identifier, IeeeWidth, Integer,
+    IntegerInterval, MemberId, MemberOwner, NodeKey, OrderingOperator, Presence, Rational,
+    ScalarLimits, TextProfile, TextType, UnionMember, Value, ValueType,
 };
 use quire_semantic_value::{
     declaration::{
-        CompositeDeclaration, CompositeShape, EqualityOperand, EqualityOperator, FieldDeclaration,
+        CompositeDeclaration, CompositeShape, EnvironmentFailure, EqualityOperand,
+        EqualityOperator, FieldDeclaration, StorageRequest, StorageUnit, TypeCheckError,
         TypeEnvironment, UnionMemberDeclaration,
     },
     enumeration::EnumMemberIndex,
@@ -23,6 +25,9 @@ use quire_semantic_value::{
     unit::{DimensionNode, NominalDeclaration, UnitGraph, UnitNode},
 };
 use std::{collections::BTreeMap, rc::Rc};
+
+#[global_allocator]
+static ALLOCATOR: FailingAllocator = FailingAllocator;
 
 fn admitted_key(id: &quire_contract_ir::CheckedNodeId) -> NodeKey {
     let structural = admitted()
@@ -7064,4 +7069,161 @@ fn event_position_counts_ingested_events_and_not_watermarks_polls_or_gap_faults(
     assert_position(&monitor, 2);
     assert_now(&monitor, 65516);
     assert_eq!(monitor.baseline(), Some(65510));
+}
+
+fn denied_owner_type_walk(input: &ProgramParts) -> (StorageRequest, usize) {
+    arm(0);
+    let result = input.types.try_check_type(&input.layout.state.value_type);
+    let denied = disarm();
+    let Err(TypeCheckError::Allocation(request)) = result else {
+        panic!("the direct owner worklist must refuse its first allocation: {result:?}");
+    };
+    let bytes = denied.expect("the owner's real worklist allocation was denied");
+    assert!(bytes > 0);
+    assert_eq!(request.unit(), StorageUnit::AdditionalElements);
+    assert_eq!(request.amount(), 1);
+    (request, bytes)
+}
+
+#[trace("TC-098", "IT-018-SC-16")]
+#[test]
+fn first_layout_type_allocation_returns_native_membership_then_retries() {
+    let input = parts();
+    let state_key = input.layout.state.key.clone();
+    let (expected, expected_bytes) = denied_owner_type_walk(&input);
+
+    arm(0);
+    let result = Program::try_new(input);
+    let denied = disarm();
+    let Err(refusal) = result else {
+        panic!("a denied first Layout type walk must not publish a Program");
+    };
+    assert_eq!(denied, Some(expected_bytes));
+    assert_eq!(refusal.code, ProgramRefusalCode::Membership);
+    assert_eq!(refusal.node, Some(state_key.clone()));
+    assert_eq!(
+        refusal.membership_failure,
+        Some(EnvironmentFailure::Allocation(expected))
+    );
+
+    let program = Program::try_new(parts()).expect("allocation-enabled reconstruction succeeds");
+    assert_eq!(program.layout().state.key, state_key);
+}
+
+#[trace("TC-098", "IT-018-SC-16")]
+#[test]
+fn later_declared_type_walk_denials_keep_native_membership_and_source() {
+    // Five Layout owner walks precede the RT scratch reservation. The four
+    // function signatures contain twelve owner walks before expression types.
+    for (successful, source) in [(6, "init"), (7, "event"), (18, "init")] {
+        let input = parts();
+        let expected_node = key(source);
+        let (expected, expected_bytes) = denied_owner_type_walk(&input);
+        arm(successful);
+        let result = Program::try_new(input);
+        let denied = disarm();
+        let Err(refusal) = result else {
+            panic!("denied declared-type walk must not publish a Program");
+        };
+        assert_eq!(
+            denied,
+            Some(expected_bytes),
+            "allocation index {successful}"
+        );
+        assert_eq!(refusal.code, ProgramRefusalCode::Membership);
+        assert_eq!(refusal.node, Some(expected_node));
+        assert_eq!(
+            refusal.membership_failure,
+            Some(EnvironmentFailure::Allocation(expected))
+        );
+        let program =
+            Program::try_new(parts()).expect("allocation-enabled reconstruction succeeds");
+        assert_eq!(program.layout().state.key, key("state"));
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-16")]
+#[test]
+fn rt_validation_scratch_denial_stays_storage_after_five_layout_walks() {
+    let input = parts();
+    let root = input.layout.root.clone();
+    // Each of the five Layout bindings completes one owner worklist reservation;
+    // the next reservation belongs to RT's function-key validation scratch.
+    arm(5);
+    let result = Program::try_new(input);
+    let denied = disarm();
+    let Err(refusal) = result else {
+        panic!("denied RT validation scratch must not publish a Program");
+    };
+    assert!(denied.is_some_and(|bytes| bytes > 0));
+    assert_eq!(refusal.code, ProgramRefusalCode::Storage);
+    assert_eq!(refusal.membership_failure, None);
+    assert_eq!(refusal.node, None);
+
+    let program = Program::try_new(parts()).expect("allocation-enabled reconstruction succeeds");
+    assert_eq!(program.layout().root, root);
+}
+
+fn ieee_type_collection(kind: CollectionKind) -> ValueType {
+    ValueType::collection(CollectionType::new(
+        kind,
+        ValueType::option(ValueType::Float(FloatType::exact(IeeeWidth::Binary64))),
+        None,
+    ))
+}
+
+#[trace("TC-098", "IT-018-SC-16")]
+#[test]
+fn declared_type_semantics_keep_original_locus_and_layout_precedence() {
+    // Time is a genuine admitted dimension identity, not a composite declaration
+    // in this environment. The negative control never constructs a fresh key.
+    let not_a_composite = ValueType::Composite(key("Time"));
+    for (which, value_type) in [
+        (0, not_a_composite.clone()),
+        (0, ValueType::Population(None)),
+        (0, ieee_type_collection(CollectionKind::Set)),
+        (1, ieee_type_collection(CollectionKind::Bag)),
+        (1, ValueType::Population(None)),
+        (2, not_a_composite),
+    ] {
+        let mut input = parts();
+        let expected = match which {
+            0 => {
+                input.layout.state.value_type = value_type;
+                input.layout.state.key.clone()
+            }
+            1 => {
+                input.expressions[0].value_type = value_type;
+                input.expressions[0].key.clone()
+            }
+            2 => {
+                let source = key("unreached-cycle");
+                input.functions.push(Function {
+                    key: source.clone(),
+                    parameters: vec![value_type],
+                    result: ValueType::Boolean,
+                    body: ExpressionId(0),
+                });
+                source
+            }
+            _ => unreachable!("the authored cases cover three consumer locations"),
+        };
+        let Err(refusal) = Program::try_new(input) else {
+            panic!("an invalid declared type must not publish a Program");
+        };
+        assert_eq!(refusal.code, ProgramRefusalCode::TypeMismatch);
+        assert_eq!(refusal.node, Some(expected));
+        assert_eq!(refusal.membership_failure, None);
+    }
+
+    let mut input = parts();
+    let root = input.layout.root.clone();
+    input.layout.package_lock = Box::new([]);
+    input.layout.state.value_type = ValueType::Population(None);
+    let Err(refusal) = Program::try_new(input) else {
+        panic!("invalid layout premises must precede later declared-type failures");
+    };
+    assert_eq!(refusal.code, ProgramRefusalCode::InvalidLayout);
+    assert_eq!(refusal.node, Some(root));
+    assert_eq!(refusal.membership_failure, None);
 }
