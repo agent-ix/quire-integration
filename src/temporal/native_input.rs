@@ -96,6 +96,7 @@ pub struct NativeTlInput<'a> {
     request: &'a EvidenceRequest,
     observation: &'a ObservationView,
     limits: NativeInputLimits,
+    selected_model_packages: Vec<String>,
     occurrence: ClauseOccurrence,
     binding: AuthenticatedBinding,
     anchor: Option<u64>,
@@ -135,6 +136,13 @@ impl<'a> NativeTlInput<'a> {
     /// Component ceiling used for anchor selection.
     pub const fn limits(&self) -> NativeInputLimits {
         self.limits
+    }
+
+    /// Exact owner-admitted selected model package identities, in owner order.
+    ///
+    /// The checked package carries no source model aliases. This list adds none.
+    pub fn selected_model_packages(&self) -> &[String] {
+        &self.selected_model_packages
     }
 
     /// Numeric owner anchor for the selected observation, if the request has one.
@@ -220,6 +228,10 @@ pub fn admit_native_tl_input<'a>(
         request,
         observation,
         limits,
+        selected_model_packages: package
+            .selected_model_packages()
+            .map(str::to_owned)
+            .collect(),
         occurrence: occurrence.clone(),
         binding,
         anchor,

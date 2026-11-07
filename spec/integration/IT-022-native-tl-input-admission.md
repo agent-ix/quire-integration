@@ -56,6 +56,9 @@ and occurrence key. The subject supplies the owner profile and clock rows.
 5. IT-022-SC-05: Refuse before scanning when the request has more positions
    than the component ceiling. Exactly at the setting admits; one over returns
    a typed limit refusal and no receipt.
+6. IT-022-SC-06: Retain the admitted checked package's selected model package
+   identities in `CheckedPackageV2::selected_model_packages` order. Do not
+   invent a source alias or infer one from package layout.
 
 ## Expected Results
 
@@ -63,4 +66,5 @@ The focused real-producer test admits one matched request and preserves its
 false shared valuation and true instance-bound valuation. Mutations of the
 package instance, binding profile, occurrence, opaque identity, duplicate
 position and numeric anchor return distinct typed refusals. This component
+exposes the selected model package identity from the owner without an alias. It
 does not construct a TL owner request or complete FR-350 acceptance criteria.

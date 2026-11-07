@@ -186,7 +186,8 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     "IT-022-SC-02",
     "IT-022-SC-03",
     "IT-022-SC-04",
-    "IT-022-SC-05"
+    "IT-022-SC-05",
+    "IT-022-SC-06"
 )]
 #[test]
 fn native_request_selects_exact_observation_and_keeps_valuations() {
@@ -250,6 +251,7 @@ fn native_request_selects_exact_observation_and_keeps_valuations() {
     let admitted =
         admit_native_tl_input(&package, &subject, &request, &observation, limits).unwrap();
     assert_eq!(admitted.limits(), limits);
+    assert_eq!(admitted.selected_model_packages(), &["acme/orders"]);
     assert_eq!(
         admit_native_tl_input(
             &package,
