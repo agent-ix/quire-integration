@@ -54,8 +54,8 @@ data. No absent, conflicting or evicted fact becomes false.
 `project_tl` takes the actual checked package and subject, QSL classification,
 surrounding closure, the actual native checked-package `EvidenceRequest`,
 ordered `ValuationEvidence`, exact occurrence and `ValuationInstance`, actual admitted observation revision, and independent TL/QObs owner
-selections and limits. This native input spelling is the pending IR-1378 owner
-correction to FR-350's legacy `Trace` spelling; no adapter guesses an opaque
+selections and limits. This native input spelling matches the published IR-1378 correction in the
+selected FR-350 owner contract; no adapter guesses an opaque
 observation identity from a numeric position. IR-1377 owns normalization of the
 TL request dependency cohort. Selection structs group references to real owner values;
 they do not replace their records, assert trust, or supply an evaluator callback.
@@ -132,8 +132,9 @@ constructor nor reader invokes an evaluator.
 
 ## Remaining owner prerequisites
 
-Full FR-350 qualification is pending the IR-1377 dependency cohort and IR-1378
-native input correction. The native full-predecessor operations supplied by QSL-1795 are consumed as
+Full FR-350 qualification remains pending the IR-1377 dependency cohort and
+execution of the native-input consumer proof. The selected IR owner now contains
+the IR-1378 native input correction. The native full-predecessor operations supplied by QSL-1795 are consumed as
 original owner APIs. The TL result owner still needs a public, non-evaluating
 operation that authenticates its complete actual direct predecessor; identities
 alone cannot discharge that requirement. The bridge preserves a typed TL-side
