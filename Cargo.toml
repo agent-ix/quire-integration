@@ -17,12 +17,17 @@ name = "quire_integration"
 path = "src/lib.rs"
 
 [dependencies]
+quire-canonical = { git = "https://github.com/agent-ix/quire-canonical", branch = "main", features = ["serde_json"] }
 quire-observation = { git = "https://github.com/agent-ix/quire-observation", branch = "main" }
 qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-eval = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
+quire-spec-language = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
+quire-mltl = { git = "https://github.com/agent-ix/quire-mltl", branch = "main" }
+tl-mltl = { git = "https://github.com/agent-ix/tl-mltl", branch = "main" }
 
 tl-syntax = { git = "https://github.com/agent-ix/tl-syntax", branch = "main", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 
@@ -31,7 +36,6 @@ qsl-analyze = { git = "https://github.com/agent-ix/quire-spec-language", branch 
 quire-specification = { package = "quire-specification-qualification", git = "https://github.com/agent-ix/quire-specification", branch = "main" }
 # QSL-334: the composed QSL -> IR -> codegen tests live here, because nothing depends on
 # this crate. Every first-party crate is `branch = "main"`, so each resolves to one copy.
-quire-spec-language = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-foundation = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-replay = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-cst = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
@@ -46,7 +50,6 @@ quire-contract-codegen = { git = "https://github.com/agent-ix/quire-contract-cod
 quire-driver = { git = "https://github.com/agent-ix/quire-driver", branch = "main" }
 quire-exact = { git = "https://github.com/agent-ix/quire-exact", branch = "main", features = ["test-support"] }
 ix-trace-rs = { git = "https://github.com/agent-ix/ix-trace-rs", branch = "main" }
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tempfile = "3"

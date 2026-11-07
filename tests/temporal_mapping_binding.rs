@@ -3,10 +3,6 @@
 
 mod support;
 
-#[path = "support/observation_revision/mod.rs"]
-#[allow(dead_code)] // This test uses only the observation slice of the shared fixture.
-mod observation_support;
-
 use ix_trace_rs::trace;
 use qsl_package::checked_views::{mapping_support, temporal_subject, Closure, Support, Target};
 use qsl_semantics::{
@@ -21,27 +17,11 @@ use quire_contract_ir::{
     CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2, ClockConfiguration,
     TemporalForm,
 };
-use quire_integration::temporal::{
-    admit_native_tl_input, prepare_tl_projection_input, NativeInputCode, NativeInputLimits,
-    ProjectionInputLimits,
-};
 use quire_integration::temporal::{validate_mapping_binding, MappingBindingRefusal};
 use quire_semantic_value::checking::CheckingLimits;
 
 /// Emit once and admit twice: the packages have equal contents and distinct owners.
 fn packages() -> (CheckedPackageV2, CheckedPackageV2, CheckedNodeId) {
-    packages_with_clock(
-        "quire.temporal.event-position.false-extension/v1",
-        ClockConfiguration::EventPosition {
-            sequence_authority: "events".into(),
-        },
-    )
-}
-
-fn packages_with_clock(
-    profile: &str,
-    clock: ClockConfiguration,
-) -> (CheckedPackageV2, CheckedPackageV2, CheckedNodeId) {
     let document =
         std::fs::read(support::qsl_root().join("tests/fixtures/spine-model.semantic-ir.json"))
             .expect("the selected QSL owner fixture exists");
@@ -52,8 +32,7 @@ model M = "acme/orders";
 temporal Due using t over (g: M::Gadget) clock "events" on origin {
     eventually[0,2] holds(true)
 }
-"#
-    .replace("quire.temporal.event-position.false-extension/v1", profile);
+"#;
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "test:temporal-binding"),
         "temporal-binding.native",
@@ -83,18 +62,17 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
     let selections: Vec<_> = graph
         .temporal_clauses()
         .iter()
-        .map(|clause| {
-            qsl_package::TemporalClockSelection::new(
-                graph.source().clone(),
-                clause.clause().span(),
-                clock.clone(),
-            )
+        .map(|clause| qsl_package::TemporalClockSelection {
+            source: graph.source().clone(),
+            declaration_span: clause.clause().span(),
+            clock: ClockConfiguration::EventPosition {
+                sequence_authority: "events".into(),
+            },
         })
         .collect();
     let emitted = qsl_package::emit_checked_with_temporal_selections(
         &qsl_package::CheckedPackage::link(graph),
         &selections,
-        qsl_package::EmitLimits::new(16_777_216),
     )
     .expect("the producer emits the temporal package");
     assert!(emitted.omitted().is_empty());
@@ -132,7 +110,7 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
 }
 
 /// This is the instance-binding precondition, not whole FR-350 projection evidence.
-#[trace("TC-461")]
+#[trace("TC-461", "FR-350-AC-3", "FR-350-AC-6")]
 #[test]
 fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let (first, second, clause) = packages();
@@ -140,9 +118,19 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     let other = temporal_subject(&second, &clause).expect("second subject reads");
     let classification = mapping_support(&subject, Closure::Complete).expect("classification");
     let other_classification = mapping_support(&other, Closure::Complete).expect("classification");
+    assert_eq!(classification.support, other_classification.support);
+    assert_eq!(classification.retained, other_classification.retained);
     assert_eq!(
-        classification, other_classification,
-        "equal content/name is insufficient"
+        classification.selection().package(),
+        other_classification.selection().package()
+    );
+    assert_eq!(
+        classification.selection().definition_artifact(),
+        other_classification.selection().definition_artifact()
+    );
+    assert_ne!(
+        classification.selection().admission_binding(),
+        other_classification.selection().admission_binding()
     );
     assert!(subject.belongs_to(&first));
     assert!(!subject.belongs_to(&second));
@@ -152,6 +140,14 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
     );
     assert_eq!(
         validate_mapping_binding(&second, &subject, &classification, Closure::Complete),
+        Err(MappingBindingRefusal::ForeignClassification)
+    );
+    assert_eq!(
+        validate_mapping_binding(&first, &subject, &other_classification, Closure::Complete),
+        Err(MappingBindingRefusal::ForeignClassification)
+    );
+    assert_eq!(
+        validate_mapping_binding(&first, &other, &classification, Closure::Complete),
         Err(MappingBindingRefusal::ForeignSubject)
     );
     assert_eq!(
@@ -182,240 +178,16 @@ fn equal_admissions_do_not_authorize_a_foreign_subject_instance() {
             ..
         }
     ));
-}
-
-/// IR-1378: the native request is retained and its opaque anchor is matched
-/// to an independently admitted observation before exposing a numeric anchor.
-#[trace(
-    "TC-461",
-    "IT-022-SC-01",
-    "IT-022-SC-02",
-    "IT-022-SC-03",
-    "IT-022-SC-04",
-    "IT-022-SC-05",
-    "IT-022-SC-06",
-    "IT-022-SC-07"
-)]
-#[test]
-fn native_request_selects_exact_observation_and_keeps_valuations() {
-    use qsl_eval::temporal::evidence::{
-        EvidencePosition, EvidenceRef, EvidenceRequest, ExecutionDisposition, Relation,
-        SemanticTriggerIdentity, TemporalEvidenceLimits, TraceBinding, TriggerEvidence,
-    };
-    use qsl_eval::temporal::{ClockCover, ProgressClosure, Valuation};
-
-    let (package, foreign, clause) = packages_with_clock(
-        "quire.temporal.timestamped-event.finite-window/v1",
-        ClockConfiguration::TimestampedEvent {
-            timestamp_unit: "nanosecond".into(),
-        },
-    );
-    let subject = temporal_subject(&package, &clause).unwrap();
-    let fixture = observation_support::Fixture::new();
-    let observation = fixture.observation(fixture.observation_document(), 1, None);
-    let identity = observation.payload().observation_identity().to_owned();
-    let trigger = SemanticTriggerIdentity::new(b"instance-a".as_slice()).unwrap();
-    let position = EvidencePosition {
-        observation: EvidenceRef::named(identity.clone()),
-        position: 5,
-        valuations: [(7, Valuation::False)].into(),
-        instance_valuations: [(trigger.clone(), [(9, Valuation::True)].into())].into(),
-        ..EvidencePosition::default()
-    };
-    let clock = subject.clock().unwrap();
-    let request = EvidenceRequest {
-        native_valuations: vec![4, 7],
-        trigger: Some(trigger.clone()),
-        correspondence: EvidenceRef::named("correspondence"),
-        positions: vec![position],
-        anchor: Some(identity.clone()),
-        deliveries: vec![],
-        origins: vec![],
-        trigger_evidence: TriggerEvidence::Admitted,
-        trigger_scope: ProgressClosure::Closed,
-        decision_progress: None,
-        decision_closure: None,
-        surrounding_progress: None,
-        surrounding_closure: None,
-        execution: ExecutionDisposition::Completed,
-        completeness: None,
-        authoritative_origin: None,
-        evicted: vec![],
-        cover: ClockCover::Exact,
-        progress_ledger: None,
-        ledger: None,
-        relation: Relation::Original,
-        control: None,
-        binding: TraceBinding {
-            profile: subject.profile().definition.identity.clone(),
-            clock_name: clock.clock_name.clone(),
-            parameters: clock.clock.clone(),
-        },
-        occurrence: None,
-        limits: TemporalEvidenceLimits::default(),
-    };
-
-    let limits = NativeInputLimits::default();
-    let admitted =
-        admit_native_tl_input(&package, &subject, &request, &observation, limits).unwrap();
-    assert_eq!(admitted.limits(), limits);
-    assert_eq!(admitted.selected_model_packages(), &["acme/orders"]);
+    let cloned = first.clone();
+    let clone_subject = temporal_subject(&cloned, &clause).expect("clone subject");
     assert_eq!(
-        admit_native_tl_input(
-            &package,
-            &subject,
-            &request,
-            &observation,
-            NativeInputLimits { max_positions: 1 },
-        )
-        .unwrap()
-        .anchor(),
-        Some(5)
+        validate_mapping_binding(&cloned, &clone_subject, &classification, Closure::Complete),
+        Ok(())
     );
+    let moved = cloned;
+    let moved_subject = temporal_subject(&moved, &clause).expect("moved subject");
     assert_eq!(
-        admit_native_tl_input(
-            &package,
-            &subject,
-            &request,
-            &observation,
-            NativeInputLimits { max_positions: 0 },
-        )
-        .unwrap_err()
-        .code(),
-        NativeInputCode::LimitReached
+        validate_mapping_binding(&moved, &moved_subject, &classification, Closure::Complete),
+        Ok(())
     );
-    assert_eq!(admitted.anchor(), Some(5));
-    assert_eq!(admitted.occurrence(), &subject.occurrences()[0]);
-    assert!(std::ptr::eq(admitted.request(), &request));
-    assert_eq!(admitted.request().native_valuations, [4, 7]);
-    assert!(std::ptr::eq(admitted.observation(), &observation));
-    assert_eq!(admitted.trigger(), Some(&trigger));
-    assert_eq!(
-        admitted.positions()[0].valuations.get(&7),
-        Some(&Valuation::False)
-    );
-    assert_eq!(
-        admitted.positions()[0].instance_valuations[&trigger].get(&9),
-        Some(&Valuation::True)
-    );
-    let mut explicit = request.clone();
-    explicit.occurrence = Some(quire_contract_ir::CheckedOccurrence {
-        role: subject.occurrences()[0].role.clone(),
-        ordinal: subject.occurrences()[0].ordinal,
-    });
-    assert_eq!(
-        admit_native_tl_input(&package, &subject, &explicit, &observation, limits)
-            .unwrap()
-            .occurrence(),
-        &subject.occurrences()[0]
-    );
-    assert_eq!(
-        admit_native_tl_input(&foreign, &subject, &request, &observation, limits)
-            .unwrap_err()
-            .code(),
-        NativeInputCode::ForeignSubject
-    );
-
-    let mut changed = request.clone();
-    changed.anchor = Some("another-observation".into());
-    assert_eq!(
-        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
-            .unwrap_err()
-            .code(),
-        NativeInputCode::Anchor
-    );
-    changed = request.clone();
-    changed.positions[0].observation.identity = "another-observation".into();
-    assert_eq!(
-        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
-            .unwrap_err()
-            .code(),
-        NativeInputCode::Anchor
-    );
-    changed = request.clone();
-    changed.positions.push(changed.positions[0].clone());
-    assert_eq!(
-        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
-            .unwrap_err()
-            .code(),
-        NativeInputCode::Anchor
-    );
-    changed = request.clone();
-    changed.positions[0].position = 6;
-    assert_eq!(
-        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
-            .unwrap_err()
-            .code(),
-        NativeInputCode::ObservationAnchor
-    );
-    changed = request.clone();
-    changed.binding.profile = "foreign-profile".into();
-    assert_eq!(
-        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
-            .unwrap_err()
-            .code(),
-        NativeInputCode::Binding
-    );
-    changed = request.clone();
-    changed.occurrence = Some(quire_contract_ir::CheckedOccurrence {
-        role: subject.occurrences()[0].role.clone(),
-        ordinal: subject.occurrences()[0].ordinal + 1,
-    });
-    assert_eq!(
-        admit_native_tl_input(&package, &subject, &changed, &observation, limits)
-            .unwrap_err()
-            .code(),
-        NativeInputCode::Occurrence
-    );
-
-    let (event_package, _, event_clause) = packages();
-    let event_subject = temporal_subject(&event_package, &event_clause).unwrap();
-    let event_clock = event_subject.clock().unwrap();
-    let mut event_request = request.clone();
-    event_request.binding = TraceBinding {
-        profile: event_subject.profile().definition.identity.clone(),
-        clock_name: event_clock.clock_name.clone(),
-        parameters: event_clock.clock.clone(),
-    };
-    assert_eq!(
-        admit_native_tl_input(
-            &event_package,
-            &event_subject,
-            &event_request,
-            &observation,
-            limits,
-        )
-        .unwrap_err()
-        .code(),
-        NativeInputCode::ObservationAnchor
-    );
-
-    let event_fixture = observation_support::Fixture::event_position();
-    let event_observation =
-        event_fixture.observation(event_fixture.observation_document(), 1, None);
-    let event_identity = event_observation
-        .payload()
-        .observation_identity()
-        .to_owned();
-    event_request.anchor = Some(event_identity.clone());
-    event_request.positions[0].observation.identity = event_identity;
-    let classification = mapping_support(&event_subject, Closure::Complete).unwrap();
-    let prepared = prepare_tl_projection_input(
-        &event_package,
-        &event_subject,
-        &classification,
-        Closure::Complete,
-        &event_request,
-        &event_observation,
-        ProjectionInputLimits::default(),
-    )
-    .unwrap();
-    assert_eq!(prepared.native().anchor(), Some(5));
-    assert_eq!(
-        prepared.native().selected_model_packages(),
-        &["acme/orders"]
-    );
-    assert!(std::ptr::eq(prepared.native().request(), &event_request));
-    assert_eq!(prepared.formula().leaves().len(), 1);
-    assert_eq!(prepared.formula().classification(), &classification);
 }

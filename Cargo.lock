@@ -1581,6 +1581,7 @@ dependencies = [
  "qsl-replay",
  "qsl-route",
  "qsl-semantics",
+ "quire-canonical",
  "quire-checked",
  "quire-contract-codegen",
  "quire-contract-model",
@@ -1588,6 +1589,7 @@ dependencies = [
  "quire-driver",
  "quire-eval",
  "quire-exact",
+ "quire-mltl",
  "quire-observation",
  "quire-semantic-value",
  "quire-spec-language",
@@ -1597,6 +1599,21 @@ dependencies = [
  "sha2",
  "tempfile",
  "thiserror",
+ "tl-mltl",
+ "tl-syntax",
+]
+
+[[package]]
+name = "quire-mltl"
+version = "0.1.0"
+source = "git+https://github.com/agent-ix/quire-mltl?branch=main#70175d914c4af6257c99d88c3aa03e5c8082c649"
+dependencies = [
+ "quire-observation",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tl-mltl",
  "tl-syntax",
 ]
 
@@ -2207,6 +2224,17 @@ name = "tinyvec"
 version = "1.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
+
+[[package]]
+name = "tl-mltl"
+version = "0.3.0"
+source = "git+https://github.com/agent-ix/tl-mltl?branch=main#8e8149d1624128c66a91bac66d597a245c1c2759"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "tl-syntax",
+]
 
 [[package]]
 name = "tl-syntax"

@@ -1,4 +1,5 @@
 //! Version-locked composition and integration runtime for native Quire V1.
+#![recursion_limit = "256"] // The correspondence record is one large `json!` object.
 
 pub mod temporal;
 
