@@ -9,7 +9,7 @@ use quire_contract_ir::{
 };
 use serde_json::Value;
 
-use crate::support::{cargo_child_command, qsl_root};
+use crate::support::{cargo_command::command as cargo_child_command, qsl_root};
 
 /// A QSL-owned model document selected by the producer and supplied as the
 /// same bytes to the IR reader. The document stays in QSL's checkout.

@@ -157,7 +157,7 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
     };
     let checked = checked(&source, &model);
     let protocol = checked
-        .resolved_graph()
+        .graph()
         .protocol("Inspect")
         .expect("original checked protocol");
     let [slot] = protocol.slots.bodies.as_slice() else {
@@ -214,10 +214,10 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
         .position(|binder| binder.name == "outcome")
         .expect("original outcome binder slot");
     let function = checked
-        .resolved_graph()
+        .graph()
         .function_by_identity(
             checked
-                .resolved_graph()
+                .graph()
                 .function_identity("makePair")
                 .expect("actual constructor"),
         )

@@ -160,7 +160,10 @@ fn linked_duplicate_ms_units_expose_the_quantity_type_location_blocker() {
     };
     assert_eq!(name, "ms");
     assert!(packages.is_empty());
-    assert_eq!((unresolved.span.start, unresolved.span.end), (required + "Quantity<".len(), required + "Quantity<ms".len()));
+    assert_eq!(
+        (unresolved.span.start, unresolved.span.end),
+        (required + "Quantity<".len(), required + "Quantity<ms".len())
+    );
     assert_ne!((error.span.start, error.span.end), (required, required + "Quantity<ms>".len()), "U32 remains incomplete: owner refuses the duplicate declaration before resolving the quantity type");
 }
 

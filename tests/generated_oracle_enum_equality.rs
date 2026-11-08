@@ -80,23 +80,37 @@ fn model_owned_enum_equality_derives_the_original_comparison_operation() {
     for (name, operator) in [
         ("redEqualsRed", quire_exact::ComparisonOperator::Equal),
         ("redEqualsGreen", quire_exact::ComparisonOperator::Equal),
-        ("redDiffersFromRed", quire_exact::ComparisonOperator::NotEqual),
-        ("redDiffersFromGreen", quire_exact::ComparisonOperator::NotEqual),
+        (
+            "redDiffersFromRed",
+            quire_exact::ComparisonOperator::NotEqual,
+        ),
+        (
+            "redDiffersFromGreen",
+            quire_exact::ComparisonOperator::NotEqual,
+        ),
     ] {
         let body = family_function_selection::body(&admitted, name);
         let derived = derive_exact_scalar_items(&admitted, std::slice::from_ref(&body));
         let [Ok(item)] = derived.as_slice() else {
             panic!("{name}: CG derivation of enum comparison: {derived:?}");
         };
-        let CheckedTerm::Application { operation, .. } = admitted.term(&body).expect("original comparison body term") else {
+        let CheckedTerm::Application { operation, .. } =
+            admitted.term(&body).expect("original comparison body term")
+        else {
             panic!("original enum comparison application");
         };
-        assert_eq!(operation.identity.as_ref(), match operator {
-            quire_exact::ComparisonOperator::Equal => "quire.op.enum.eq",
-            quire_exact::ComparisonOperator::NotEqual => "quire.op.enum.ne",
-            _ => unreachable!("table contains equality operators only"),
-        });
+        assert_eq!(
+            operation.identity(),
+            Some(match operator {
+                quire_exact::ComparisonOperator::Equal => "quire.op.enum.eq",
+                quire_exact::ComparisonOperator::NotEqual => "quire.op.enum.ne",
+                _ => unreachable!("table contains equality operators only"),
+            })
+        );
         assert_eq!(item.node_id, body, "original comparison body");
-        assert_eq!(item.operation, ExactScalarOperation::EnumComparison { operator });
+        assert_eq!(
+            item.operation,
+            ExactScalarOperation::EnumComparison { operator }
+        );
     }
 }

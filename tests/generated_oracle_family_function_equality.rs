@@ -656,10 +656,10 @@ fn observe() {
         };
         let name = format!("equality{index}");
         let function = authority
-            .resolved_graph()
+            .graph()
             .function_by_identity(
                 authority
-                    .resolved_graph()
+                    .graph()
                     .function_identity(&name)
                     .expect("original checked function identity"),
             )

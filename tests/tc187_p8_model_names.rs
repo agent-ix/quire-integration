@@ -207,7 +207,9 @@ fn emitted(
             )
             .expect("original document evidence");
     }
-    let CheckedPackageDispatchResult::AdmittedV2(admitted) = read_checked_package(bytes, CheckedPackageReadLimits::bounded(), &evidence) else {
+    let CheckedPackageDispatchResult::AdmittedV2(admitted) =
+        read_checked_package(bytes, CheckedPackageReadLimits::bounded(), &evidence)
+    else {
         panic!("strict IR admits original emission");
     };
     // Inspect the owner's resolved document-held identities, retaining original emission above.

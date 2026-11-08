@@ -202,7 +202,13 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
 fn missing_actual_initializer_body_is_a_native_ir_refusal() {
     let healthy = producer::Produced::healthy();
     let plan = healthy.package.monitor_plans().next().unwrap();
-    let index = healthy.package.resolved_graph().nodes.iter().position(|node| &node.node_id == plan.init().node_id()).expect("the selected initializer has its original document holder");
+    let index = healthy
+        .package
+        .resolved_graph()
+        .nodes
+        .iter()
+        .position(|node| &node.node_id == plan.init().node_id())
+        .expect("the selected initializer has its original document holder");
     let mut wire: serde_json::Value =
         serde_json::from_slice(healthy.root.emission().package().bytes()).unwrap();
     let nodes = wire["semantic_graph"]["nodes"].as_array_mut().unwrap();

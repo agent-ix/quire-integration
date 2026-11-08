@@ -63,25 +63,58 @@ pub(crate) fn inferred_modulus_domains_retain_renderer_refusal_without_execution
     )
     .expect("typed QSL division request reaches negotiation");
     assert_eq!(driven.settlements.len(), 1, "result bound");
-    let quire_contract_codegen::Disposition::Unsupported { cause } = &driven.settlements[0].backend.as_ref().expect("backend settled").disposition else {
-        panic!("finite inferred domains retain the current renderer refusal: {:?}", driven.settlements);
+    let quire_contract_codegen::Disposition::Unsupported { cause } = &driven.settlements[0]
+        .backend
+        .as_ref()
+        .expect("backend settled")
+        .disposition
+    else {
+        panic!(
+            "finite inferred domains retain the current renderer refusal: {:?}",
+            driven.settlements
+        );
     };
-    let quire_contract_codegen::Cause::KaniFormRefused { form, refusal, backend } = cause.as_ref() else {
+    let quire_contract_codegen::Cause::KaniFormRefused {
+        form,
+        refusal,
+        backend,
+    } = cause
+    else {
         panic!("native Kani renderer cause: {cause:?}");
     };
     assert_eq!(backend, "kani");
-    assert_eq!(form.operation_identity.as_deref(), Some("quire.op.integer.mod"));
-    let quire_contract_codegen::UnsupportedObligation::OperationNotRendered { operation_identity, derived_domains } = refusal else {
+    assert_eq!(
+        form.operation_identity.as_deref(),
+        Some("quire.op.integer.mod")
+    );
+    let quire_contract_codegen::UnsupportedObligation::OperationNotRendered {
+        operation_identity,
+        derived_domains,
+    } = refusal
+    else {
         panic!("native operation refusal: {refusal:?}");
     };
     assert_eq!(operation_identity, "quire.op.integer.mod");
     assert_eq!(derived_domains.len(), 2);
-    for (domain, (expected_lower, expected_upper)) in derived_domains.iter().zip([("0", "9"), ("1", "3")]) {
-        let quire_contract_codegen::DerivedDomain::IntegerRange { bound, lower, upper } = domain else {
+    for (domain, (expected_lower, expected_upper)) in
+        derived_domains.iter().zip([("0", "9"), ("1", "3")])
+    {
+        let quire_contract_codegen::DerivedDomain::IntegerRange {
+            bound,
+            lower,
+            upper,
+        } = domain
+        else {
             panic!("inferred original finite integer domain: {domain:?}");
         };
-        assert!(driven.checked().term(bound).is_some(), "original inferred bound belongs to the admitted package");
-        assert_eq!((lower.as_str(), upper.as_str()), (expected_lower, expected_upper));
+        assert!(
+            driven.checked().term(bound).is_some(),
+            "original inferred bound belongs to the admitted package"
+        );
+        assert_eq!(
+            (lower.as_str(), upper.as_str()),
+            (expected_lower, expected_upper)
+        );
     }
     assert!(driven.scalar_executions().is_empty(), "result bound");
     assert!(driven.generation().items.is_empty(), "result bound");
