@@ -119,7 +119,7 @@ missing meaning.
 
 Status: Planned for the complete construction and adverse intake handoff under
 IR-721. The two `monitor_program_adverse` tests pass on the refreshed QSL main
-dependency after [QSL-1722](https://linear.app/agent-ix/issue/QSL-1722) was fixed.
+dependency after the upstream fix.
 Executed evidence covers the genuine final PlanRoot production and unchanged
 entry-source reproduction; separately produced, selected-initializer-reachable
 modulo with genuine changed root/initializer keys and unchanged clause;

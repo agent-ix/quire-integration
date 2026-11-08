@@ -8,3 +8,5 @@ target/
 *-target/
 target-*/
 .worktrees/
+__pycache__/
+*.pyc

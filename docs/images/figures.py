@@ -124,6 +124,7 @@ REPOS = [
     (0, 2, "quire-observation", "qualified observations", False),
     (1, 2, "quire-protocol", "protocol conformance", True),
     (2, 2, "quire-analyze", "SMT consistency", False),
+    (3, 2, "quire-eval", "shared evaluation core", False),
     (0, 3, "quire-mltl", "MLTL over observations", False),
 ]
 FEEDS = [
@@ -149,7 +150,7 @@ def ecosystem(here="quire-integration"):
         "The Quire repositories. The main chain runs from the standard, quire-specification, to "
         "the compiler, quire-spec-language, then quire-contract-ir, quire-contract-codegen and "
         "quire-contract-runtime. quire-spec-language also feeds quire-protocol, and "
-        "quire-contract-ir feeds quire-analyze. quire-observation feeds quire-protocol and "
+        "quire-contract-ir feeds quire-analyze. quire-eval is the evaluation core shared by the language and backend repositories. quire-observation feeds quire-protocol and "
         "quire-mltl. Above the chain, quire-driver runs it, quire-integration tests it and "
         "quire-verification plans verification. Below it, shared libraries used throughout: "
         "quire-exact, quire-semantic-value, quire-walk, quire-canonical and "
@@ -158,11 +159,11 @@ def ecosystem(here="quire-integration"):
     w, h, step = 176, 50, 201
     rows = {0: 20, 1: 120, 2: 210, 3: 290}
     where = {}
-    for col, row, name, sub, private in REPOS:
+    for col, row, name, sub, _ in REPOS:
         x, y = col * step, rows[row]
         where[name] = (x, y)
         role = "logic" if name == here else "ink"
-        f.box(x, y, w, h, role, name, sub, dashed=private)
+        f.box(x, y, w, h, role, name, sub)
     for a, b in FEEDS:
         (ax, ay), (bx, by) = where[a], where[b]
         if ay == by:
@@ -180,8 +181,7 @@ def ecosystem(here="quire-integration"):
         w0 = round(w0 + spare)
         f.box(x, 390, w0, h, "logic" if name == here else "ink", name)
         x += w0 + gap
-    f.legend(0, 472, [("logic", "this repository", "box"), ("ink", "private", "dash"),
-                      ("model", "feeds", "fill")])
+    f.legend(0, 472, [("logic", "this repository", "box"), ("model", "feeds", "fill")])
     return f
 
 
