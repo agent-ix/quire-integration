@@ -77,12 +77,22 @@ Neither evaluator is reproduced.
     modes over eight operands, at work 1024, 0 and 1. Compare values, IEEE flag
     losses, exact-mode refusals, charges and counters; require the `1 op 3`
     bit patterns.
+11. Admit the standalone `acme/colors` model with the four original enum
+    comparisons (`Red = Red`, `Red = Green`, `Red != Red`, `Red != Green`)
+    through QSL and IR, derive each application as an enum comparison with the
+    catalogued `quire.op.enum.eq` or `quire.op.enum.ne` identity and generate the
+    oracles. Take the genuine `Red` and `Green` model members as native operands
+    (the language has no ordering on enums). Evaluate each original body with the
+    production scoped charge capture at work 1024, 0, 1, 2 and 3 and compare the
+    typed Boolean result, ordered admitted per-charge requests, denied points and
+    every counter with the generated oracle under the same capture. Require the
+    independent truth value of each arm when no charge is denied, and a
+    WorkUnits stop whose charge point is the single denied request otherwise.
 
 Further Text input boundaries remain Planned under IR-842. The other Planned
 entries keep their own owners, recorded in IT-019: IEEE NumericEqual/TotalOrder/
 BitIdentical comparisons (CG refuses generation with `FormMismatch`) under
-IR-1401, evaluated-right Boolean paths under IR-1402, enum equality (CG
-`BlockedOnUpstream`), and division/modulo behind IR-1391's CG result-bound
+IR-1401, evaluated-right Boolean paths under IR-1402, and division/modulo behind IR-1391's CG result-bound
 derivation. These selected cases make no whole-family claim.
 
 ## Expected Results
@@ -97,6 +107,6 @@ connective and still stops equality at EqualityPlanForm. Those Boolean stops
 have their real locations, no losses, no admitted charges and zero consumption
 in every LimitKind counter. The 25 Boolean, 35 Integer, 72 Text and 29 Rational cases
 execute at work 0, 1 and 1024 (483 observations); the 39 Decimal cases execute at five
-work allowances (195); the IEEE cohort is 1584 observations. Any row
+work allowances (195); the enum cohort is 20 observations (four arms at five allowances); the IEEE cohort is 1584 observations. Any row
 that does not genuinely derive is reported separately and receives no agreement
 credit. Full IT-019-SC-05 and family closure remain Planned under IR-842.
