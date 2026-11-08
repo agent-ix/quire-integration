@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! FR-350: non-evaluating admission and comparison of original owner results.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use qsl_eval::temporal::evidence::PackageMismatch;
 use qsl_eval::temporal::{
@@ -20,10 +20,11 @@ use quire_mltl::{
     report::{AssessmentExecution, ResultRelationKind, SettlementBasis, TemporalTruth},
 };
 use quire_observation::authority::{availability, completeness, OpenClosed};
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use super::{
-    projection::{hex, lowered_owner_limits},
+    projection::{hex, hex_string, lowered_owner_limits},
     TlLimits, TlProjectionLimit, TlProjectionUsage, ValidatedTlProjection,
 };
 
@@ -571,22 +572,72 @@ fn premises_equal(
         && native_support == tl_support
 }
 
+#[derive(Serialize)]
+#[serde(untagged)]
+enum NativeOutcomeRecord<'a> {
+    Identity(String),
+    Failure(NativeFailureRecord<'a>),
+}
+
+#[derive(Serialize)]
+#[serde(tag = "failure", rename_all = "snake_case")]
+enum NativeFailureRecord<'a> {
+    Admission(NativeAdmissionRecord<'a>),
+    Fault(NativeFaultRecord<'a>),
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+enum NativeAdmissionKind {
+    Refused,
+    Incomplete,
+}
+
+#[derive(Serialize)]
+struct NativeAdmissionRecord<'a> {
+    kind: NativeAdmissionKind,
+    code: &'a str,
+    cause: &'a str,
+    prefix: Option<&'a str>,
+    fields: &'a BTreeMap<&'static str, String>,
+    member: &'a str,
+    index: Option<String>,
+    path: Vec<NativeAdmissionPath<'a>>,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum NativeAdmissionPath<'a> {
+    Field { field: &'a str },
+    Option { option: bool },
+    Index { index: String },
+}
+
+#[derive(Serialize)]
+struct NativeFaultRecord<'a> {
+    stage: &'a str,
+    invariant: &'a str,
+    named: &'a [(&'static str, String)],
+}
+
 /// Encode the current evidence call's original diagnostic members without parsing
 /// display text. Other call families retain their typed failure as an operation error.
-fn native_outcome_record(
-    outcome: &Result<EvaluatedEvidence, CallFailure>,
+fn native_outcome_record<'a>(
+    outcome: &'a Result<EvaluatedEvidence, CallFailure>,
     budget: &mut Budget,
-) -> Result<Value, TlJoinError> {
+) -> Result<NativeOutcomeRecord<'a>, TlJoinError> {
     match outcome {
         Ok(issued) => {
             let identity = issued.result().result_identity.as_bytes();
             budget.bytes(identity.len())?;
-            Ok(hex(identity))
+            Ok(NativeOutcomeRecord::Identity(hex_string(identity)))
         }
         Err(failure @ CallFailure::Admission(admission)) => {
             let (kind, diagnostic) = match admission.as_ref() {
-                CallAdmissionFailure::Refused(record) => ("refused", record),
-                CallAdmissionFailure::Incomplete(record) => ("incomplete", record),
+                CallAdmissionFailure::Refused(record) => (NativeAdmissionKind::Refused, record),
+                CallAdmissionFailure::Incomplete(record) => {
+                    (NativeAdmissionKind::Incomplete, record)
+                }
             };
             // Temporal evidence admission names a request member and has no kernel
             // construction cause. Never erase a different family's extra provenance.
@@ -629,21 +680,30 @@ fn native_outcome_record(
                 .iter()
                 .map(|step| match step {
                     quire_semantic_value::admission::PathStep::Field(name) => {
-                        json!({"field": name})
+                        NativeAdmissionPath::Field { field: name }
                     }
                     quire_semantic_value::admission::PathStep::OptionValue => {
-                        json!({"option": true})
+                        NativeAdmissionPath::Option { option: true }
                     }
                     quire_semantic_value::admission::PathStep::Index(index) => {
-                        json!({"index": index.to_string()})
+                        NativeAdmissionPath::Index {
+                            index: index.to_string(),
+                        }
                     }
                 })
                 .collect::<Vec<_>>();
-            Ok(json!({"failure": "admission", "kind": kind,
-                "code": diagnostic.record.catalog.code(), "cause": diagnostic.record.catalog.cause(),
-                "prefix": diagnostic.record.catalog.prefix(), "fields": diagnostic.record.fields,
-                "member": name, "index": index.map(|value| value.to_string()), "path": path,
-            }))
+            Ok(NativeOutcomeRecord::Failure(
+                NativeFailureRecord::Admission(NativeAdmissionRecord {
+                    kind,
+                    code: diagnostic.record.catalog.code(),
+                    cause: diagnostic.record.catalog.cause(),
+                    prefix: diagnostic.record.catalog.prefix(),
+                    fields: &diagnostic.record.fields,
+                    member: name,
+                    index: index.map(|value| value.to_string()),
+                    path,
+                }),
+            ))
         }
         Err(failure @ CallFailure::Fault(fault)) => {
             if fault.kernel_cause().is_some() {
@@ -655,8 +715,13 @@ fn native_outcome_record(
                 |sum, (name, value)| sum.saturating_add(name.len()).saturating_add(value.len()),
             );
             budget.bytes(size)?;
-            Ok(json!({"failure": "fault", "stage": fault.stage(),
-                "invariant": fault.invariant(), "named": fault.named()}))
+            Ok(NativeOutcomeRecord::Failure(NativeFailureRecord::Fault(
+                NativeFaultRecord {
+                    stage: fault.stage(),
+                    invariant: fault.invariant(),
+                    named: fault.named(),
+                },
+            )))
         }
         Err(
             failure @ (CallFailure::Input(_)

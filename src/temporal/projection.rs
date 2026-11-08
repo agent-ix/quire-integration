@@ -23,7 +23,7 @@ mod owners;
 mod positions;
 mod record;
 
-pub(in crate::temporal) use record::hex;
+pub(in crate::temporal) use record::{hex, hex_string};
 
 /// Public bridge profile name supplied directly to the request owner.
 pub const PROFILE: &str = "quire.native-temporal-correspondence/v1";

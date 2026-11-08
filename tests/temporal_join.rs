@@ -1660,6 +1660,38 @@ fn actual_native_call_refusal_is_retained_distinct_from_absence_without_evaluati
             quire_eval::CallAdmissionFailure::Refused(record)
             | quire_eval::CallAdmissionFailure::Incomplete(record) => record,
         };
+        let quire_eval::CallAdmissionLocus::Member { name, index } = &diagnostic.locus else {
+            panic!("the original clock refusal names its request member");
+        };
+        assert!(diagnostic.record.path.is_empty());
+        assert!(diagnostic.record.kernel.is_none());
+        let expected = json!({
+            "version": "quire.native-temporal-join/v1",
+            "correspondence": hex(projection.bytes()),
+            "native": {
+                "failure": "admission", "kind": "refused",
+                "code": diagnostic.record.catalog.code(),
+                "cause": diagnostic.record.catalog.cause(),
+                "prefix": diagnostic.record.catalog.prefix(),
+                "fields": diagnostic.record.fields,
+                "member": name, "index": index.map(|value| value.to_string()), "path": [],
+            },
+            "nativeAdmitted": false,
+            "mapped": hex(mapped.bytes()),
+            "tlResult": hex(mapped.source().bytes()),
+            "previous": null,
+            "decision": "refused", "comparison": "not-compared",
+            "causes": ["result-refused"], "value": null,
+        });
+        assert_eq!(
+            joined.bytes(),
+            quire_canonical::to_vec(
+                &expected,
+                quire_canonical::Limits::new(TlLimits::default().max_bytes)
+            )
+            .unwrap(),
+            "typed native records retain the complete established canonical wire bytes"
+        );
         let work = u64::try_from(diagnostic.record.fields.len() + diagnostic.record.path.len() + 1)
             .unwrap();
         assert_eq!(joined.usage().work, work);

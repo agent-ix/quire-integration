@@ -21,13 +21,18 @@ use crate::temporal::TemporalSubjectView;
 
 /// Lowercase hexadecimal spelling of exact owner bytes.
 pub(crate) fn hex(bytes: &[u8]) -> Value {
+    Value::String(hex_string(bytes))
+}
+
+/// Lowercase hexadecimal text for typed wire payloads.
+pub(crate) fn hex_string(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut text = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
         text.push(char::from(DIGITS[usize::from(byte >> 4)]));
         text.push(char::from(DIGITS[usize::from(byte & 15)]));
     }
-    Value::String(text)
+    text
 }
 
 fn dec(value: impl std::fmt::Display) -> Value {
