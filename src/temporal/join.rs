@@ -581,7 +581,7 @@ fn native_outcome_record(
         Ok(issued) => {
             let identity = issued.result().result_identity.as_bytes();
             budget.bytes(identity.len())?;
-            Ok(Value::String(hex(identity)))
+            Ok(hex(identity))
         }
         Err(failure @ CallFailure::Admission(admission)) => {
             let (kind, diagnostic) = match admission.as_ref() {

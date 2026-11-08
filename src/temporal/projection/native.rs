@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 use qsl_eval::temporal::{
     evidence::{bound_atom_indices, native_atom_operands},
-    finite_window::Valuation,
+    Valuation,
 };
 use qsl_eval::temporal::{
     evidence::{

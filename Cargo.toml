@@ -17,6 +17,7 @@ name = "quire_integration"
 path = "src/lib.rs"
 
 [dependencies]
+quire-semantic-value = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 quire-canonical = { git = "https://github.com/agent-ix/quire-canonical", branch = "main", features = ["serde_json"] }
 quire-observation = { git = "https://github.com/agent-ix/quire-observation", branch = "main" }
 qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
@@ -46,7 +47,6 @@ qsl-route = { git = "https://github.com/agent-ix/quire-spec-language", branch = 
 qsl-semantics = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-eval = { git = "https://github.com/agent-ix/quire-eval", branch = "main", default-features = false }
 quire-checked = { git = "https://github.com/agent-ix/quire-eval", branch = "main", default-features = false }
-quire-semantic-value = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 quire-contract-runtime = { git = "https://github.com/agent-ix/quire-contract-runtime", branch = "main", features = ["exact"] }
 quire-contract-codegen = { git = "https://github.com/agent-ix/quire-contract-codegen", branch = "main" }
 quire-driver = { git = "https://github.com/agent-ix/quire-driver", branch = "main" }
