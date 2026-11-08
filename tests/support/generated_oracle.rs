@@ -10,7 +10,7 @@ use std::{
 use quire_contract_codegen::{Artifact, ArtifactBundle};
 
 #[path = "cargo_command.rs"]
-mod cargo_command;
+pub(crate) mod cargo_command;
 
 static NEXT_OBSERVATION: AtomicU64 = AtomicU64::new(0);
 

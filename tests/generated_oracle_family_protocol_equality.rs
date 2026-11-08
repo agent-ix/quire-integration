@@ -6,7 +6,9 @@ mod family_scalar_limits;
 mod generated_oracle;
 #[path = "support/oracle_observation.rs"]
 mod oracle_observation;
+#[path = "support/qsl_root.rs"]
 mod support;
+use generated_oracle::cargo_command;
 use quire_contract_codegen::{
     ClaimDisposition, CompositeEqualityItem, ContractDriverResultSelection,
     ContractRequestPosition, EqualityOperandDescriptor, EqualityOperatorKind,

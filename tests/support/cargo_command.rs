@@ -5,7 +5,7 @@ use std::{path::Path, process::Command};
 
 /// Build a Cargo child under the shared lock and finite thermal settings.
 /// Launch the owning test executable outside Cargo and the shared lock.
-pub(super) fn command() -> Command {
+pub(crate) fn command() -> Command {
     // A temporary child directory must not reselect an ambient rustup compiler.
     let cargo = Path::new(env!("CARGO"));
     let compiler = cargo.with_file_name(format!("rustc{}", std::env::consts::EXE_SUFFIX));
