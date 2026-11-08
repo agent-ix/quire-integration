@@ -835,3 +835,52 @@ Contract IR PR965 is actually MERGED at 2026-11-08T13:48:17Z with merge 079fb852
 The normal refresh coherently advances all QSL packages to published 5ff99930804e036486ed045708a48554ebca622c; its changed surface includes grammar/forms/emission/planner work and has not been represented as a no-op dependency update. No new material dependency defect was established in this targeted disposition. The actual post-adoption first-Layout and native refusal smoke logs each name the intended exact test and report 1 passed, 0 failed. The scoped post-adoption Clippy log finishes successfully. Earlier 79 exact tests belong to the earlier 935d93e QSL cohort and six typed-wire tests to the b47357b cohort; none is claimed rerun on 5ff9993. The lead's final aggregate gate on the actual final dependency cohort remains pending. No reviewer Cargo, runtime, full review, aggregate, deep or Kani run was made.
 
 **Latest review status: PASS; all real findings have latest outcome fixed, no open findings.** This supersedes historical pending/current-verdict statements above, while preserving their original findings and disposition history. SR813 FND-002 was fixed in disposition 2; SR814 FND-001 was fixed in disposition 1; SR815 FND-002 is fixed in disposition 3. Other original placeholder rows are not findings. Lead owns final gate and merge. Plan completion: not assessed.
+
+## Targeted test-harness disposition (pass 4)
+
+Targeted review of 7ebf6ed89c517868348b206865f001a6df483d51 only: four test-support files introduce one private Cargo-child builder for metadata, original QSL emission and generated native execution. The global flock is acquired by the actual child process; launching the parent test executable directly outside the lock removes the observed parent/child lock cycle without bypassing child serialization. Original Cargo argv, generated compiler/target arguments, data and assertions are preserved; no production or Makefile/CI changes occur. Thermal nice/ionice/job/incremental/debug settings are centralized. The actual decimal direct receipt passes 1 test. The actual producer direct receipt fails before emission with compiler mismatch E0514, exposing the missing common selected-compiler setting. New finding FND-003 is open and routed to the existing coder/PR. No broad review, Cargo command or aggregate gate was run by the reviewer. Prior real findings remain fixed; final gate and this new code defect remain pending.
+
+## New findings (disposition pass 4)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-003 | high | The new shared Cargo-child builder selects Cargo but leaves RUSTC ambient for producer children launched outside Cargo: the direct producer control runs rustc 1.99.1 against shared 1.98.1 artifacts and fails E0514 before genuine QSL emission or assertions. Generated-native children alone retain an explicit selected compiler. | tests/support/cargo_command.rs:8-17 |
+
+## Disposition pass 4 outcome
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-003 | still-open | Preserve the selected Cargo toolchain compiler centrally for every child, then execute the actual direct producer control successfully; cleaning artifacts or changing ambient toolchains would not repair child command semantics. |
+
+## Targeted compiler disposition (pass 5)
+
+At local ad141be9fb76e39060ec2a10b7f4075ca588e535, the selected-toolchain sibling rustc lookup, existence assertion and RUSTC env are now centralized in cargo_command::command, while generated native execution consumes exactly that same compiler selection rather than duplicating it. This repairs FND-003 without changing Cargo arguments, target, data, assertions or child locking. The actual direct producer-selected-compiler log reports genuine QSL AdmittedV2, the named test ok, 1 passed/0 failed after 214.78s. The earlier failing receipt is retained. Prior decimal direct execution already passed with the same sibling-compiler semantics; it is not claimed rerun here. Actual compile-only inventory has 64 distinct executable artifacts and build-finished success=true.
+
+A separate scoped lint receipt is red: /tmp/IR-1400-thermal-clippy.log reports duplicate_mod for multiple declarations of the shared helper in a test crate. New medium FND-004 is therefore still-open and routed to the existing coder/PR, without a lint suppression. Latest successful scoped lint/fmt evidence and pushed frozen candidate confirmation remain pending; local HEAD currently differs from GH head 3d593f895b2c088377e73085b7fab8201ce95863. No reviewer Cargo/runtime or aggregate gate was executed. Earlier findings remain fixed. Overall current review is CONDITIONAL on FND-004 and the lead final gate.
+
+## New findings (disposition pass 5)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-004 | medium | The shared cargo_command.rs is loaded as multiple modules within the same test crate; scoped Clippy fails clippy::duplicate_mod under -D warnings, so the required lint gate cannot pass until callers import a single module declaration. | tests/support/producer_origin.rs:14-15 |
+
+## Disposition pass 5 outcomes
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-003 | fixed | Central RUSTC selection matches selected Cargo toolchain and actual producer emission/test now passes. |
+| FND-004 | still-open | Declare the helper once per test crate and import it from callers; retain lint strictness and provide successful scoped Clippy/fmt evidence. |
+
+## Targeted import-once disposition (pass 6)
+
+Targeted FND-004 disposition on frozen pushed clean 00d8c82df6f90ea0ec77a8719aacdd55d3740b53. Reviewed only the six support/import files changed after ad141be. Producer now imports the shared support command reexport; the one protocol test combining generated execution and metadata aliases the existing generated command module. The locator moves unchanged to qsl_root.rs and resolves that single module in either parent layout. No lint allow is added. Machine comparison verifies the complete command builder is identical to ad141be apart from pub(super) becoming pub(crate), and the locator is identical apart from replacing its module declaration with a parent-module import. Selected Cargo/RUSTC, child flock, thermal environment, target directories and args retain the reviewed behavior. No production, public product API, lock, specification, data, assertions or Makefile/CI changes.
+
+Final scoped Clippy covering lib, generated decimal, combined protocol and producer identity finishes successfully in /tmp/IR-1400-thermal-clippy-fixed.log; final fmt and whole-diff whitespace logs were inspected. The final compile-only JSON inventory reports 64 distinct actual executable artifacts and build-finished success=true. Actual ad141be decimal receipt passes the whole sole-test target (1/0, zero filtered); actual producer receipt passes its named real-emission test (1/0, 17 filtered), with genuine AdmittedV2. Both logs were read; these are runtime-behavior evidence from ad141be with import-only equivalence verified, not claimed reruns at 00d8c82. Earlier failing compiler and duplicate-module logs remain preserved. No reviewer Cargo/runtime/aggregate run. Lead remaining runtime gate remains pending, including the producer's other 17 cases.
+
+**Latest review status: PASS; all real findings latest fixed, no open findings and no new finding in this targeted fix.** This supersedes historical pending verdicts above without rewriting findings or prior dispositions. Code SR813 FND-002/FND-003/FND-004, gap SR814 FND-001 and spec SR815 FND-002 all have latest fixed outcomes. Other placeholder rows are not findings. Lead owns remaining final gate and merge. Plan completion: not assessed.
+
+## Disposition pass 6 outcome
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-004 | fixed | One command module per test crate is imported through existing support/generated parents; strict scoped Clippy passes without suppression and final 64-target compilation succeeds. |
