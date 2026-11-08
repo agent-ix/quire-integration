@@ -32,9 +32,11 @@ use serde_json::Value;
 /// The version the authored domain package document carries.
 const AUTHORED_VERSION: &str = "1.0.0";
 
-/// The domain package identity and its declarations the unit uses.
+/// The domain package identity and every ordinary object it declares. QSL FR-094
+/// "Model declaration nodes" roots every object of the selected document, including
+/// the unit's unused `Rock` (QSL `qsl-package` emit tests, `model_key("Rock")`).
 const IDENTITY: &str = "acme/orders";
-const DECLARATIONS: [&str; 2] = ["Gadget", "Widget"];
+const DECLARATIONS: [&str; 3] = ["Gadget", "Rock", "Widget"];
 
 /// QSL's authored domain package document with only `package.version` set to
 /// `version`.
@@ -86,7 +88,11 @@ fn emit(unit: &str, document: &[u8]) -> Vec<u8> {
             .expect("the unit assembles")
             .check(CheckingLimits::default())
             .expect("the package checks");
-    let emission = emit_checked(&CheckedPackage::link(graph)).expect("the package emits");
+    let emission = emit_checked(
+        &CheckedPackage::link(graph),
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("the package emits");
     assert_eq!(emission.omitted(), []);
     emission.package().bytes().to_vec()
 }

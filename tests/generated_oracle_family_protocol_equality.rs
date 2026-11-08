@@ -50,7 +50,11 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
         std::fs::read(support::qsl_root().join("tests/fixtures/spine-model.semantic-ir.json"))
             .expect("lock-selected model input");
     let producer = checked(&source, &model);
-    let emitted = qsl_package::emit_checked(&producer).expect("original protocol equality emits");
+    let emitted = qsl_package::emit_checked(
+        &producer,
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("original protocol equality emits");
     assert!(emitted.omitted().is_empty());
     let mut evidence = CheckedPackageEvidence::new();
     evidence.support_feature("quire.value.complete/v1");
@@ -217,9 +221,15 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
         )
         .expect("actual constructor body");
     let mut input_meter = Meter::new(family_scalar_limits::limits(1024));
-    let input =
-        qsl_eval::value::evaluate_closed(&checked, function.body, function.slots, &mut input_meter)
-            .expect("original source constructor");
+    let input = qsl_eval::value::evaluate_closed_with_frame(
+        &checked,
+        function.body,
+        function.slots,
+        Vec::new(),
+        function.formed_units,
+        &mut input_meter,
+    )
+    .expect("original source constructor");
     assert!(input.location.is_none());
     assert!(input.losses.is_empty());
     let FamilyOutcome::Evaluated(Outcome::Completed(input)) = input.outcome else {

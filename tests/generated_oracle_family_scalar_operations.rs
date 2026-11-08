@@ -32,6 +32,7 @@ struct Row {
     name: String,
     syntax: &'static str,
     unary: bool,
+    lazy: bool,
     cases: Vec<(&'static str, &'static str, Value)>,
 }
 
@@ -48,6 +49,7 @@ fn rows() -> Vec<Row> {
             name: name.to_owned(),
             syntax,
             unary: false,
+            lazy: false,
             cases: [
                 ("false", "false"),
                 ("false", "true"),
@@ -64,11 +66,25 @@ fn rows() -> Vec<Row> {
         name: "bnot".to_owned(),
         syntax: "not",
         unary: true,
+        lazy: false,
         cases: vec![
             ("false", "false", Value::Boolean(true)),
             ("true", "false", Value::Boolean(false)),
         ],
     });
+    for (name, syntax, left, expected) in [
+        ("lazyand", "and", "false", false),
+        ("lazyor", "or", "true", true),
+        ("lazyimplies", "implies", "false", true),
+    ] {
+        rows.push(Row {
+            name: name.to_owned(),
+            syntax,
+            unary: false,
+            lazy: true,
+            cases: vec![(left, "(1 = 1)", Value::Boolean(expected))],
+        });
+    }
     rows.into_iter()
         .flat_map(|row| {
             row.cases
@@ -78,6 +94,7 @@ fn rows() -> Vec<Row> {
                     name: format!("{}truth{index}", row.name),
                     syntax: row.syntax,
                     unary: row.unary,
+                    lazy: row.lazy,
                     cases: vec![case],
                 })
                 .collect::<Vec<_>>()
@@ -113,7 +130,11 @@ fn selected_scalar_operations_match_independently_checked_qsl_bodies() {
     let rows = rows();
     let source = source(&rows);
     let producer = checked(&source);
-    let emission = emit_checked(&producer).expect("original checked source emits");
+    let emission = emit_checked(
+        &producer,
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("original checked source emits");
     assert!(emission.omitted().is_empty());
     let mut evidence = CheckedPackageEvidence::new();
     evidence.support_feature("quire.value.complete/v1");
@@ -137,19 +158,22 @@ fn selected_scalar_operations_match_independently_checked_qsl_bodies() {
             })
         })
         .collect::<Vec<_>>();
-    for item in &items {
+    for (row, item) in rows.iter().zip(&items) {
         assert!(
             matches!(
-                item.operation,
+                &item.operation,
                 ExactScalarOperation::Boolean {
-                    right_may_stop: false,
+                    right_may_stop,
                     ..
-                } | ExactScalarOperation::Equality {
+                } if *right_may_stop == row.lazy
+            ) || matches!(
+                &item.operation,
+                ExactScalarOperation::Equality {
                     operands: quire_contract_codegen::EqualityOperandKind::Boolean,
                     ..
                 }
             ),
-            "only selected eager Boolean rows: {:?}",
+            "selected Boolean row: {:?}",
             item.operation
         );
     }
@@ -196,10 +220,12 @@ fn observe() {
                 .expect("actual checked function body");
             for work in [1024, 0, 1] {
                 let mut meter = Meter::new(limits(work));
-                let evaluation = qsl_eval::value::evaluate_closed(
+                let evaluation = qsl_eval::value::evaluate_closed_with_frame(
                     &authority,
                     function.body,
                     function.slots,
+                    Vec::new(),
+                    function.formed_units,
                     &mut meter,
                 )
                 .expect("public checked body evaluation");
@@ -247,6 +273,8 @@ fn observe() {
                 expected.push(oracle_observation::snapshot(&outcome, &losses, &meter));
                 let arguments = if row.unary {
                     (*left).to_owned()
+                } else if row.lazy {
+                    format!("{left}, || -> Outcome<bool> {{ panic!(\"short-circuit right evaluated\") }}")
                 } else {
                     format!("{left}, {right}")
                 };

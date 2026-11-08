@@ -339,7 +339,11 @@ fn checked_float_source(function: &str) -> CheckedPackage {
 
 fn assert_ieee_carrier(function: &str, identity: &str, expected_count: usize) {
     let package = checked_float_source(function);
-    let emission = emit_checked(&package).expect("admitted IEEE source emits a checked package");
+    let emission = emit_checked(
+        &package,
+        qsl_package::EmitLimits::new(qsl_replay::spine::EMIT_OUTPUT_BYTES_DEFAULT),
+    )
+    .expect("admitted IEEE source emits a checked package");
     let wire: serde_json::Value =
         serde_json::from_slice(emission.package().bytes()).expect("checked package is JSON");
     let nodes = wire["semantic_graph"]["nodes"]

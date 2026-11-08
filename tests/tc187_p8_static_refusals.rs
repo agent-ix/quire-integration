@@ -331,7 +331,13 @@ fn same_named_base_dimensions_keep_distinct_actual_owners() {
                 .map(String::as_str),
             Some("L")
         );
-        assert_eq!(node.form, NominalUnitForm::Dimension { terms: Vec::new() });
+        assert_eq!(
+            node.form,
+            NominalUnitForm::Dimension {
+                base: true,
+                terms: Vec::new()
+            }
+        );
         assert_eq!(
             unit.dimension().exponents().collect::<Vec<_>>(),
             vec![(unit.dimension_node(), &Integer::one())]

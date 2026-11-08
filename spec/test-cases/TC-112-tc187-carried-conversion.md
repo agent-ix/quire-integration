@@ -13,8 +13,8 @@ relationships:
 Exercise public TC-187 U07 and U08 through original checked QSL conversion
 bodies and independently invoked native carried conversion. Source names the
 inch unit `inch` because `in` is reserved; its scale is exactly 127/5000 metres.
-This is source/native evidence only. Generated carried target and rounding
-agreement and complete SC-04 remain Planned.
+The generated carried-target and rounding agreement is executed by
+`tc187_p9_remaining_conversions` and recorded in IT-019; complete SC-04 remains Planned.
 
 ## Test Procedure
 
@@ -46,4 +46,4 @@ U08 completes at -2 and 2 and refuses DecimalOutOfDomain at -3 and 3 after
 target-domain and before retention, with no value or loss. Work one denies
 target-domain before membership. Every source/native comparison preserves
 complete typed outcome and accounting without subtracting call charges.
-The generated carried conversion leg remains Planned.
+The generated carried conversion leg is executed in TC-106's conversion tests and IT-019.

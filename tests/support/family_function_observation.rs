@@ -11,7 +11,9 @@ mod family_scalar_limits {
 
 use family_function_selection::declared;
 use family_scalar_limits::limits;
-mod family_function_envelope { include!("family_function_envelope.rs"); }
+mod family_function_envelope {
+    include!("family_function_envelope.rs");
+}
 use family_function_envelope::same_envelope;
 
 use qsl_replay::{
@@ -213,63 +215,70 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
         );
         zero(&rejected_meter);
         owner_refusals += 1;
-        for work in [1024, 0, 1] {
-            let arguments = vec![
-                Value::Integer(Integer::from(4_i64)),
-                Value::Integer(Integer::from(3_i64)),
-            ];
-            let mut authority_meter = Meter::new(limits(work));
-            let environment = ApplicationEnvironment::new(ObjectClosure::default());
-            let mut registry = handle.registry();
-            let authority = registry
-                .begin_call(
-                    &selection,
-                    arguments.clone(),
-                    &environment,
-                    &mut authority_meter,
+        let samples = if name == "product" {
+            vec![(4_i64, 3_i64, 12_i64), (4, 7, 28)]
+        } else {
+            vec![(4_i64, 3_i64, expected)]
+        };
+        for (left, right, expected) in samples {
+            for work in [1024, 0, 1] {
+                let arguments = vec![
+                    Value::Integer(Integer::from(left)),
+                    Value::Integer(Integer::from(right)),
+                ];
+                let mut authority_meter = Meter::new(limits(work));
+                let environment = ApplicationEnvironment::new(ObjectClosure::default());
+                let mut registry = handle.registry();
+                let authority = registry
+                    .begin_call(
+                        &selection,
+                        arguments.clone(),
+                        &environment,
+                        &mut authority_meter,
+                    )
+                    .expect("real authority Begin")
+                    .run()
+                    .expect("required authority evaluation");
+                let mut generated_meter = Meter::new(limits(work));
+                let actual = generated(
+                    name,
+                    SOURCE.as_bytes(),
+                    &package,
+                    arguments,
+                    &mut generated_meter,
                 )
-                .expect("real authority Begin")
-                .run()
-                .expect("required authority evaluation");
-            let mut generated_meter = Meter::new(limits(work));
-            let actual = generated(
-                name,
-                SOURCE.as_bytes(),
-                &package,
-                arguments,
-                &mut generated_meter,
-            )
-            .expect("original generated source authenticates")
-            .expect("required generated evaluation");
-            same_envelope(&authority, &actual);
-            required(
-                name,
-                source_index,
-                expected,
-                work,
-                &authority,
-                &authority_meter,
-            );
-            required(
-                name,
-                source_index,
-                expected,
-                work,
-                &actual,
-                &generated_meter,
-            );
-            assert_eq!(
-                authority_meter.admitted_charges(),
-                generated_meter.admitted_charges()
-            );
-            for kind in LimitKind::ALL {
-                assert_eq!(
-                    authority_meter.consumed(kind),
-                    generated_meter.consumed(kind)
+                .expect("original generated source authenticates")
+                .expect("required generated evaluation");
+                same_envelope(&authority, &actual);
+                required(
+                    name,
+                    source_index,
+                    expected,
+                    work,
+                    &authority,
+                    &authority_meter,
                 );
+                required(
+                    name,
+                    source_index,
+                    expected,
+                    work,
+                    &actual,
+                    &generated_meter,
+                );
+                assert_eq!(
+                    authority_meter.admitted_charges(),
+                    generated_meter.admitted_charges()
+                );
+                for kind in LimitKind::ALL {
+                    assert_eq!(
+                        authority_meter.consumed(kind),
+                        generated_meter.consumed(kind)
+                    );
+                }
+                envelopes += 1;
+                eprintln!("SC05 {name} work={work}: authority={authority:?}; generated={actual:?}; charges={:?}; counters={:?}",generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
             }
-            envelopes += 1;
-            eprintln!("SC05 {name} work={work}: authority={authority:?}; generated={actual:?}; charges={:?}; counters={:?}",generated_meter.admitted_charges(),LimitKind::ALL.map(|kind|(kind,generated_meter.consumed(kind))));
         }
         for (arguments, required_refusal) in [
             (
