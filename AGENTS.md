@@ -1,8 +1,7 @@
 # Contributor guidance
 
 Read this file, `README.md`, `CONTENT_RIGHTS.md`, and the
-owning issues before editing. This private bootstrap implements Research #34/#74
-under integration epics #39/#40.
+owning issues before editing. This repository holds the cross-repository integration tests for Quire.
 
 ## Hash / digest / pin antipattern: present, slated for removal
 
