@@ -8,6 +8,8 @@ use std::{
 
 use serde::Deserialize;
 
+mod cargo_command;
+
 #[derive(Deserialize)]
 struct Metadata {
     packages: Vec<MetadataPackage>,
@@ -23,7 +25,7 @@ pub fn qsl_root() -> &'static Path {
     static ROOT: OnceLock<PathBuf> = OnceLock::new();
     ROOT.get_or_init(|| {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-        let output = std::process::Command::new(env!("CARGO"))
+        let output = cargo_command::command()
             .args(["metadata", "--format-version", "1", "--manifest-path"])
             .arg(&manifest)
             .output()

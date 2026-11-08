@@ -4,11 +4,13 @@
 use std::{
     fs,
     path::Path,
-    process::Command,
     sync::atomic::{AtomicU64, Ordering},
 };
 
 use quire_contract_codegen::{Artifact, ArtifactBundle};
+
+#[path = "cargo_command.rs"]
+mod cargo_command;
 
 static NEXT_OBSERVATION: AtomicU64 = AtomicU64::new(0);
 
@@ -89,10 +91,7 @@ pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
         compiler.is_file(),
         "the selected Cargo toolchain contains rustc"
     );
-    let output = Command::new("flock")
-        .arg("/tmp/titan-cargo.lock")
-        .args(["nice", "-n", "10", "ionice", "-c2", "-n7"])
-        .arg(cargo)
+    let output = cargo_command::command()
         .args(["test", "-j2", "--quiet", "--manifest-path"])
         .arg(directory.path().join("Cargo.toml"))
         .args([
@@ -108,8 +107,6 @@ pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
             Path::new(env!("CARGO_MANIFEST_DIR")).join("target"),
         )
         .env("RUSTC", compiler)
-        .env("CARGO_INCREMENTAL", "0")
-        .env("CARGO_PROFILE_DEV_DEBUG", "0")
         .output()
         .expect("native artifact compilation and execution starts");
     if output.status.success() && !output.stderr.is_empty() {
