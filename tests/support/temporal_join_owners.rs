@@ -5,6 +5,8 @@
 
 #![allow(dead_code)] // Each target uses a different subset of these helpers.
 
+use qsl_eval::temporal::evidence::{EvaluatedEvidence, EvidencePackage};
+use qsl_package::BarePackage;
 use qsl_package::NativeJoinBudget;
 use quire_exact::{Meter, ScalarLimits};
 use quire_integration::temporal::ValidatedTlProjection;
@@ -12,8 +14,6 @@ use quire_mltl::{
     contract_ir::{self, MappingSelection, ValidatedMappedResult},
     report::{self, ResultRelationInput, ValidatedTemporalResult},
 };
-use qsl_eval::temporal::evidence::{EvidencePackage, EvaluatedEvidence};
-use qsl_package::BarePackage;
 use tl_mltl::wire::OwnerLimits;
 
 /// Lowercase hexadecimal spelling of owner bytes, as the records write them.
@@ -54,12 +54,19 @@ pub(crate) fn evaluate_native_with_prior(
     let package = EvidencePackage::from_package(&bare, &mut native_budget())
         .expect("actual native package rows and capture projections");
     if let Some(prior) = prior {
-        assert_eq!(input.request.ledger.as_ref(), Some(&prior.result().ledger),
-            "correction fixture must supply the exact predecessor ledger in its request");
+        assert_eq!(
+            input.request.ledger.as_ref(),
+            Some(&prior.result().ledger),
+            "correction fixture must supply the exact predecessor ledger in its request"
+        );
     }
-    package.evaluate_temporal_evidence(
-        &input.occurrence.node, input.request, &mut Meter::new(scalar_limits()),
-    ).expect("explicit native fixture evaluation")
+    package
+        .evaluate_temporal_evidence(
+            &input.occurrence.node,
+            input.request,
+            &mut Meter::new(scalar_limits()),
+        )
+        .expect("explicit native fixture evaluation")
 }
 
 /// Both evaluator invocations remain outside the bridge under test.

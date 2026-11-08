@@ -2,6 +2,11 @@
 //! Original-source packages for capture and shared-declaration correspondence.
 
 use qsl_eval::temporal::evidence::{CaptureFact, CapturedValue, TraceBinding};
+use qsl_eval::temporal::{
+    evidence::{bound_atom_indices, native_atom_operands},
+    Valuation,
+};
+use qsl_package::checked_views::instance_bound_atoms;
 use qsl_package::checked_views::{mapping_support, temporal_subject, ClauseOccurrence, Closure};
 use qsl_semantics::{
     check::PackageDeclarations,
@@ -17,7 +22,6 @@ use quire_contract_ir::{
 };
 use quire_integration::temporal::NativeProjectionInput;
 use quire_semantic_value::checking::CheckingLimits;
-use quire_spec_language::temporal::{ValuationEvidence, ValuationRow};
 
 use crate::{
     projection_support::{self, Case, EVENT},
@@ -144,31 +148,35 @@ pub(super) fn with_source(
         request.origins[0].captures = captures
             .iter()
             .map(|value| CaptureFact::Value {
-                anchor: base.native.instance.anchor.into(),
+                anchor: base.native.request.anchor.as_deref().unwrap().into(),
                 value: CapturedValue::new(value.to_vec()),
             })
             .collect();
-        let rows = subject
-            .predicate_leaves()
-            .iter()
-            .map(|operand| ValuationRow {
-                subject: occurrence.clone(),
-                position: 0,
-                anchor: base.native.instance.anchor.into(),
-                capture_instance: base.native.instance.capture_instance.into(),
-                revision: base.native.observation.revision.clone(),
-                operand: operand.clone(),
-                value: true,
-            })
-            .collect();
-        let evidence = ValuationEvidence::admit(
-            &subject,
-            &projection_support::native_trace(EVENT, base.native.instance.anchor),
-            base.native.instance,
-            &base.native.observation.revision,
-            rows,
+        let atoms = native_atom_operands(&subject);
+        let bound = bound_atom_indices(
+            subject.formula_graph(),
+            &instance_bound_atoms(&subject).unwrap(),
         )
-        .expect("actual native valuation owner");
+        .unwrap();
+        request.positions[0].valuations.clear();
+        request.positions[0].instance_valuations.clear();
+        for (index, operand) in atoms.iter().enumerate() {
+            if operand.is_none() {
+                continue;
+            }
+            let atom = u64::try_from(index).unwrap();
+            if bound.contains(&atom) {
+                request.positions[0]
+                    .instance_valuations
+                    .entry(request.trigger.clone().unwrap())
+                    .or_default()
+                    .insert(atom, Valuation::True);
+            } else {
+                request.positions[0]
+                    .valuations
+                    .insert(atom, Valuation::True);
+            }
+        }
         test(Case {
             package: &package,
             subject: &subject,
@@ -176,10 +184,7 @@ pub(super) fn with_source(
             surrounding: Closure::Complete,
             native: NativeProjectionInput {
                 request: &request,
-                valuations: &evidence,
                 occurrence: &occurrence,
-                instance: base.native.instance,
-                observation: base.native.observation,
             },
             selection: base.selection,
         });

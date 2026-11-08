@@ -18,6 +18,21 @@ use quire_integration::temporal::{
 
 const HIGH: u64 = 1 << 40;
 
+fn valuation_count(request: &qsl_eval::temporal::evidence::EvidenceRequest) -> usize {
+    request
+        .positions
+        .iter()
+        .map(|position| {
+            position.valuations.len()
+                + position
+                    .instance_valuations
+                    .values()
+                    .map(std::collections::BTreeMap::len)
+                    .sum::<usize>()
+        })
+        .sum()
+}
+
 fn high() -> TlLimits {
     TlLimits {
         max_bytes: HIGH,
@@ -108,7 +123,7 @@ fn projection_work(case: &Case<'_>, projection: &ValidatedTlProjection<'_>) -> u
             .records()
             .len()
         + request.positions.len()
-        + case.native.valuations.rows().len()
+        + valuation_count(case.native.request)
         + tl_positions * leaves
         + projection.formula().formula().nodes().len()
         + projection.propositions().propositions().len()
@@ -212,7 +227,7 @@ fn projection_limits_admit_at_the_computed_count_and_refuse_one_below() {
             ),
             (
                 TlProjectionLimit::Valuations,
-                len(case.native.valuations.rows().len()),
+                len(valuation_count(case.native.request)),
             ),
             (TlProjectionLimit::Work, projection_work(&case, &projection)),
         ];
@@ -285,7 +300,7 @@ fn projection_limits_admit_at_the_computed_count_and_refuse_one_below() {
 #[test]
 fn one_action_crossing_two_limits_returns_the_first_in_table_order() {
     with_case("holds(true) and holds(false)", false, |case| {
-        let rows = len(case.native.valuations.rows().len());
+        let rows = len(valuation_count(case.native.request));
         let request = case.native.request;
         // Work already charged when the valuation rows are charged together
         // with the valuation counter: the instance visits, the bundle records
@@ -355,9 +370,9 @@ fn join_limits_admit_at_the_computed_count_and_refuse_one_below() {
             &mut native_budget(),
         )
         .expect("unconstrained join");
-        let support = len(native.support().len() + mapped.source().decision_support().len());
+        let support = len(native.result().support.len() + mapped.source().decision_support().len());
         let bytes = [
-            native.to_owner_bytes().len(),
+            native.result().result_identity.as_bytes().len(),
             mapped.bytes().len(),
             mapped.source().bytes().len(),
             reference.bytes().len(),

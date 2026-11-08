@@ -11,12 +11,12 @@ use ix_trace_rs::trace;
 use owners::{evaluate_mapped, evaluate_native, native_budget};
 use projection_support::with_case;
 use qsl_eval::temporal::evidence::Truth;
+use qsl_eval::temporal::{evidence::native_atom_operands, Valuation};
 use quire_integration::temporal::{
     join_tl, read_tl_join, read_tl_projection, ExpectedTlJoin, ExpectedTlProjection, TlInput,
     TlJoinCause, TlJoinDecision, TlLimits,
 };
 use quire_mltl::{contract_ir::MappedOutcome, report::TemporalTruth};
-use quire_spec_language::temporal::ReportOutcome;
 use tl_syntax::PropositionId;
 
 #[trace("TC-115", "FR-350-AC-1")]
@@ -29,10 +29,12 @@ fn two_distinct_valuation_rows_reach_both_owner_results_and_the_strict_join() {
         ("holds(true) and holds(false)", false),
     ] {
         with_case(formula, false, |case| {
-            let rows = case.native.valuations.rows();
-            assert_eq!(rows.len(), 2);
-            assert_eq!((rows[0].value, rows[1].value), (true, false));
-            assert_ne!(rows[0].operand, rows[1].operand);
+            let values = &case.native.request.positions[0].valuations;
+            assert_eq!(values.len(), 2);
+            assert_eq!(values.get(&0), Some(&Valuation::True));
+            assert_eq!(values.get(&1), Some(&Valuation::False));
+            let operands = native_atom_operands(case.subject);
+            assert_ne!(operands[0], operands[1]);
             let projection = case.project(TlLimits::default()).expect("projection");
             let read = read_tl_projection(
                 projection.bytes(),
@@ -56,9 +58,9 @@ fn two_distinct_valuation_rows_reach_both_owner_results_and_the_strict_join() {
             assert!(trace.document().closed);
             let native = evaluate_native(&read);
             let mapped = evaluate_mapped(&read);
-            assert_eq!(native.outcome(), ReportOutcome::Evaluated);
+            assert!(native.result().incomplete.is_none());
             assert_eq!(
-                native.truth(),
+                native.result().truth,
                 Some(if expected { Truth::True } else { Truth::False })
             );
             assert_eq!(
@@ -95,10 +97,10 @@ fn two_distinct_valuation_rows_reach_both_owner_results_and_the_strict_join() {
             assert_eq!(reread.value(), Some(expected));
             assert!(reread.causes().is_empty());
             assert_eq!(reread.bytes(), joined.bytes());
-            assert_eq!(
-                reread.native().expect("native retained").to_owner_bytes(),
-                native.to_owner_bytes()
-            );
+            assert!(std::ptr::eq(
+                reread.native().expect("native retained"),
+                &native
+            ));
             assert_eq!(
                 reread.mapped().expect("mapped retained").bytes(),
                 mapped.bytes()
@@ -125,8 +127,8 @@ fn equal_true_results_from_another_formula_do_not_authorize_the_join() {
                 .expect("foreign projection");
             let foreign_native = evaluate_native(&foreign);
             let foreign_mapped = evaluate_mapped(&foreign);
-            assert_eq!(native.truth(), Some(Truth::True));
-            assert_eq!(foreign_native.truth(), Some(Truth::True));
+            assert_eq!(native.result().truth, Some(Truth::True));
+            assert_eq!(foreign_native.result().truth, Some(Truth::True));
             assert_eq!(mapped.source().truth(), TemporalTruth::Satisfied);
             assert_eq!(foreign_mapped.source().truth(), TemporalTruth::Satisfied);
             assert_eq!(mapped.outcome(), MappedOutcome::Value { value: true });

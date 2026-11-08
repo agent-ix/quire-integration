@@ -3,19 +3,23 @@
 
 use std::collections::BTreeSet;
 
+use qsl_eval::temporal::evidence::PackageMismatch;
 use qsl_eval::temporal::{
-    evidence::{ActivationState, EvidencePackage, EvidenceResult, EvaluatedEvidence, ExecutionDisposition, NonValueKind as NativeNonValueKind, Relation, Settlement, Truth, matches_result_identity},
+    evidence::{
+        matches_result_identity, ActivationState, EvaluatedEvidence, EvidencePackage,
+        EvidenceResult, ExecutionDisposition, NonValueKind as NativeNonValueKind, Relation,
+        Settlement, Truth,
+    },
     ProgressClosure,
 };
+use qsl_package::BarePackage;
 use qsl_package::NativeJoinBudget;
+use quire_eval::CallFailure;
 use quire_mltl::{
     contract_ir::{MappedOutcome, MappingSelection, NonValueKind, ValidatedMappedResult},
     report::{AssessmentExecution, ResultRelationKind, SettlementBasis, TemporalTruth},
 };
 use quire_observation::authority::{availability, completeness, OpenClosed};
-use quire_eval::CallFailure;
-use qsl_eval::temporal::evidence::PackageMismatch;
-use qsl_package::BarePackage;
 use serde_json::{json, Value};
 
 use super::{
@@ -119,7 +123,7 @@ pub enum TlJoinCode {
     LimitReached,
     /// The canonical writer refused the join record.
     Encoding,
-    /// Another native bounded-writer refusal.
+    /// Original native evidence package or identity-binding refusal.
     NativeEvidence,
 }
 
@@ -183,7 +187,7 @@ impl TlJoinError {
     pub const fn code(&self) -> TlJoinCode {
         match self {
             Self::ExpectedMismatch => TlJoinCode::ExpectedMismatch,
-            Self::LimitReached { .. } => TlJoinCode::LimitReached,
+            Self::LimitReached { .. } | Self::NativePackage(PackageMismatch::Exhausted(_)) => TlJoinCode::LimitReached,
             Self::NativeEvidence(_) | Self::NativePackage(_) => TlJoinCode::NativeEvidence,
             Self::Encoding(_) => TlJoinCode::Encoding,
         }
@@ -209,7 +213,7 @@ pub struct TlJoinOwnerRefusals {
 }
 
 impl TlJoinOwnerRefusals {
-    /// Original native owner refusal, if that read or predecessor check refused.
+    /// Native source, request or predecessor mismatch of a genuine issued result.
     pub fn native(&self) -> Option<&TlNativeMismatch> {
         self.native.as_ref()
     }
@@ -255,7 +259,7 @@ impl<'a> ValidatedTlJoin<'a> {
     pub fn native(&self) -> Option<&'a EvaluatedEvidence> {
         self.native
     }
-    /// Whether strict native admission, including predecessor validation, succeeded.
+    /// Whether the genuine issued result matched this input and supplied predecessor.
     pub fn native_admitted(&self) -> bool {
         self.native_admitted
     }
@@ -449,11 +453,15 @@ fn native_state(result: &EvidenceResult) -> NativeState {
         return match non_value.kind {
             NativeNonValueKind::Refused => NativeState::Refused,
             NativeNonValueKind::Missing => NativeState::Incomplete,
-            NativeNonValueKind::Inactive | NativeNonValueKind::ActivationUnknown | NativeNonValueKind::Unactivated => NativeState::Unavailable,
+            NativeNonValueKind::Inactive
+            | NativeNonValueKind::ActivationUnknown
+            | NativeNonValueKind::Unactivated => NativeState::Unavailable,
         };
     }
     match result.activation {
-        ActivationState::Inactive | ActivationState::Unknown | ActivationState::Unavailable => NativeState::Unavailable,
+        ActivationState::Inactive | ActivationState::Unknown | ActivationState::Unavailable => {
+            NativeState::Unavailable
+        }
         ActivationState::Active => native_final(result.truth, result.settlement)
             .map_or(NativeState::Pending, NativeState::Final),
     }
@@ -521,16 +529,8 @@ fn premises_equal(
         ExecutionDisposition::Completed => AssessmentExecution::Completed,
         ExecutionDisposition::Failed => AssessmentExecution::Failed,
     };
-    let positions = &projection.native().request.positions;
-    let native_support: Option<BTreeSet<&str>> = native
-        .support
-        .iter()
-        .map(|support| {
-            positions
-                .get(support.position)
-                .map(|position| position.observation.identity.as_str())
-        })
-        .collect();
+    let native_support: BTreeSet<&str> = native.support.iter()
+        .map(|support| support.observation.identity.as_str()).collect();
     let tl_support: BTreeSet<&str> = source
         .decision_support()
         .iter()
@@ -545,7 +545,7 @@ fn premises_equal(
         && source.completeness() == expected.completeness()
         && source.availability() == expected.availability()
         && settlement_equal(native.settlement, source.settlement())
-        && native_support.is_some_and(|identities| identities == tl_support)
+        && native_support == tl_support
 }
 
 fn build<'a>(
@@ -556,6 +556,9 @@ fn build<'a>(
     mut budget: Budget,
     native_budget: &mut NativeJoinBudget,
 ) -> Result<ValidatedTlJoin<'a>, TlJoinError> {
+    if let Some(issued) = native {
+        budget.bytes(issued.result().result_identity.as_bytes().len())?;
+    }
     if let Some(result) = mapped {
         budget.bytes(result.bytes().len())?;
         budget.bytes(result.source().bytes().len())?;
@@ -568,7 +571,8 @@ fn build<'a>(
 
     // Native authority is the original opaque evaluator-issued carrier. Matching its
     // input identity binds it to this projection; no evaluator runs in the join.
-    let prior_native = previous.filter(|join| join.native_admitted())
+    let prior_native = previous
+        .filter(|join| join.native_admitted())
         .and_then(ValidatedTlJoin::native);
     let mut native_side = NativeState::Unavailable;
     let mut read_native = None;
@@ -589,21 +593,24 @@ fn build<'a>(
             let bare = BarePackage::new(projection.package());
             let package = EvidencePackage::from_package(&bare, native_budget)
                 .map_err(TlJoinError::NativePackage)?;
-            let subject = package.subject(&input.occurrence.node, input.request.occurrence.as_ref())
+            let subject = package
+                .subject(&input.occurrence.node, input.request.occurrence.as_ref())
                 .map_err(TlJoinError::NativeEvidence)?;
             if !matches_result_identity(&subject, input.request, result.result_identity.as_bytes())
-                .map_err(TlJoinError::NativeEvidence)? {
+                .map_err(TlJoinError::NativeEvidence)?
+            {
                 native_side = NativeState::Refused;
                 refusals.native = Some(TlNativeMismatch::Input);
             } else {
                 let prior_matches = match &result.relation {
                     Relation::Original => previous.is_none(),
-                    Relation::Superseding(identity) | Relation::Invalidating(identity) =>
+                    Relation::Superseding(identity) | Relation::Invalidating(identity) => {
                         prior_native.is_some_and(|prior| {
                             let prior = prior.result();
                             identity == &prior.result_identity
                                 && prior.lineage.checked_add(1) == Some(result.lineage)
-                        }),
+                        })
+                    }
                 };
                 if !prior_matches {
                     native_side = NativeState::Lineage;

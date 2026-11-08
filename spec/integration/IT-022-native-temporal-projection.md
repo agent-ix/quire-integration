@@ -88,6 +88,12 @@ the mapped TL result, the prior admitted join, `TlLimits` and the caller's
 `NativeJoinBudget` for owner package projection. Native correction authority is
 the evaluator-written ledger; FR-523's lineage limit replaces the retired
 predecessor-byte work and storage limits.
+The join record's `native` member carries the hexadecimal native result identity;
+its `previous.native` carries the prior issued result identity. These references
+name immutable owner-issued full values held by the admitted join, rather than
+copied native report documents. Strict join reading requires the exact expected
+issued carrier and reconstructs the complete canonical record. TL source and
+mapped documents retain their complete original owner bytes.
 
 ### Successor semantics
 

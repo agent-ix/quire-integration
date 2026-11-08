@@ -21,7 +21,7 @@ quire-canonical = { git = "https://github.com/agent-ix/quire-canonical", branch 
 quire-observation = { git = "https://github.com/agent-ix/quire-observation", branch = "main" }
 qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-eval = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
-quire-eval = { git = "https://github.com/agent-ix/quire-eval", branch = "main" }
+quire-eval = { git = "https://github.com/agent-ix/quire-eval", branch = "main", default-features = false }
 quire-spec-language = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
 quire-mltl = { git = "https://github.com/agent-ix/quire-mltl", branch = "main" }
@@ -33,9 +33,6 @@ serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
-qsl-cst = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
-qsl-forms = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
-qsl-semantics = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsv-failing-allocator = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 qsl-analyze = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-specification = { package = "quire-specification-qualification", git = "https://github.com/agent-ix/quire-specification", branch = "main" }

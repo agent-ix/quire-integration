@@ -101,6 +101,44 @@ pub(crate) fn expected_members(
             })
         })
         .collect();
+    let operands = qsl_eval::temporal::evidence::native_atom_operands(case.subject);
+    let bound = qsl_eval::temporal::evidence::bound_atom_indices(
+        case.subject.formula_graph(),
+        &qsl_package::checked_views::instance_bound_atoms(case.subject).unwrap(),
+    )
+    .unwrap();
+    let mut cells = std::collections::BTreeMap::new();
+    for (position, supplied) in request.positions.iter().enumerate() {
+        for (index, operand) in operands.iter().enumerate() {
+            let Some(operand) = operand.as_ref() else {
+                continue;
+            };
+            let atom = u64::try_from(index).unwrap();
+            let value = if bound.contains(&atom) {
+                supplied
+                    .instance_valuations
+                    .get(request.trigger.as_ref().unwrap())
+                    .unwrap()
+                    .get(&atom)
+            } else {
+                supplied.valuations.get(&atom)
+            };
+            let value = match value {
+                Some(qsl_eval::temporal::Valuation::True) => true,
+                Some(qsl_eval::temporal::Valuation::False) => false,
+                other => panic!("expected admitted Boolean cell: {other:?}"),
+            };
+            cells.insert((position, operand), value);
+        }
+    }
+    let valuations = cells
+        .iter()
+        .map(|((position, operand), value)| {
+            json!({
+                "position": dec(position), "operand": ir(operand), "value": value,
+            })
+        })
+        .collect::<Vec<_>>();
     let value = json!({
         "profile": "quire.native-temporal-correspondence/v1",
         "bridgeDefinition": hex(case.selection.bridge_definition.bytes()),
@@ -128,8 +166,7 @@ pub(crate) fn expected_members(
             };
             json!({"node": ir(&node.node), "operation": ir(&node.operation), "lower": lower, "upper": upper})
         }).collect::<Vec<_>>(),
-        "anchor": case.native.instance.anchor,
-        "captureInstance": case.native.instance.capture_instance,
+        "anchor": request.anchor,
         "captures": captures.iter().map(|bytes| hex(bytes)).collect::<Vec<_>>(),
         "trigger": hex(request.trigger.as_ref().expect("trigger").as_bytes()),
         "triggerPayload": hex(trigger_payload),
@@ -149,17 +186,7 @@ pub(crate) fn expected_members(
         "propositionMap": hex(&projection.propositions().canonical_json_bytes().expect("map bytes")),
         "request": hex(projection.request().bytes()),
         "input": {"kind": kind, "bytes": hex(input)},
-        "valuations": case.native.valuations.rows().iter().map(|row| json!({
-            "node": ir(&row.subject.node),
-            "role": ir(&row.subject.role),
-            "ordinal": dec(row.subject.ordinal),
-            "position": dec(row.position),
-            "anchor": row.anchor,
-            "captureInstance": row.capture_instance,
-            "revision": row.revision,
-            "operand": ir(&row.operand),
-            "value": row.value,
-        })).collect::<Vec<_>>(),
+        "valuations": valuations,
         "native": {
             "correspondence": evidence_ref(&request.correspondence),
             "triggerScope": if closed(request.trigger_scope) { "closed" } else { "open" },
