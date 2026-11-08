@@ -270,7 +270,7 @@ pub(crate) fn packages(
     let first = admit();
     let second = admit();
     let clauses: Vec<_> = first
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .zip(first.node_kinds())

@@ -74,7 +74,7 @@ fn admit(source: &str) -> Admitted {
 
 fn operation_nodes(package: &CheckedPackageV2, identity: &str) -> Vec<CheckedNodeId> {
     let nodes = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter_map(|node| match package.term(&node.node_id) {
@@ -207,7 +207,7 @@ fn unbounded_qsl_integer_source_retains_the_codegen_bound_refusal() {
     };
     let declared = admitted
         .ir
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .find(|node| &node.node_id == unbounded_type)
@@ -382,7 +382,7 @@ fn bounded_scalar_entry_retains_the_real_quantity_value_position_refusals() {
         };
         let refused_type = admitted
             .ir
-            .graph()
+            .resolved_graph()
             .nodes
             .iter()
             .find(|node| &node.node_id == unbounded_type)

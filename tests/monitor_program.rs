@@ -90,7 +90,7 @@ fn key(name: &str) -> NodeKey {
     KEYS.get_or_init(|| {
         let package = admitted();
         let mut keys: BTreeMap<String, NodeKey> = IDENTITIES.iter().map(|(label, declaration)| {
-            let nodes: Vec<_> = package.graph().nodes.iter().filter(|node| {
+            let nodes: Vec<_> = package.resolved_graph().nodes.iter().filter(|node| {
                 matches!(&node.owner, Some(quire_contract_ir::CheckedNodeOwner::Source {authority, identity}) if authority.as_ref() == "local" && identity.as_ref() == "source:monitor-construction.native")
                     && node.declaration.as_ref().is_some_and(|value| value.qualified_name.last().is_some_and(|part| part.as_ref() == *declaration))
             }).collect();
@@ -109,7 +109,7 @@ fn key(name: &str) -> NodeKey {
             let key = admitted_key(&node.node_id);
             ((*label).to_owned(), key)
         }).collect();
-        let step_node = package.graph().nodes.iter().find(|node| {
+        let step_node = package.resolved_graph().nodes.iter().find(|node| {
             admitted_key(&node.node_id) == keys["step"]
         }).expect("Step declaration retains its admitted tuple body");
         let body = serde_json::to_value(&step_node.body).unwrap();
@@ -133,7 +133,7 @@ fn admitted_time_units() -> UnitTable {
         .map(|label| {
             let unit_key = key(label);
             let node = admitted()
-                .graph()
+                .resolved_graph()
                 .nodes
                 .iter()
                 .find(|node| admitted_key(&node.node_id) == unit_key)
@@ -4951,7 +4951,7 @@ fn checked_equality_keeps_original_enum_index_after_preparation_drops() {
     let mut values = Vec::new();
     for name in ["Idle", "Busy"] {
         let nodes = admitted()
-            .graph()
+            .resolved_graph()
             .nodes
             .iter()
             .filter(|node| {
@@ -6743,7 +6743,7 @@ fn admitted_position_sources() -> [NodeKey; 4] {
     let package = admitted();
     let function_key = key("position-event");
     let function = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .find(|node| admitted_key(&node.node_id) == function_key)
@@ -6772,7 +6772,7 @@ fn admitted_position_sources() -> [NodeKey; 4] {
     assert!(package.term(delta).is_some());
 
     let additions: Vec<_> = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter_map(|node| match &node.body {

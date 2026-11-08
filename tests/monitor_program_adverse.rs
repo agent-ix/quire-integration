@@ -61,7 +61,7 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
     assert_eq!(original.uncertainty().denominator.as_ref(), "1");
     let root_node = healthy
         .package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .find(|node| &node.node_id == original.node_id())
@@ -148,7 +148,7 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
     );
     let node = &modulo[0];
     let (source_node, kind) = changed_package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .zip(changed_package.node_kinds())

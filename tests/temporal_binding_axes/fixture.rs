@@ -115,7 +115,12 @@ pub(super) fn with_source(
     projection_support::with_case("holds(true)", false, |base| {
         let package = package(declarations);
         let mut selected: Option<ClauseOccurrence> = None;
-        for (node, kind) in package.graph().nodes.iter().zip(package.node_kinds()) {
+        for (node, kind) in package
+            .resolved_graph()
+            .nodes
+            .iter()
+            .zip(package.node_kinds())
+        {
             if *kind != CheckedNodeKind::Temporal(TemporalForm::TemporalClause) {
                 continue;
             }

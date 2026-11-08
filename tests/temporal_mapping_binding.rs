@@ -99,7 +99,7 @@ temporal Due using t over (g: M::Gadget) clock "events" on origin {
     let first = admit();
     let second = admit();
     let clauses: Vec<_> = first
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .zip(first.node_kinds())
