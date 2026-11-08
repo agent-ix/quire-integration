@@ -43,7 +43,7 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
     let (repeated, repeated_package) = healthy.entry_emission(false);
     assert_eq!(
         repeated.package().bytes(),
-        healthy.root.emission.package().bytes(),
+        healthy.root.emission().package().bytes(),
         "the unmodified public entry route reproduces the actual producer output"
     );
     let original = healthy.package.monitor_plans().next().unwrap();
@@ -204,7 +204,7 @@ fn missing_actual_initializer_body_is_a_native_ir_refusal() {
     let plan = healthy.package.monitor_plans().next().unwrap();
     let original_entry = serde_json::to_value(plan.init().node_id()).unwrap();
     let mut wire: serde_json::Value =
-        serde_json::from_slice(healthy.root.emission.package().bytes()).unwrap();
+        serde_json::from_slice(healthy.root.emission().package().bytes()).unwrap();
     let nodes = wire["semantic_graph"]["nodes"].as_array_mut().unwrap();
     let index = nodes
         .iter()
@@ -233,7 +233,7 @@ fn missing_actual_initializer_body_is_a_native_ir_refusal() {
     );
     assert!(
         matches!(
-            healthy.read_bytes(healthy.root.emission.package().bytes()),
+            healthy.read_bytes(healthy.root.emission().package().bytes()),
             CheckedPackageDispatchResult::AdmittedV2(_)
         ),
         "the original producer bytes remain healthy after the adverse read"

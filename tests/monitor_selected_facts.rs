@@ -113,7 +113,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         &Cancel::new(),
     )
     .expect("the real QSL producer returns a final PlanRoot emission");
-    let emission = &root.emission;
+    let emission = root.emission();
     let mut evidence = emission.evidence().clone();
     evidence
         .insert_domain_package_document(identity, document)
