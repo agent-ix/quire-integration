@@ -30,7 +30,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
         family_function_equality_source::SOURCE.as_bytes(),
     );
     let integers = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter(|node| {
@@ -42,7 +42,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
     };
     let integer = integer.node_id.clone();
     let booleans = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter(|node| {
@@ -118,7 +118,7 @@ fn primitive_and_nominal_function_equality_matches_fresh_qsl_sessions() {
                             panic!("actual nominal parameter reference");
                         };
                         let selected = package
-                            .graph()
+                            .resolved_graph()
                             .nodes
                             .iter()
                             .filter(|node| &node.node_id == target)
@@ -484,7 +484,7 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
                     other => panic!("original typed equality operand: {other:?}"),
                 };
                 let selected = package
-                    .graph()
+                    .resolved_graph()
                     .nodes
                     .iter()
                     .filter(|node| &node.node_id == target)
@@ -558,7 +558,7 @@ fn primitive_composite_generator_matches_independent_checked_bodies() {
     assert_eq!(output.claim_map.items.len(), rows.len());
     let actual_type = |form: &str| {
         let selected = package
-            .graph()
+            .resolved_graph()
             .nodes
             .iter()
             .filter(|node| {
@@ -656,10 +656,10 @@ fn observe() {
         };
         let name = format!("equality{index}");
         let function = authority
-            .graph()
+            .resolved_graph()
             .function_by_identity(
                 authority
-                    .graph()
+                    .resolved_graph()
                     .function_identity(&name)
                     .expect("original checked function identity"),
             )

@@ -72,7 +72,7 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
         panic!("genuine protocol equality emission admits");
     };
     let equality = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter(|node| node.semantic_form.as_ref() == "binary")
@@ -89,7 +89,7 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
             panic!("original protocol binder reference");
         };
         let nodes = package
-            .graph()
+            .resolved_graph()
             .nodes
             .iter()
             .filter(|node| &node.node_id == target)
@@ -157,7 +157,7 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
     };
     let checked = checked(&source, &model);
     let protocol = checked
-        .graph()
+        .resolved_graph()
         .protocol("Inspect")
         .expect("original checked protocol");
     let [slot] = protocol.slots.bodies.as_slice() else {
@@ -214,10 +214,10 @@ fn compare_protocol_finish(operator: EqualityOperatorKind, syntax: &str, answer:
         .position(|binder| binder.name == "outcome")
         .expect("original outcome binder slot");
     let function = checked
-        .graph()
+        .resolved_graph()
         .function_by_identity(
             checked
-                .graph()
+                .resolved_graph()
                 .function_identity("makePair")
                 .expect("actual constructor"),
         )
@@ -278,7 +278,7 @@ evidence.support_feature("quire.value.complete/v1");
 evidence.support_feature("quire.protocol.finite-global/v1");
 evidence.insert_domain_package_document("acme/orders",model).unwrap();
 let quire_contract_model::CheckedPackageV2ReadResult::Admitted(package)=quire_contract_model::CheckedPackageV2::read(acquired.package().bytes(),quire_contract_model::CheckedPackageReadLimits::bounded(),&evidence) else {panic!("source package");};
-let declarations=package.graph().nodes.iter().filter(|node|node.declaration.as_ref().is_some_and(|decl|decl.qualified_name.iter().map(AsRef::as_ref).eq(["makePair"]))).collect::<Vec<_>>();
+let declarations=package.resolved_graph().nodes.iter().filter(|node|node.declaration.as_ref().is_some_and(|decl|decl.qualified_name.iter().map(AsRef::as_ref).eq(["makePair"]))).collect::<Vec<_>>();
 let [declaration]=declarations.as_slice() else {panic!("original constructor declaration");};
 let key=acquired.context().wire_graph().key(&declaration.node_id).expect("actual source constructor key");
 let handle=acquired.handle();

@@ -76,7 +76,7 @@ fn assert_assembly_missing(declarations: &str, name: &str) {
         panic!("one typed missing-name refusal for {name}: {refusal:?}");
     };
     assert!(
-        matches!(&error.cause, AssemblyCause::UnresolvedTypeName { name: found } if found == name),
+        matches!(&error.cause, AssemblyCause::UnresolvedUnitName { name: found, packages } if found == name && packages.is_empty()),
         "{name}: {error:?}"
     );
     assert_eq!(

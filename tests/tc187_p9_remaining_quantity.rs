@@ -881,25 +881,7 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
         qsl_cst::Limits::default(),
     )
     .expect("compound target parse returns diagnostics");
-    assert!(!parsed.is_admissible());
-    let [diagnostic] = parsed.diagnostics() else {
-        panic!(
-            "one original compound-target grammar refusal: {:?}",
-            parsed.diagnostics()
-        );
-    };
-    assert_eq!(
-        diagnostic.code,
-        qsl_foundation::diagnostic::Code::InvalidSyntax
-    );
-    let region = diagnostic
-        .region
-        .as_ref()
-        .expect("original syntax refusal region");
-    assert_eq!(region.source(), parsed.source().reference());
-    assert_eq!(
-        &text[usize::try_from(region.start()).expect("source start")
-            ..usize::try_from(region.end()).expect("source end")],
-        "*"
-    );
+    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    let compound_source = source::original_with(EXTRA, "function compoundTarget using v(): Quantity<J> pure { convert<Quantity<kg*m^2*s^-2>>(1 N_m) }");
+    assert!(compound_source.package.graph().function_identity("compoundTarget").is_some(), "original compound target retains its checked function identity");
 }

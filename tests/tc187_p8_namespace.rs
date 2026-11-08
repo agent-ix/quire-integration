@@ -46,7 +46,7 @@ fn ordinary_ms_type_and_quantity_ms_select_distinct_original_nodes() {
         [(_, ValueType::Composite(_)), (_, ValueType::Quantity(_))]
     ));
     let admitted = source::emitted(checked, None);
-    let nodes = &admitted.graph().nodes;
+    let nodes = &admitted.resolved_graph().nodes;
     let named: Vec<_> = nodes
         .iter()
         .filter(|node| {
@@ -130,8 +130,8 @@ fn linked_duplicate_ms_units_expose_the_quantity_type_location_blocker() {
         &Cancel::new(),
     )
     .expect_err("duplicate units refuse the linked package");
-    let [error] = refusal.errors.as_slice() else {
-        panic!("one ambiguity: {refusal:?}");
+    let [error, unresolved] = refusal.errors.as_slice() else {
+        panic!("duplicate declaration and unresolved use: {refusal:?}");
     };
     assert_eq!(
         error.cause.catalog_code().to_string(),
@@ -155,6 +155,12 @@ fn linked_duplicate_ms_units_expose_the_quantity_type_location_blocker() {
         (second_name, second_name + 2)
     );
     let required = second.find("Quantity<ms>").expect("quantity use");
+    let AssemblyCause::UnresolvedUnitName { name, packages } = &unresolved.cause else {
+        panic!("native unresolved quantity use: {unresolved:?}");
+    };
+    assert_eq!(name, "ms");
+    assert!(packages.is_empty());
+    assert_eq!((unresolved.span.start, unresolved.span.end), (required + "Quantity<".len(), required + "Quantity<ms".len()));
     assert_ne!((error.span.start, error.span.end), (required, required + "Quantity<ms>".len()), "U32 remains incomplete: owner refuses the duplicate declaration before resolving the quantity type");
 }
 

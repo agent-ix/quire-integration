@@ -6,7 +6,7 @@ use super::{CheckedNodeId, CheckedPackageV2, CheckedTerm};
 /// Select exactly one original function declaration, without a first-match fallback.
 pub fn declared(package: &CheckedPackageV2, name: &str) -> CheckedNodeId {
     let selected = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter(|node| {
