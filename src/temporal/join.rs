@@ -572,28 +572,28 @@ fn premises_equal(
         && native_support == tl_support
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, quire_canonical::FixedShape)]
 #[serde(untagged)]
 enum NativeOutcomeRecord<'a> {
     Identity(String),
     Failure(NativeFailureRecord<'a>),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, quire_canonical::FixedShape)]
 #[serde(tag = "failure", rename_all = "snake_case")]
 enum NativeFailureRecord<'a> {
     Admission(NativeAdmissionRecord<'a>),
     Fault(NativeFaultRecord<'a>),
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, quire_canonical::FixedShape)]
 #[serde(rename_all = "snake_case")]
 enum NativeAdmissionKind {
     Refused,
     Incomplete,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, quire_canonical::FixedShape)]
 struct NativeAdmissionRecord<'a> {
     kind: NativeAdmissionKind,
     code: &'a str,
@@ -605,7 +605,7 @@ struct NativeAdmissionRecord<'a> {
     path: Vec<NativeAdmissionPath<'a>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, quire_canonical::FixedShape)]
 #[serde(untagged)]
 enum NativeAdmissionPath<'a> {
     Field { field: &'a str },
@@ -613,7 +613,7 @@ enum NativeAdmissionPath<'a> {
     Index { index: String },
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, quire_canonical::FixedShape)]
 struct NativeFaultRecord<'a> {
     stage: &'a str,
     invariant: &'a str,
