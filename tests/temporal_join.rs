@@ -1641,6 +1641,59 @@ fn actual_native_call_refusal_is_retained_distinct_from_absence_without_evaluati
         assert_eq!(joined.causes().first(), Some(&TlJoinCause::ResultRefused));
         let record: Value = serde_json::from_slice(joined.bytes()).unwrap();
         assert_eq!(record["native"]["failure"], "admission");
+        let quire_eval::CallFailure::Admission(admission) = original else {
+            unreachable!()
+        };
+        let diagnostic = match admission.as_ref() {
+            quire_eval::CallAdmissionFailure::Refused(record)
+            | quire_eval::CallAdmissionFailure::Incomplete(record) => record,
+        };
+        let work = u64::try_from(diagnostic.record.fields.len() + diagnostic.record.path.len() + 1)
+            .unwrap();
+        assert_eq!(joined.usage().work, work);
+        let mut limits = TlLimits {
+            max_work: work,
+            ..TlLimits::default()
+        };
+        let exact = join_tl(
+            &projection,
+            Some(&outcome),
+            Some(&mapped),
+            None,
+            limits,
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(exact.bytes(), joined.bytes());
+        limits.max_work = work - 1;
+        assert!(
+            matches!(join_tl(&projection, Some(&outcome), Some(&mapped), None, limits, &mut native_budget()),
+            Err(TlJoinError::LimitReached { limit: TlProjectionLimit::Work, value, setting }) if value == work && setting == work - 1)
+        );
+        let bytes = u64::try_from(joined.bytes().len()).unwrap();
+        limits = TlLimits {
+            max_bytes: bytes,
+            ..TlLimits::default()
+        };
+        assert_eq!(
+            join_tl(
+                &projection,
+                Some(&outcome),
+                Some(&mapped),
+                None,
+                limits,
+                &mut native_budget()
+            )
+            .unwrap()
+            .bytes(),
+            joined.bytes()
+        );
+        limits.max_bytes -= 1;
+        assert!(
+            matches!(join_tl(&projection, Some(&outcome), Some(&mapped), None, limits, &mut native_budget()),
+            Err(TlJoinError::LimitReached { limit: TlProjectionLimit::Bytes, value, setting }) if value == bytes && setting == bytes - 1)
+        );
+
         let reread = read_tl_join(
             joined.bytes(),
             ExpectedTlJoin {
