@@ -18,6 +18,13 @@ static NEXT_OBSERVATION: AtomicU64 = AtomicU64::new(0);
 /// driver. The driver calls its public generated functions; it supplies no
 /// replacement implementation of an operation.
 pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
+    execute_with(artifacts, driver, "")
+}
+
+/// As [`execute`], with extra dev-dependency lines the driver itself names. The
+/// consumer lock still selects every first-party revision.
+#[allow(dead_code)]
+pub fn execute_with(artifacts: &[Artifact], driver: &str, dev_dependencies: &str) -> Vec<String> {
     let directory = tempfile::tempdir().expect("owned generated crate directory");
     // All generated crates share one Cargo target directory. Give each
     // observation its own package and test target identity so Cargo cannot
@@ -70,6 +77,7 @@ pub fn execute(artifacts: &[Artifact], driver: &str) -> Vec<String> {
         "\n[dev-dependencies]\nquire-exact = {{ {}, features = [\"test-support\"] }}\n",
         quire_contract_codegen::EXACT_DEPENDENCY_SOURCE,
     ));
+    manifest.push_str(dev_dependencies);
     manifest.push_str(&format!(
         "\n[[test]]\nname = \"{test_name}\"\npath = \"tests/observation.rs\"\n"
     ));
