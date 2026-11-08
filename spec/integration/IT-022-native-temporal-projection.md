@@ -42,10 +42,9 @@ Qualify the complete `quire.native-temporal-correspondence/v1` bridge of
 Contract IR FR-350 in this repository: bridge-definition admission, projection,
 correspondence strict reading, result joining, join strict reading,
 corrections and all seven bridge limits. FR-350 is the normative contract for
-construction order, join rows, error codes and bridge limits. The native inputs
-and retained result authority below follow the current QSL FR-526 successor;
-the successor section identifies the retired FR-350 surfaces requiring owner
-synchronization. Every scenario below remains required for qualification.
+native inputs, retained result authority, construction order, join rows, error
+codes and bridge limits. Its published boundary adopts the current QSL FR-526
+successor. Every scenario below remains required for qualification.
 
 ## Target Integration
 
@@ -110,13 +109,14 @@ mapped documents retain their complete original owner bytes.
 QSL FR-526 succeeds the retired native-report and valuation-row route. These
 scenarios retain their IDs while qualifying the successor's atom maps,
 immutable evaluator-issued result authority and flat predecessor ledger.
-Contract IR FR-350's references to `ValuationEvidence`, `Report`, duplicate rows,
-`native_valuations` and predecessor byte limits describe that retired route;
-they cannot be exercised against the current publication. The successor port
-preserves the independent bridge dispositions, original checked source bindings,
-full retained owner result, exact request binding, ordered join rows and genuine
-observation/TL comparison. It does not restore the retired facade or substitute
-an input-identity check for the immutable result authority.
+Published Contract IR FR-350, its AD-009 assurance artifact and TC-461 define
+this same successor boundary. These scenarios qualify the published native
+request maps, immutable evaluator-issued result authority and ledger lineage.
+The bridge preserves independent dispositions, original checked source bindings,
+the complete retained owner result, exact request binding, ordered join rows and
+genuine observation/TL comparison. The input-identity check binds an already
+immutable issued result to the selected request; the original owner carrier
+provides complete-result authority.
 
 ## Test Procedure
 
