@@ -13,10 +13,11 @@ relationships:
 ## Description
 
 Execute every IT-022 scenario, which together realize Contract IR TC-461, with
-owner-produced inputs only: QSL-emitted packages, `evaluate_v2` reports,
+owner-produced inputs only: QSL-emitted packages, opaque `EvaluatedEvidence` carriers issued by
+`EvidencePackage::evaluate_temporal_evidence`,
 quire-mltl evaluated and mapped results, and QObs owner views. Expected
 correspondence and join bytes are computed by the test from the inputs using
-FR-350's encoding rules; no frozen vector, digest or copied owner document is
+IT-022's current FR-526 successor encoding rules; no frozen vector, digest or copied owner document is
 used.
 
 ## Test Procedure
@@ -38,9 +39,9 @@ scenario's FR-350 criterion ids:
 Assert complete typed owner values and typed refusals, never only an error
 string or a trace tag. Run the IT-020 formula and IT-021 observation revision
 regressions. The direct `TC-115` tests also carry one exact FR-350 criterion
-per trace attribute. They project two distinct true/false valuation rows through
+per trace attribute. They project two distinct true/false atom-map values through
 conjunction and disjunction, evaluate each owner separately, and strictly read
-the joined Boolean with its original owner bytes. Independently authored formulas
+the joined Boolean with its original immutable native carrier and TL owner bytes. Independently authored formulas
 that both evaluate true must still refuse a foreign native or TL result; equal
 Boolean values alone never authorize a join.
 
@@ -57,8 +58,11 @@ refuses one below it, and no bridge operation invokes an evaluator.
   `Unsupported` only for formula and lane mismatches (`src/report.rs:735-760`),
   which a bridge-built request for a Supported subject never yields, and a
   result for any other request is `refused` (R1) first.
-- A TL correction paired with an original native report over the same
-  projection: the native owner refuses to evaluate an original report against a
+- A TL correction paired with an original native result over the same
+  projection: the native owner refuses to evaluate an original result against a
   request that carries a predecessor relation.
+- Caller-mutated native truth/support under one issued identity: the public
+  read-data `EvidenceResult` can be copied, but cannot construct or replace the
+  private result inside the evaluator-issued carrier required by `join_tl`.
 - Multi-stamp bundles and duplicate bundle observation identities: see
   IT-022, "Checks verified at unit level".

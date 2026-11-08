@@ -5,6 +5,7 @@
 mod observation;
 use crate::support;
 
+use qsl_eval::temporal::{evidence::native_atom_operands, Valuation};
 use qsl_eval::temporal::{
     evidence::{
         CompletenessRecord, EvidencePosition, EvidenceRef, EvidenceRequest, ExecutionDisposition,
@@ -35,10 +36,6 @@ use quire_integration::temporal::{
 use quire_mltl::request::ObservationInputs;
 use quire_observation::authority::{self as a, bundle, Limits, OpenClosed};
 use quire_semantic_value::checking::CheckingLimits;
-use quire_spec_language::temporal::{
-    self as native, ObservationRef, ValuationEvidence, ValuationInstance, ValuationRow,
-};
-use std::collections::BTreeMap;
 use tl_mltl::wire::OwnerLimits;
 
 /// Parse and check original source without bypassing native temporal admission.
@@ -272,7 +269,7 @@ pub(crate) fn packages(
     let first = admit();
     let second = admit();
     let clauses: Vec<_> = first
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .zip(first.node_kinds())
@@ -287,7 +284,6 @@ pub(crate) fn packages(
 
 pub(crate) const EVENT: &str = "quire.temporal.event-position.false-extension/v1";
 pub(crate) const SAMPLE: &str = "quire.temporal.fixed-sample.false-extension/v1";
-pub(crate) const CAPTURE_INSTANCE: &str = "capture-environment:origin";
 
 #[derive(Clone, Copy)]
 pub(crate) struct Case<'a> {
@@ -506,19 +502,10 @@ pub(crate) fn with_case_watermark(
         anchor.parse::<u64>().is_err(),
         "the observation identity is an opaque name, never a numeric anchor"
     );
-    let instance = ValuationInstance {
-        anchor,
-        capture_instance: CAPTURE_INSTANCE,
-    };
-    let revision = ObservationRef {
-        reference: observation.bundle().identity().as_str().to_owned(),
-        revision: observation.bundle().revision().to_string(),
-    };
     let binding = subject.clock_of(occurrence).expect("selected native clock");
     let trigger =
         SemanticTriggerIdentity::new(b"whole-execution:one".as_slice()).expect("origin identity");
     let request = EvidenceRequest {
-        native_valuations: Vec::new(),
         trigger: Some(trigger.clone()),
         correspondence: EvidenceRef {
             authority_identity: bridge_definition.authority().to_owned(),
@@ -526,11 +513,31 @@ pub(crate) fn with_case_watermark(
         },
         positions: (0..count)
             .map(|offset| EvidencePosition {
-                observation: EvidenceRef::named(
-                    f.observation_at(usize::try_from(offset).unwrap())
-                        .payload()
-                        .observation_identity(),
-                ),
+                observation: EvidenceRef {
+                    authority_identity: observation.bundle().identity().as_str().to_owned(),
+                    authority_revision: observation.bundle().revision().to_string(),
+                    ..EvidenceRef::named(
+                        f.observation_at(usize::try_from(offset).unwrap())
+                            .payload()
+                            .observation_identity(),
+                    )
+                },
+                valuations: native_atom_operands(&subject)
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, operand)| {
+                        operand.as_ref().map(|_| {
+                            (
+                                u64::try_from(index).unwrap(),
+                                if index % 2 == 0 {
+                                    Valuation::True
+                                } else {
+                                    Valuation::False
+                                },
+                            )
+                        })
+                    })
+                    .collect(),
                 position: start + offset,
                 ..EvidencePosition::default()
             })
@@ -574,27 +581,6 @@ pub(crate) fn with_case_watermark(
         }),
         limits: TemporalEvidenceLimits::default(),
     };
-    let trace = native_trace_n(profile, anchor, usize::try_from(count).unwrap());
-    let rows = (0..usize::try_from(count).unwrap())
-        .flat_map(|position| {
-            subject
-                .predicate_leaves()
-                .iter()
-                .enumerate()
-                .map(move |(index, operand)| (position, index, operand))
-        })
-        .map(|(position, index, operand)| ValuationRow {
-            subject: occurrence.clone(),
-            position,
-            anchor: anchor.to_owned(),
-            capture_instance: CAPTURE_INSTANCE.to_owned(),
-            revision: revision.revision.clone(),
-            operand: operand.clone(),
-            value: index % 2 == 0,
-        })
-        .collect();
-    let valuations = ValuationEvidence::admit(&subject, &trace, instance, &revision.revision, rows)
-        .expect("actual native valuation admission");
     test(Case {
         package: &package,
         subject: &subject,
@@ -602,16 +588,9 @@ pub(crate) fn with_case_watermark(
         surrounding,
         native: NativeProjectionInput {
             request: &request,
-            valuations: &valuations,
             occurrence,
-            instance,
-            observation: &revision,
         },
         selection: TlProjectionSelection {
-            native_report_limits: quire_spec_language::temporal::ReportPredecessorLimits::new(
-                1 << 30,
-                1 << 30,
-            ),
             bridge_definition: &bridge_definition,
             observation: &observation,
             clock: &clock,
@@ -626,49 +605,4 @@ pub(crate) fn with_case_watermark(
             owner_limits: OwnerLimits::default(),
         },
     });
-}
-
-#[allow(dead_code)] // Single-position targets only.
-pub(crate) fn native_trace(profile: &str, anchor: &str) -> native::Trace {
-    native_trace_n(profile, anchor, 1)
-}
-
-pub(crate) fn native_trace_n(profile: &str, anchor: &str, count: usize) -> native::Trace {
-    native::Trace {
-        clock: native::ClockBinding {
-            name: "events".into(),
-            profile_identity: profile.into(),
-            parameters: BTreeMap::new(),
-        },
-        positions: (0..count)
-            .map(|coordinate| native::Position {
-                coordinate: i64::try_from(coordinate).unwrap(),
-                order: None,
-                valuations: BTreeMap::new(),
-                instance_valuations: BTreeMap::new(),
-            })
-            .collect(),
-        anchor: anchor.into(),
-        triggers: Vec::new(),
-        trigger_evidence: native::Evidence::Admitted,
-        trigger_scope: native::Closure::Closed,
-        decision_scope: native::Closure::Closed,
-        surrounding_execution: native::Closure::Closed,
-        execution: native::Execution::Completed,
-        completeness: native::Completeness::Complete,
-        authoritative_origin: true,
-        watermark: 1,
-        evicted: Vec::new(),
-    }
-}
-
-/// The native trace shape the owner admits valuation rows against for this case.
-#[allow(dead_code)] // Not every target sharing this support admits valuation rows.
-pub(crate) fn trace_for(case: &Case<'_>) -> native::Trace {
-    let profile: &str = &case.subject.profile().definition.identity;
-    native_trace_n(
-        profile,
-        case.native.instance.anchor,
-        case.native.request.positions.len(),
-    )
 }

@@ -45,7 +45,7 @@ fn original_call_literal_is_typed_by_the_declared_ms_node() {
     .check(CheckingLimits::default())
     .expect("f(3 ms) checks");
     let admitted = source::emitted(graph, None);
-    let nodes = &admitted.graph().nodes;
+    let nodes = &admitted.resolved_graph().nodes;
     let ms = nodes
         .iter()
         .find(|node| {
@@ -164,7 +164,7 @@ fn admitted_operation_parameter_names_the_original_ms_unit() {
         &[("elapsed".to_owned(), expected.clone())]
     );
     let admitted = source::emitted(graph, Some((MODEL, &document)));
-    let nodes = &admitted.graph().nodes;
+    let nodes = &admitted.resolved_graph().nodes;
     let ms = nodes
         .iter()
         .find(|node| {

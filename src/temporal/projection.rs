@@ -8,9 +8,6 @@ use quire_mltl::request::{
     self, ObservationInputs, RequestInput, TemporalInput, ValidatedTemporalRequest,
 };
 use quire_observation::authority::clock;
-use quire_spec_language::temporal::{
-    ObservationRef, ValuationCause, ValuationEvidence, ValuationInstance,
-};
 use tl_mltl::{
     past::history::ValidatedPositionHistory,
     wire::{OwnerLimits, OwnerReadError, ValidatedTrace},
@@ -26,7 +23,7 @@ mod owners;
 mod positions;
 mod record;
 
-pub(in crate::temporal) use record::hex;
+pub(in crate::temporal) use record::{hex, hex_string};
 
 /// Public bridge profile name supplied directly to the request owner.
 pub const PROFILE: &str = "quire.native-temporal-correspondence/v1";
@@ -36,21 +33,13 @@ pub const PROFILE: &str = "quire.native-temporal-correspondence/v1";
 pub struct NativeProjectionInput<'a> {
     /// The actual checked-package native request, never an evaluator callback.
     pub request: &'a EvidenceRequest,
-    /// Ordered rows admitted by the native valuation owner.
-    pub valuations: &'a ValuationEvidence,
     /// Exact authored occurrence selected by the request.
     pub occurrence: &'a ClauseOccurrence,
-    /// The native row admission's explicit anchor and immutable capture instance.
-    pub instance: ValuationInstance<'a>,
-    /// Native reference to the actual supplied observation revision.
-    pub observation: &'a ObservationRef,
 }
 
 /// Independently selected genuine observation and TL owner inputs.
 #[derive(Clone, Copy)]
 pub struct TlProjectionSelection<'a> {
-    /// Original finite limits of each native report-owner operation, separate from bridge/IR counters.
-    pub native_report_limits: quire_spec_language::temporal::ReportPredecessorLimits,
     /// Actual strict admission to the original integration-owned bridge definition.
     pub bridge_definition: &'a super::ValidatedTlBridgeDefinition,
     /// The actual admitted observation revision, including the complete bundle.
@@ -72,7 +61,7 @@ pub struct TlLimits {
     pub max_nodes: u64,
     /// Selected positions.
     pub max_positions: u64,
-    /// Native `ValuationEvidence` rows.
+    /// Native request valuation entries.
     pub max_valuations: u64,
     /// Compared decision-support entries (the later join).
     pub max_support: u64,
@@ -306,13 +295,13 @@ pub enum TlProjectionError {
     /// Named cross-wired native premise.
     #[error("projection native premise differs: {0:?}")]
     NativePremise(TlProjectionPremise),
-    /// A row fails the owner's admission check order.
-    #[error("projection valuation row {row} differs in {cause:?}")]
+    /// A request map names an atom outside the checked formula.
+    #[error("projection valuation at position {position} names unknown atom {atom}")]
     Valuation {
-        /// Original admitted row ordinal.
-        row: usize,
-        /// First failing check.
-        cause: ValuationCause,
+        /// Original request position index.
+        position: usize,
+        /// Unknown native atom index.
+        atom: u64,
     },
     /// Original native owner authentication failure.
     #[error("native clock authentication refused: {0}")]

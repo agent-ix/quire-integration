@@ -77,7 +77,7 @@ fn emit_and_read(source_text: &str) -> CheckedPackageV2 {
 /// Select the exact admitted declaration, refusing absence or ambiguity.
 fn declaration_node<'a>(package: &'a CheckedPackageV2, name: &str) -> &'a CheckedSemanticNodeV2 {
     let matches: Vec<_> = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter(|node| {
@@ -164,7 +164,7 @@ fn admitted_enum_declaration_retains_member_order_and_typed_refusals() {
     assert_eq!(declaration.key(), phase);
     assert_eq!(declaration.members(), ["OPEN", "SHUT"]);
     let mut member_cases = Vec::new();
-    for node in &package.graph().nodes {
+    for node in &package.resolved_graph().nodes {
         if node.semantic_form.as_ref() != "enum_value" || node.semantic_type != phase_node.node_id {
             continue;
         }

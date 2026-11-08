@@ -91,7 +91,7 @@ fn tc192_dispatches_every_lock_selected_row() {
                 pending_qsl_case(vector, "QSL-1389", "bounded result rejected at QSL S4")
             }
             "DIV-07" => {
-                div07_backend::missing_division_result_bound_settles_requires_bound_without_execution();
+                div07_backend::inferred_modulus_domains_retain_renderer_refusal_without_execution();
                 pending_qsl_case(
                     vector,
                     "QSL-1389",

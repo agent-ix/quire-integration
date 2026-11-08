@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! Original model-owned enum equality: admitted by QSL and IR, refused by CG derivation.
+//! Original model-owned enum equality: admitted by QSL and IR, derived by CG with original body identities.
 
 #[path = "support/family_function_selection.rs"]
 mod family_function_selection;
@@ -12,7 +12,7 @@ use qsl_semantics::{
         intake::{admit_unit, package_input},
     },
 };
-use quire_contract_codegen::{derive_exact_scalar_items, ExactScalarRefusal};
+use quire_contract_codegen::{derive_exact_scalar_items, ExactScalarOperation};
 use quire_contract_ir::{
     CheckedNodeId, CheckedPackageEvidence, CheckedPackageReadLimits, CheckedPackageV2,
     CheckedPackageV2ReadResult, CheckedTerm,
@@ -22,7 +22,7 @@ use quire_specification::{ACME_COLORS_COMPARISON_SOURCE, ACME_COLORS_DOMAIN_PACK
 
 #[trace("TC-102", "IT-019-SC-05")]
 #[test]
-fn model_owned_enum_equality_is_admitted_and_refused_by_cg_derivation() {
+fn model_owned_enum_equality_derives_the_original_comparison_operation() {
     let document = ACME_COLORS_DOMAIN_PACKAGE.as_bytes();
     let parsed = qsl_cst::parse(
         qsl_foundation::SourceIdentity::new("agent-ix", "enum-comparison"),
@@ -76,32 +76,41 @@ fn model_owned_enum_equality_is_admitted_and_refused_by_cg_derivation() {
     ) else {
         panic!("the emitted enum package admits");
     };
-    // QSL and IR admit the standalone QSpec colors model and all four equality and inequality
-    // truth arms; CG derivation refuses each model-owned variant comparison, so none reaches a
-    // generated native oracle and none is credited as agreement.
-    for name in [
-        "redEqualsRed",
-        "redEqualsGreen",
-        "redDiffersFromRed",
-        "redDiffersFromGreen",
+    // Derivation evidence only: no generated native agreement is credited here.
+    for (name, operator) in [
+        ("redEqualsRed", quire_exact::ComparisonOperator::Equal),
+        ("redEqualsGreen", quire_exact::ComparisonOperator::Equal),
+        (
+            "redDiffersFromRed",
+            quire_exact::ComparisonOperator::NotEqual,
+        ),
+        (
+            "redDiffersFromGreen",
+            quire_exact::ComparisonOperator::NotEqual,
+        ),
     ] {
         let body = family_function_selection::body(&admitted, name);
         let derived = derive_exact_scalar_items(&admitted, std::slice::from_ref(&body));
-        let [Err(ExactScalarRefusal::BlockedOnUpstream {
-            unsupported_node_id,
-            node_tag,
-            ..
-        })] = derived.as_slice()
-        else {
+        let [Ok(item)] = derived.as_slice() else {
             panic!("{name}: CG derivation of enum comparison: {derived:?}");
         };
-        assert_eq!(&**node_tag, "model", "{name}");
-        let refused = admitted
-            .graph()
-            .nodes
-            .iter()
-            .find(|node| &node.node_id == unsupported_node_id)
-            .expect("the refused node is in the admitted graph");
-        assert_eq!(&*refused.semantic_form, "variant_type", "{name}");
+        let CheckedTerm::Application { operation, .. } =
+            admitted.term(&body).expect("original comparison body term")
+        else {
+            panic!("original enum comparison application");
+        };
+        assert_eq!(
+            operation.identity(),
+            Some(match operator {
+                quire_exact::ComparisonOperator::Equal => "quire.op.enum.eq",
+                quire_exact::ComparisonOperator::NotEqual => "quire.op.enum.ne",
+                _ => unreachable!("table contains equality operators only"),
+            })
+        );
+        assert_eq!(item.node_id, body, "original comparison body");
+        assert_eq!(
+            item.operation,
+            ExactScalarOperation::EnumComparison { operator }
+        );
     }
 }

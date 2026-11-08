@@ -113,7 +113,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         &Cancel::new(),
     )
     .expect("the real QSL producer returns a final PlanRoot emission");
-    let emission = &root.emission;
+    let emission = root.emission();
     let mut evidence = emission.evidence().clone();
     evidence
         .insert_domain_package_document(identity, document)
@@ -140,11 +140,12 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     let declarations = emission.selected_exact_declaration_rows();
     let fields = emission.selected_exact_field_rows();
     assert!(!declarations.is_empty() && !fields.is_empty());
+    let mut native_budget = NativeJoinBudget::new(1_000_000, 1_000_000);
     SelectedExactIdentities::from_stage_rows(
         &package,
         declarations.iter().cloned(),
         fields.iter().cloned(),
-        &mut NativeJoinBudget::new(1_000_000, 1_000_000),
+        &mut native_budget,
     )
     .expect("IR joins exact original producer identities");
     let mut matching_fields = fields
@@ -168,7 +169,9 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
     }];
     // The producer's public handoff adapter owns the exhaustive translation
     // and retains only witnesses for nodes in this final emitted package.
-    let equality_rows = emission.equality_witness(&package);
+    let equality_rows = emission
+        .equality_witness(&package, &mut native_budget)
+        .expect("the owner admits original equality rows under the shared finite budget");
     let applications = equality_rows.applications();
     let facts = equality_rows.facts();
     assert!(!applications.is_empty() && !facts.is_empty());

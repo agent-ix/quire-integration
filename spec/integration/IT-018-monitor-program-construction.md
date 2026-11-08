@@ -188,6 +188,26 @@ placement in the controlled layout grants no temporal-root admission or executio
     The ordinary entries use producer-origin identities and admitted typed source
     bodies; this one criterion does not claim full temporal producer/TC-200 coverage.
 
+16. Exercise fallible declared-type construction. IT-018-SC-16: prepare valid controlled
+    `ProgramParts` using the source-owned declaration lookup above before arming a failing
+    allocator in a dedicated test binary. Refuse the first allocation inside
+    `Program::try_new`, the first Layout binding's shared type-check worklist. Construction
+    returns `ProgramRefusalCode::Membership` and no Program, retaining the native allocation
+    class and original `StorageRequest` unit and amount. The owner allocator fixture uses
+    one-shot denial and automatically disarms after the denied request; this observation
+    alone does not prove allocation-free refusal projection. Inspect the production mapping
+    separately to confirm projection performs no new allocation or allocating clone. With
+    allocation enabled, the same valid construction succeeds.
+    Separately deny the first RT-owned validation scratch reservation and require `Storage`,
+    distinct from shared type-check `Membership`. Semantic controls retain the pre-existing
+    `TypeMismatch` and first-refusal order. Native projection controls preserve the distinct
+    allocation and capacity classes and their original request units and amounts without a
+    synthetic configured ceiling; those controls do not claim real capacity exhaustion or
+    replace the allocator-denial case. No fabricated identity, modified emitted bytes,
+    weakened producer-origin guard or new owner API supplies these controls. This criterion
+    qualifies the ordinary constructor's native failure boundary, not temporal production,
+    entry execution or full FR-276 acceptance.
+
 ## Expected Results
 
 The complete target passes every construction control against the lock-selected RT

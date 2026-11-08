@@ -881,25 +881,38 @@ fn genuine_compound_values_retain_separate_source_and_owner_conversion_evidence(
         qsl_cst::Limits::default(),
     )
     .expect("compound target parse returns diagnostics");
-    assert!(!parsed.is_admissible());
-    let [diagnostic] = parsed.diagnostics() else {
-        panic!(
-            "one original compound-target grammar refusal: {:?}",
-            parsed.diagnostics()
-        );
+    assert!(parsed.is_admissible(), "{:?}", parsed.diagnostics());
+    let forms = qsl_forms::build_unit(&parsed).expect("original compound target forms");
+    let declarations = qsl_semantics::check::PackageDeclarations::assemble(
+        parsed.source().reference().clone(),
+        "agent-ix/quantity-operations".to_owned(),
+        forms,
+        qsl_semantics::model::intake::SelectedModels::default(),
+        Vec::new(),
+    )
+    .expect("original compound target assembles");
+    let regions = declarations.regions();
+    let refusals = declarations
+        .check(CheckingLimits::default())
+        .expect_err("compound target differs from the declared nominal J result");
+    let [refusal] = refusals.as_slice() else {
+        panic!("one original compound-result type mismatch: {refusals:?}");
     };
+    assert!(matches!(
+        refusal.cause,
+        qsl_semantics::check::CheckCause::IllTyped(_)
+    ));
     assert_eq!(
-        diagnostic.code,
-        qsl_foundation::diagnostic::Code::InvalidSyntax
+        refusal.cause.catalog_code().map(|code| code.to_string()),
+        Some("ill_typed/type-mismatch".to_owned())
     );
-    let region = diagnostic
-        .region
-        .as_ref()
-        .expect("original syntax refusal region");
+    let region = regions
+        .region(&refusal.location)
+        .expect("original result mismatch source location");
     assert_eq!(region.source(), parsed.source().reference());
     assert_eq!(
-        &text[usize::try_from(region.start()).expect("source start")
-            ..usize::try_from(region.end()).expect("source end")],
-        "*"
+        &text[usize::try_from(region.start()).expect("region start")
+            ..usize::try_from(region.end()).expect("region end")],
+        "convert<Quantity<kg*m^2*s^-2>>(1 N_m)"
     );
 }

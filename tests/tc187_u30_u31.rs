@@ -69,16 +69,33 @@ fn declared_ms(package: &PackageDeclarations, text: &str) -> UnitId {
     unit.id().clone()
 }
 
-fn assert_assembly_missing(declarations: &str, name: &str) {
+enum MissingNamespace {
+    Unit,
+    Type,
+}
+
+fn assert_assembly_missing(declarations: &str, name: &str, namespace: MissingNamespace) {
     let text = source(declarations);
     let refusal = assemble(&text).expect_err("the unit namespace miss refuses assembly");
     let [error] = refusal.errors.as_slice() else {
         panic!("one typed missing-name refusal for {name}: {refusal:?}");
     };
-    assert!(
-        matches!(&error.cause, AssemblyCause::UnresolvedTypeName { name: found } if found == name),
-        "{name}: {error:?}"
-    );
+    match (namespace, &error.cause) {
+        (
+            MissingNamespace::Unit,
+            AssemblyCause::UnresolvedUnitName {
+                name: found,
+                packages,
+            },
+        ) => {
+            assert_eq!(found, name);
+            assert!(packages.is_empty());
+        }
+        (MissingNamespace::Type, AssemblyCause::UnresolvedTypeName { name: found }) => {
+            assert_eq!(found, name)
+        }
+        _ => panic!("original missing-name namespace for {name}: {error:?}"),
+    }
     assert_eq!(
         error.cause.catalog_code().to_string(),
         "missing_declaration/missing-name"
@@ -152,12 +169,18 @@ fn public_u30_quantity_parameter_uses_ms_and_refuses_other_units_or_names() {
     assert_assembly_missing(
         "function f using v(d: Quantity<T>): Boolean pure { true }",
         "T",
+        MissingNamespace::Unit,
     );
     assert_assembly_missing(
         "function f using v(d: Quantity<nothing>): Boolean pure { true }",
         "nothing",
+        MissingNamespace::Unit,
     );
-    assert_assembly_missing("function f using v(d: ms): Boolean pure { true }", "ms");
+    assert_assembly_missing(
+        "function f using v(d: ms): Boolean pure { true }",
+        "ms",
+        MissingNamespace::Type,
+    );
 }
 
 /// Trace: QSpec-TC-187 and QSpec-FR-142-AC-12. The result retains ms.

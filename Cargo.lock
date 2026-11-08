@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "agent-ix-extraction-frontend"
 version = "0.2.1"
-source = "git+https://github.com/agent-ix/filament-core-data?branch=main#df5e55796db57a62e5b5984c8ec60d70049cebe0"
+source = "git+https://github.com/agent-ix/filament-core-data?branch=main#45a927b258c297159567e4be6a40b6f466a42516"
 dependencies = [
  "agent-ix-semantic-ir",
  "clap",
@@ -17,12 +17,12 @@ dependencies = [
 [[package]]
 name = "agent-ix-semantic-ir"
 version = "0.1.1"
-source = "git+https://github.com/agent-ix/filament-core-data?branch=main#df5e55796db57a62e5b5984c8ec60d70049cebe0"
+source = "git+https://github.com/agent-ix/filament-core-data?branch=main#45a927b258c297159567e4be6a40b6f466a42516"
 
 [[package]]
 name = "agent-ix-semantic-schema"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/filament-core-data?branch=main#df5e55796db57a62e5b5984c8ec60d70049cebe0"
+source = "git+https://github.com/agent-ix/filament-core-data?branch=main#45a927b258c297159567e4be6a40b6f466a42516"
 
 [[package]]
 name = "ahash"
@@ -217,9 +217,9 @@ checksum = "175812e0be2bccb6abe50bb8d566126198344f707e304f45c648fd8f2cc0365e"
 
 [[package]]
 name = "cc"
-version = "1.11.0"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "375989decec1a0fa424442bed520fa12ede43a48475ce8c7417d2c69b32b5f6b"
+checksum = "4ff2a8126fff0f8c839080d619675a585e61720bb12d2baceae45769fd66f155"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -549,17 +549,16 @@ dependencies = [
 
 [[package]]
 name = "generator"
-version = "0.8.11"
+version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1be81b31c9ce4caf7f3178eeb90662bb1864d3ad363ec6bdada3201adff19c37"
+checksum = "ea6c6a73cd1aa4f4f00c02b109fa55d3a9d6ecc2fc4f53177b74ed6ee23b0c53"
 dependencies = [
  "cc",
- "cfg-if",
  "libc",
  "log",
  "rustversion",
- "windows-link",
- "windows-result",
+ "windows-core",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1008,9 +1007,9 @@ dependencies = [
 
 [[package]]
 name = "loom"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "419e0dc8046cb947daa77eb95ae174acfbddb7673b4151f56d1eed8e93fbfaca"
+checksum = "f1611ddbf89dc6ae42cfbd51fc207836140130257646eab8d6d2fb16577db2d2"
 dependencies = [
  "cfg-if",
  "generator",
@@ -1201,7 +1200,7 @@ dependencies = [
  "libc",
  "redox_syscall",
  "smallvec",
- "windows-link",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -1253,7 +1252,7 @@ dependencies = [
 [[package]]
 name = "qsl-analyze"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "ix-trace-rs",
  "num-bigint",
@@ -1267,7 +1266,9 @@ dependencies = [
  "qsl-semantics",
  "quire-canonical",
  "quire-checked",
+ "quire-contract-model",
  "quire-exact",
+ "quire-observation",
  "quire-semantic-value",
  "thiserror",
 ]
@@ -1275,7 +1276,7 @@ dependencies = [
 [[package]]
 name = "qsl-cst"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "ix-trace-rs",
  "logos",
@@ -1287,7 +1288,7 @@ dependencies = [
 [[package]]
 name = "qsl-eval"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1306,7 +1307,7 @@ dependencies = [
 [[package]]
 name = "qsl-forms"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "ix-trace-rs",
  "qsl-cst",
@@ -1319,7 +1320,7 @@ dependencies = [
 [[package]]
 name = "qsl-foundation"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "hashbrown 0.17.1",
  "ix-trace-rs",
@@ -1333,7 +1334,7 @@ dependencies = [
 [[package]]
 name = "qsl-package"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1351,7 +1352,7 @@ dependencies = [
 [[package]]
 name = "qsl-replay"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "base64 0.22.1",
  "ix-trace-rs",
@@ -1378,7 +1379,7 @@ dependencies = [
 [[package]]
 name = "qsl-route"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "ix-trace-rs",
  "qsl-foundation",
@@ -1392,7 +1393,7 @@ dependencies = [
 [[package]]
 name = "qsl-semantics"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "agent-ix-extraction-frontend",
  "agent-ix-semantic-ir",
@@ -1409,12 +1410,19 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror",
+ "unicode-ident",
+ "unicode-normalization",
 ]
+
+[[package]]
+name = "qsv-failing-allocator"
+version = "0.0.0"
+source = "git+https://github.com/agent-ix/quire-semantic-value?branch=main#f9b3afd689f45126c79102e51e8ed23c6a6de38a"
 
 [[package]]
 name = "quire-canonical"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/quire-canonical?branch=main#35987f1dea33edf13bdf8e6a39153a802503f5a0"
+source = "git+https://github.com/agent-ix/quire-canonical?branch=main#6ff8e0914f1ddc00c2969aa001592d4c3d9f631a"
 dependencies = [
  "quire-canonical-derive",
  "ryu-js",
@@ -1427,7 +1435,7 @@ dependencies = [
 [[package]]
 name = "quire-canonical-derive"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/quire-canonical?branch=main#35987f1dea33edf13bdf8e6a39153a802503f5a0"
+source = "git+https://github.com/agent-ix/quire-canonical?branch=main#6ff8e0914f1ddc00c2969aa001592d4c3d9f631a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1450,7 +1458,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-codegen"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#cd184a37bd27d18bf9bd2fbab281ad4da6afa2af"
+source = "git+https://github.com/agent-ix/quire-contract-codegen?branch=main#95356b5b6d9e5df6832403d1e369cb50de5ea803"
 dependencies = [
  "command-fds",
  "ix-trace-rs",
@@ -1475,7 +1483,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-ir"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#4f0ef6307c4ba079b374e8ebc3dac3cf0b3ef199"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#079fb8523eea679e9cff7d2a2b900c73a49a5849"
 dependencies = [
  "ix-trace-rs",
  "quire-contract-model",
@@ -1487,7 +1495,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-model"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#4f0ef6307c4ba079b374e8ebc3dac3cf0b3ef199"
+source = "git+https://github.com/agent-ix/quire-contract-ir?branch=main#079fb8523eea679e9cff7d2a2b900c73a49a5849"
 dependencies = [
  "ix-trace-rs",
  "jsonschema 0.17.1",
@@ -1513,7 +1521,7 @@ dependencies = [
 [[package]]
 name = "quire-contract-runtime"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#a483bf5cb6d2d6a5130ab5c39aeb6b6e2d857e22"
+source = "git+https://github.com/agent-ix/quire-contract-runtime?branch=main#0d216cc020001e54b6763980741d374b08aa0bf3"
 dependencies = [
  "quire-exact",
  "quire-semantic-value",
@@ -1522,7 +1530,7 @@ dependencies = [
 [[package]]
 name = "quire-driver"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-driver?branch=main#b96a51a16aef83137e6e6a6494ad7507a707d9d6"
+source = "git+https://github.com/agent-ix/quire-driver?branch=main#93c21b277c9b89238dc01825d41fd3166e1006a4"
 dependencies = [
  "qsl-foundation",
  "qsl-package",
@@ -1553,7 +1561,7 @@ dependencies = [
 [[package]]
 name = "quire-exact"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-exact?branch=main#9ded73f61ad3b00ed18350b0309c5ee1fbe65c08"
+source = "git+https://github.com/agent-ix/quire-exact?branch=main#3aa2db57f79af92fb206dde6dc46e081d70d5812"
 dependencies = [
  "allocator-api2",
  "arrayvec",
@@ -1581,6 +1589,7 @@ dependencies = [
  "qsl-replay",
  "qsl-route",
  "qsl-semantics",
+ "qsv-failing-allocator",
  "quire-canonical",
  "quire-checked",
  "quire-contract-codegen",
@@ -1606,7 +1615,7 @@ dependencies = [
 [[package]]
 name = "quire-mltl"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-mltl?branch=main#70175d914c4af6257c99d88c3aa03e5c8082c649"
+source = "git+https://github.com/agent-ix/quire-mltl?branch=main#eac1aae565bf23abcf3a9a7230e2843da6088b92"
 dependencies = [
  "quire-observation",
  "serde",
@@ -1620,9 +1629,11 @@ dependencies = [
 [[package]]
 name = "quire-observation"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-observation?branch=main#4d5198c4f897ed7477e7a03907b7a11ebaca4557"
+source = "git+https://github.com/agent-ix/quire-observation?branch=main#014eb43bccc5ea952db33e336db813d54ee26a55"
 dependencies = [
+ "qsl-foundation",
  "quire-canonical",
+ "quire-exact",
  "serde",
  "serde_json",
  "sha2",
@@ -1652,7 +1663,7 @@ dependencies = [
 [[package]]
 name = "quire-semantic-value"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-semantic-value?branch=main#a16416bf014df3c067f8b1640f224c2e3c4bb5e1"
+source = "git+https://github.com/agent-ix/quire-semantic-value?branch=main#f9b3afd689f45126c79102e51e8ed23c6a6de38a"
 dependencies = [
  "quire-canonical",
  "quire-exact",
@@ -1662,7 +1673,7 @@ dependencies = [
 [[package]]
 name = "quire-spec-language"
 version = "0.2.0"
-source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#2ed49b651ad483fef03f6e03fd396ff1c6a55bb6"
+source = "git+https://github.com/agent-ix/quire-spec-language?branch=main#5ff99930804e036486ed045708a48554ebca622c"
 dependencies = [
  "ix-trace-rs",
  "logos",
@@ -1670,7 +1681,6 @@ dependencies = [
  "num-integer",
  "num-traits",
  "qsl-cst",
- "qsl-eval",
  "qsl-forms",
  "qsl-foundation",
  "qsl-package",
@@ -1679,7 +1689,6 @@ dependencies = [
  "quire-canonical",
  "quire-checked",
  "quire-contract-model",
- "quire-eval",
  "quire-exact",
  "quire-semantic-value",
  "serde",
@@ -1691,12 +1700,12 @@ dependencies = [
 [[package]]
 name = "quire-specification-qualification"
 version = "0.0.0"
-source = "git+https://github.com/agent-ix/quire-specification?branch=main#e53e94873a7729678a157d522a1631dc95bb7289"
+source = "git+https://github.com/agent-ix/quire-specification?branch=main#7e63321f943326fc64a60ffcca8ccb2fbd04c85d"
 
 [[package]]
 name = "quire-verification-contracts"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-verification-contracts?branch=main#5070338df68b896d4e26051123133e2cb93f4ec9"
+source = "git+https://github.com/agent-ix/quire-verification-contracts?branch=main#5769cb835ddb164abe65199d19776be681a8bbba"
 dependencies = [
  "chrono",
  "jsonschema 0.55.1",
@@ -1713,7 +1722,7 @@ dependencies = [
 [[package]]
 name = "quire-walk"
 version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-walk?branch=main#b38a3c9b4341ece401ad1b1e2ae109f4c82bd80e"
+source = "git+https://github.com/agent-ix/quire-walk?branch=main#b439a72321609d218974ca80db73735899962099"
 
 [[package]]
 name = "quote"
@@ -1843,9 +1852,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "891efababe418670775f199f0d233d84843c227a0949a883ce15b37c78d6629d"
+checksum = "e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa"
 dependencies = [
  "bitflags",
  "errno",
@@ -2048,9 +2057,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "smallvec"
-version = "1.16.4"
+version = "1.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0d5d4b1981b8bbbb7aed204cae5726d683d5d6ac7e74ec54122ea28f315e7c8"
+checksum = "149309498a5f7334b12ddae0cad8aba81ce785fe91755068867e017cf98fee46"
 
 [[package]]
 name = "spin"
@@ -2228,7 +2237,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 [[package]]
 name = "tl-mltl"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/tl-mltl?branch=main#8e8149d1624128c66a91bac66d597a245c1c2759"
+source = "git+https://github.com/agent-ix/tl-mltl?branch=main#c2e74484a91e292729483f2c4ec621d8d1f390db"
 dependencies = [
  "serde",
  "serde_json",
@@ -2239,7 +2248,7 @@ dependencies = [
 [[package]]
 name = "tl-syntax"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/tl-syntax?branch=main#d97d3d732a8f161337bb57d3559d82bae9d38a5d"
+source = "git+https://github.com/agent-ix/tl-syntax?branch=main#5fd20dd227c566c7b8fd4243068ab1a4ec7af6db"
 dependencies = [
  "serde",
  "serde_json",
@@ -2410,9 +2419,9 @@ checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 
 [[package]]
 name = "uuid"
-version = "1.29.0"
+version = "1.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a0e2d11620c50695fe12bbbfde96b3477fe606e7284c22d505c12ce51214514"
+checksum = "4a06f08a856b009bc7bbaf7d3e79808595d032dd19074c0c2ef26e49e03e6bdc"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
@@ -2549,18 +2558,68 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
+name = "windows-core"
+version = "0.100.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "803590c6856f51d15fa2e9fabe4f4703122c8737f72ef2741b4ac09d4c2192f5"
+dependencies = [
+ "windows-implement",
+ "windows-interface",
+ "windows-link 0.100.0",
+ "windows-result",
+ "windows-strings",
+]
+
+[[package]]
+name = "windows-implement"
+version = "0.100.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bc1bc82e5a1b1a4d7255861b07881a0407b552f50a4d8543c0c7276fa96f6e8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "windows-interface"
+version = "0.100.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3f7005c3b757b9b82c2f40c0e71094ff1080adddaf3e8b6ce99b545d3c48796"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
 
 [[package]]
-name = "windows-result"
-version = "0.4.1"
+name = "windows-link"
+version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7781fa89eaf60850ac3d2da7af8e5242a5ea78d1a11c49bf2910bb5a73853eb5"
+checksum = "9b39de7c7fe78858b0144c50c3fc000bab3be17d5e9b85b1053871693c7f7415"
+
+[[package]]
+name = "windows-result"
+version = "0.100.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44873a1ef61c85d5e2991db91fe656cfcf0731097e00dff1ac860f1cb3b752a0"
 dependencies = [
- "windows-link",
+ "windows-link 0.100.0",
+]
+
+[[package]]
+name = "windows-strings"
+version = "0.100.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a70b590c684f1d2854f74999896f7c0558f1bdde62f599088599e20ea1d2f60"
+dependencies = [
+ "windows-link 0.100.0",
 ]
 
 [[package]]
@@ -2569,7 +2628,7 @@ version = "0.61.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
- "windows-link",
+ "windows-link 0.2.1",
 ]
 
 [[package]]

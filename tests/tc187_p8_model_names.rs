@@ -207,12 +207,13 @@ fn emitted(
             )
             .expect("original document evidence");
     }
-    let admitted = read_checked_package(bytes, CheckedPackageReadLimits::bounded(), &evidence);
-    assert!(
-        matches!(admitted, CheckedPackageDispatchResult::AdmittedV2(_)),
-        "strict IR admits original emission: {admitted:?}"
-    );
-    wire
+    let CheckedPackageDispatchResult::AdmittedV2(admitted) =
+        read_checked_package(bytes, CheckedPackageReadLimits::bounded(), &evidence)
+    else {
+        panic!("strict IR admits original emission");
+    };
+    // Inspect the owner's resolved document-held identities, retaining original emission above.
+    serde_json::to_value(admitted.resolved_graph()).expect("resolved admitted graph view")
 }
 
 fn nominal(assembled: &PackageDeclarations, source: &str, name: &str) -> quire_exact::NodeKey {
@@ -264,7 +265,7 @@ fn parameter<'a>(wire: &'a Value, function: &str) -> &'a Value {
 }
 
 fn nodes(wire: &Value) -> &[Value] {
-    wire["semantic_graph"]["nodes"].as_array().expect("nodes")
+    wire["nodes"].as_array().expect("nodes")
 }
 fn model_node<'a>(wire: &'a Value, identity: &str) -> &'a Value {
     let found: Vec<_> = nodes(wire)

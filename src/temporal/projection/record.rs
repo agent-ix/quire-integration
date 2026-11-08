@@ -21,13 +21,18 @@ use crate::temporal::TemporalSubjectView;
 
 /// Lowercase hexadecimal spelling of exact owner bytes.
 pub(crate) fn hex(bytes: &[u8]) -> Value {
+    Value::String(hex_string(bytes))
+}
+
+/// Lowercase hexadecimal text for typed wire payloads.
+pub(crate) fn hex_string(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut text = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
         text.push(char::from(DIGITS[usize::from(byte >> 4)]));
         text.push(char::from(DIGITS[usize::from(byte & 15)]));
     }
-    Value::String(text)
+    text
 }
 
 fn dec(value: impl std::fmt::Display) -> Value {
@@ -140,21 +145,14 @@ pub(super) fn encode(
             })
         })
         .collect::<Vec<_>>();
-    let valuations = native
-        .valuations
-        .rows()
+    let valuations = facts
+        .values
         .iter()
-        .map(|row| {
+        .map(|((position, operand), value)| {
             Ok(json!({
-                "node": ir(&row.subject.node)?,
-                "role": ir(&row.subject.role)?,
-                "ordinal": dec(row.subject.ordinal),
-                "position": dec(row.position),
-                "anchor": row.anchor,
-                "captureInstance": row.capture_instance,
-                "revision": row.revision,
-                "operand": ir(&row.operand)?,
-                "value": row.value,
+                "position": dec(position),
+                "operand": ir(operand)?,
+                "value": value,
             }))
         })
         .collect::<Result<Vec<_>, Error>>()?;
@@ -188,8 +186,7 @@ pub(super) fn encode(
         "models": models,
         "bindings": bindings,
         "intervals": intervals,
-        "anchor": native.instance.anchor,
-        "captureInstance": native.instance.capture_instance,
+        "anchor": native.request.anchor,
         "captures": facts.captures.iter().map(|bytes| hex(bytes)).collect::<Vec<_>>(),
         "trigger": hex(native.request.trigger.as_ref().map_or(&[][..], |value| value.as_bytes())),
         "triggerPayload": hex(facts.trigger_payload),

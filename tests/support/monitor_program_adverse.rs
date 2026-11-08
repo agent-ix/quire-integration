@@ -112,7 +112,7 @@ temporal Construction using timed over (candidate: Selected::ConfigVersion) cloc
             &Cancel::new(),
         )
         .expect("the public producer emits the actual complete plan root");
-        let package = read(&root.emission, &identity, &document);
+        let package = read(root.emission(), &identity, &document);
         assert_eq!(package.monitor_plans().len(), 1);
         Self {
             root,
@@ -127,13 +127,13 @@ temporal Construction using timed over (candidate: Selected::ConfigVersion) cloc
 
     /// Read an adverse byte input against the original final producer evidence.
     pub fn read_bytes(&self, bytes: &[u8]) -> CheckedPackageDispatchResult {
-        read_result(&self.root.emission, &self.identity, &self.document, bytes)
+        read_result(self.root.emission(), &self.identity, &self.document, bytes)
     }
 
     /// Recheck owner-generated entry source and let the producer assign all new keys.
     /// With `unsupported` false this must reproduce the healthy emission exactly.
     pub fn entry_emission(&self, unsupported: bool) -> (Emission, Box<CheckedPackageV2>) {
-        let mut entries = render(&spec_from_plan(&self.root.plan).unwrap());
+        let mut entries = render(&spec_from_plan(self.root.plan()).unwrap());
         if unsupported {
             const BEFORE: &str = "let initial = State { now: 0, history_start:";
             const AFTER: &str = "let initial = State { now: 0 mod 1, history_start:";
@@ -183,7 +183,7 @@ temporal Construction using timed over (candidate: Selected::ConfigVersion) cloc
         evidence
             .insert_domain_package_document(self.identity.as_str(), self.document.clone())
             .unwrap();
-        let plan = &self.root.plan;
+        let plan = self.root.plan();
         let premises = plan.root_premises();
         let buffers = plan
             .buffers()

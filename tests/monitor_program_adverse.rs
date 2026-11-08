@@ -43,7 +43,7 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
     let (repeated, repeated_package) = healthy.entry_emission(false);
     assert_eq!(
         repeated.package().bytes(),
-        healthy.root.emission.package().bytes(),
+        healthy.root.emission().package().bytes(),
         "the unmodified public entry route reproduces the actual producer output"
     );
     let original = healthy.package.monitor_plans().next().unwrap();
@@ -61,7 +61,7 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
     assert_eq!(original.uncertainty().denominator.as_ref(), "1");
     let root_node = healthy
         .package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .find(|node| &node.node_id == original.node_id())
@@ -148,7 +148,7 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
     );
     let node = &modulo[0];
     let (source_node, kind) = changed_package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .zip(changed_package.node_kinds())
@@ -202,14 +202,16 @@ fn producer_rekeys_a_genuinely_reachable_unsupported_initializer() {
 fn missing_actual_initializer_body_is_a_native_ir_refusal() {
     let healthy = producer::Produced::healthy();
     let plan = healthy.package.monitor_plans().next().unwrap();
-    let original_entry = serde_json::to_value(plan.init().node_id()).unwrap();
-    let mut wire: serde_json::Value =
-        serde_json::from_slice(healthy.root.emission.package().bytes()).unwrap();
-    let nodes = wire["semantic_graph"]["nodes"].as_array_mut().unwrap();
-    let index = nodes
+    let index = healthy
+        .package
+        .resolved_graph()
+        .nodes
         .iter()
-        .position(|node| node["node_id"] == original_entry)
-        .expect("the actual selected initializer is present");
+        .position(|node| &node.node_id == plan.init().node_id())
+        .expect("the selected initializer has its original document holder");
+    let mut wire: serde_json::Value =
+        serde_json::from_slice(healthy.root.emission().package().bytes()).unwrap();
+    let nodes = wire["semantic_graph"]["nodes"].as_array_mut().unwrap();
     assert!(nodes[index]
         .as_object_mut()
         .unwrap()
@@ -233,7 +235,7 @@ fn missing_actual_initializer_body_is_a_native_ir_refusal() {
     );
     assert!(
         matches!(
-            healthy.read_bytes(healthy.root.emission.package().bytes()),
+            healthy.read_bytes(healthy.root.emission().package().bytes()),
             CheckedPackageDispatchResult::AdmittedV2(_)
         ),
         "the original producer bytes remain healthy after the adverse read"

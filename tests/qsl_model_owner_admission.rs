@@ -129,7 +129,7 @@ fn admitted(version: &str) -> CheckedPackageV2 {
 /// Domain selections retained by the admitted model-root owners.
 fn model_identities(package: &CheckedPackageV2) -> Vec<&str> {
     package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter_map(|node| match &node.owner {
@@ -142,7 +142,7 @@ fn model_identities(package: &CheckedPackageV2) -> Vec<&str> {
 /// The admitted structural identities of declarations owned by the model.
 fn model_node_ids(package: &CheckedPackageV2) -> BTreeMap<String, CheckedNodeId> {
     package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter_map(|node| match (&*node.node_tag, &node.owner) {
@@ -168,7 +168,7 @@ fn operation_nodes(
     operation: &str,
 ) -> Vec<quire_contract_ir::CheckedNodeId> {
     let node_ids = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter(|node| {
@@ -210,7 +210,7 @@ fn a_model_bearing_package_emitted_by_qsl_is_admitted_by_irs_reader() {
     let package = admitted(AUTHORED_VERSION);
     assert_eq!(model_identities(&package), [IDENTITY]);
     let declared: Vec<&str> = package
-        .graph()
+        .resolved_graph()
         .nodes
         .iter()
         .filter_map(|node| node.declaration.as_ref())

@@ -274,7 +274,7 @@ fn observe() {
                 let arguments = if row.unary {
                     (*left).to_owned()
                 } else if row.lazy {
-                    format!("{left}, || -> Outcome<bool> {{ panic!(\"short-circuit right evaluated\") }}")
+                    format!("{left}, |_: &mut Meter| -> Outcome<bool> {{ panic!(\"short-circuit right evaluated\") }}")
                 } else {
                     format!("{left}, {right}")
                 };

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Live QSL checked-package producer and IR reader for IT-016 tests.
 
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path};
 
 use quire_contract_ir::{
     read_checked_package, CheckedPackageDispatchResult, CheckedPackageEvidence,
@@ -9,7 +9,7 @@ use quire_contract_ir::{
 };
 use serde_json::Value;
 
-use crate::support::qsl_root;
+use crate::support::{cargo_command::command as cargo_child_command, qsl_root};
 
 /// A QSL-owned model document selected by the producer and supplied as the
 /// same bytes to the IR reader. The document stays in QSL's checkout.
@@ -33,7 +33,7 @@ pub fn emit_and_read_checked_v2(request: CheckedProducerRequest<'_>) -> CheckedP
     let directory = tempfile::tempdir().expect("test source directory");
     fs::write(directory.path().join(request.source_path), request.source)
         .expect("write authored QSL source");
-    let mut command = Command::new(env!("CARGO"));
+    let mut command = cargo_child_command();
     command
         .current_dir(directory.path())
         .env(

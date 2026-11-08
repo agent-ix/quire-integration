@@ -17,10 +17,12 @@ name = "quire_integration"
 path = "src/lib.rs"
 
 [dependencies]
+quire-semantic-value = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 quire-canonical = { git = "https://github.com/agent-ix/quire-canonical", branch = "main", features = ["serde_json"] }
 quire-observation = { git = "https://github.com/agent-ix/quire-observation", branch = "main" }
 qsl-package = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 qsl-eval = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
+quire-eval = { git = "https://github.com/agent-ix/quire-eval", branch = "main", default-features = false }
 quire-spec-language = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-contract-ir = { package = "quire-contract-model", git = "https://github.com/agent-ix/quire-contract-ir", branch = "main" }
 quire-mltl = { git = "https://github.com/agent-ix/quire-mltl", branch = "main" }
@@ -32,6 +34,7 @@ serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
+qsv-failing-allocator = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 qsl-analyze = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-specification = { package = "quire-specification-qualification", git = "https://github.com/agent-ix/quire-specification", branch = "main" }
 # QSL-334: the composed QSL -> IR -> codegen tests live here, because nothing depends on
@@ -44,7 +47,6 @@ qsl-route = { git = "https://github.com/agent-ix/quire-spec-language", branch = 
 qsl-semantics = { git = "https://github.com/agent-ix/quire-spec-language", branch = "main" }
 quire-eval = { git = "https://github.com/agent-ix/quire-eval", branch = "main", default-features = false }
 quire-checked = { git = "https://github.com/agent-ix/quire-eval", branch = "main", default-features = false }
-quire-semantic-value = { git = "https://github.com/agent-ix/quire-semantic-value", branch = "main" }
 quire-contract-runtime = { git = "https://github.com/agent-ix/quire-contract-runtime", branch = "main", features = ["exact"] }
 quire-contract-codegen = { git = "https://github.com/agent-ix/quire-contract-codegen", branch = "main" }
 quire-driver = { git = "https://github.com/agent-ix/quire-driver", branch = "main" }
