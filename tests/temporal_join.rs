@@ -14,6 +14,7 @@ use qsl_eval::temporal::evidence::{EvaluatedEvidence, EvidencePackage};
 use qsl_eval::temporal::evidence::{ObligationKey, Relation, Settlement, Truth};
 use qsl_package::checked_views::Closure;
 use qsl_package::BarePackage;
+use quire_eval::CallFailure;
 use quire_exact::Meter;
 use quire_integration::temporal::{
     join_tl, project_tl, read_tl_join, ExpectedTlJoin, NativeProjectionInput, TlJoinCause,
@@ -32,16 +33,31 @@ fn genuine_equal_final_pairs_retain_actual_sources_and_their_boolean() {
             let projection = case.project(TlLimits::default()).expect("projection");
             let native = evaluate_native(&projection);
             let mapped = evaluate_mapped(&projection);
-            assert!(native.result().incomplete.is_none());
+            assert!(native
+                .as_ref()
+                .expect("successful owner evaluation")
+                .result()
+                .incomplete
+                .is_none());
             assert_eq!(
-                native.result().truth,
+                native
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+                    .truth,
                 Some(if expected_value {
                     Truth::True
                 } else {
                     Truth::False
                 })
             );
-            let original_native = format!("{:?}", native.result());
+            let original_native = format!(
+                "{:?}",
+                native
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+            );
             let original_mapped = mapped.bytes().to_vec();
             let original_source = mapped.source().bytes().to_vec();
             let joined = join_tl(
@@ -79,10 +95,24 @@ fn genuine_equal_final_pairs_retain_actual_sources_and_their_boolean() {
             assert_eq!(wire["correspondence"], json!(hex(projection.bytes())));
             assert_eq!(
                 wire["native"],
-                json!(hex(native.result().result_identity.as_bytes()))
+                json!(hex(native
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+                    .result_identity
+                    .as_bytes()))
             );
             assert_eq!(wire["mapped"], json!(hex(&original_mapped)));
-            assert_eq!(format!("{:?}", native.result()), original_native);
+            assert_eq!(
+                format!(
+                    "{:?}",
+                    native
+                        .as_ref()
+                        .expect("successful owner evaluation")
+                        .result()
+                ),
+                original_native
+            );
             assert_eq!(mapped.bytes(), original_mapped);
             assert_eq!(mapped.source().bytes(), original_source);
         });
@@ -103,8 +133,22 @@ fn equal_pending_requires_actual_open_decision_and_surrounding_scopes() {
                 .expect("actual online prefix");
             let native = evaluate_native(&projection);
             let mapped = evaluate_mapped(&projection);
-            assert_eq!(native.result().truth, Some(Truth::Pending));
-            assert_eq!(native.result().settlement, Some(Settlement::Unsettled));
+            assert_eq!(
+                native
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+                    .truth,
+                Some(Truth::Pending)
+            );
+            assert_eq!(
+                native
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+                    .settlement,
+                Some(Settlement::Unsettled)
+            );
             assert_eq!(mapped.source().truth(), report::TemporalTruth::Pending);
             assert_eq!(
                 mapped.source().settlement(),
@@ -158,7 +202,14 @@ fn surrounding_closed_does_not_replace_open_decision_scope_or_hide_conflict() {
                 .expect("separate closure axes");
             let native = evaluate_native(&projection);
             let mapped = evaluate_mapped(&projection);
-            assert_eq!(native.result().truth, Some(Truth::Pending));
+            assert_eq!(
+                native
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+                    .truth,
+                Some(Truth::Pending)
+            );
             assert_eq!(mapped.source().truth(), report::TemporalTruth::Violated);
             let joined = join_tl(
                 &projection,
@@ -260,7 +311,12 @@ fn unavailable_precedes_native_incomplete_and_preserves_both_causes_in_order() {
         )
         .expect("projection does not evaluate the native request");
         let native = evaluate_native(&projection);
-        assert!(native.result().incomplete.is_some());
+        assert!(native
+            .as_ref()
+            .expect("successful owner evaluation")
+            .result()
+            .incomplete
+            .is_some());
         let joined = join_tl(
             &projection,
             Some(&native),
@@ -589,7 +645,12 @@ fn ordered_causes_have_their_own_exact_and_one_short_ceiling() {
         )
         .expect("projection");
         let native = evaluate_native(&projection);
-        assert!(native.result().incomplete.is_some());
+        assert!(native
+            .as_ref()
+            .expect("successful owner evaluation")
+            .result()
+            .incomplete
+            .is_some());
         let first = join_tl(
             &projection,
             Some(&native),
@@ -744,7 +805,13 @@ fn genuine_correction_pairs_preserve_original_carriers_and_reach_equal_final() {
             &mut native_budget(),
         )
         .unwrap();
-        let saved = format!("{:?}", native.result());
+        let saved = format!(
+            "{:?}",
+            native
+                .as_ref()
+                .expect("successful owner evaluation")
+                .result()
+        );
         let prior_bytes = prior.bytes().to_vec();
         with_progress_correction(&original, &native, |projection, issued| {
             let source = evaluate_tl(
@@ -764,7 +831,10 @@ fn genuine_correction_pairs_preserve_original_carriers_and_reach_equal_final() {
             .unwrap();
             assert_eq!(joined.decision(), TlJoinDecision::EqualFinal);
             assert_eq!(joined.value(), Some(true));
-            assert!(std::ptr::eq(joined.native().unwrap(), &issued));
+            assert!(std::ptr::eq(
+                joined.native().unwrap(),
+                issued.as_ref().unwrap()
+            ));
             let read = read_tl_join(
                 joined.bytes(),
                 ExpectedTlJoin {
@@ -803,7 +873,16 @@ fn genuine_correction_pairs_preserve_original_carriers_and_reach_equal_final() {
             assert_eq!(mixed.decision(), TlJoinDecision::Conflict);
             assert_eq!(mixed.value(), None);
         });
-        assert_eq!(format!("{:?}", native.result()), saved);
+        assert_eq!(
+            format!(
+                "{:?}",
+                native
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+            ),
+            saved
+        );
         assert_eq!(prior.bytes(), prior_bytes);
     });
 }
@@ -829,8 +908,20 @@ fn native_failed_execution_precedes_equal_boolean_and_retains_all_causes() {
         .expect("failed assessment execution remains independent of projection premises");
         let native = evaluate_native(&projection);
         let mapped = evaluate_mapped(&projection);
-        assert!(native.result().incomplete.is_none());
-        assert_eq!(native.result().truth, Some(Truth::True));
+        assert!(native
+            .as_ref()
+            .expect("successful owner evaluation")
+            .result()
+            .incomplete
+            .is_none());
+        assert_eq!(
+            native
+                .as_ref()
+                .expect("successful owner evaluation")
+                .result()
+                .truth,
+            Some(Truth::True)
+        );
         assert_eq!(mapped.source().execution(), AssessmentExecution::Completed);
         let joined = join_tl(
             &projection,
@@ -874,7 +965,13 @@ fn native_lineage_limit_is_the_owner_counter_and_preserves_prior_authority() {
     with_case("holds(true)", false, |case| {
         let original = case.project(TlLimits::default()).unwrap();
         let prior = evaluate_native(&original);
-        let saved = format!("{:?}", prior.result());
+        let saved = format!(
+            "{:?}",
+            prior
+                .as_ref()
+                .expect("successful owner evaluation")
+                .result()
+        );
         projection_support::with_case_watermark(
             "holds(true)",
             false,
@@ -897,14 +994,27 @@ fn native_lineage_limit_is_the_owner_counter_and_preserves_prior_authority() {
                     assert_eq!(issued.result().lineage, 1);
                     assert_eq!(
                         issued.result().relation,
-                        Relation::Superseding(prior.predecessor().clone())
+                        Relation::Superseding(
+                            prior
+                                .as_ref()
+                                .expect("successful predecessor call")
+                                .predecessor()
+                                .clone()
+                        )
                     );
                     if ceiling == 0 {
                         assert!(issued.result().incomplete.is_some());
                         assert_eq!(issued.result().truth, None);
                         assert_eq!(issued.result().usage.instances, 0);
                         assert_eq!(issued.result().usage.positions, 0);
-                        assert_eq!(issued.result().ledger, prior.result().ledger);
+                        assert_eq!(
+                            issued.result().ledger,
+                            prior
+                                .as_ref()
+                                .expect("successful owner evaluation")
+                                .result()
+                                .ledger
+                        );
                     } else {
                         assert!(issued.result().incomplete.is_none());
                         assert_eq!(issued.result().truth, Some(Truth::True));
@@ -912,13 +1022,22 @@ fn native_lineage_limit_is_the_owner_counter_and_preserves_prior_authority() {
                 }
             },
         );
-        assert_eq!(format!("{:?}", prior.result()), saved);
+        assert_eq!(
+            format!(
+                "{:?}",
+                prior
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+            ),
+            saved
+        );
     });
 }
 
 fn actual_correction_request(
     projection: &ValidatedTlProjection<'_>,
-    prior: &EvaluatedEvidence,
+    prior: &Result<EvaluatedEvidence, CallFailure>,
     advanced: projection_support::Case<'_>,
 ) -> qsl_eval::temporal::evidence::EvidenceRequest {
     let input = projection.native();
@@ -931,7 +1050,11 @@ fn actual_correction_request(
         serde_json::to_vec(&(&input.occurrence.node, selected)).unwrap(),
         input.occurrence.ordinal,
     );
-    let ledger = &prior.result().ledger;
+    let ledger = &prior
+        .as_ref()
+        .expect("successful owner evaluation")
+        .result()
+        .ledger;
     let predecessor = ledger
         .result(&key, input.request.trigger.as_ref())
         .unwrap()
@@ -989,7 +1112,14 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
                             ),
                             other.selection.owner_limits,
                         );
-                        assert!(!matches!(native.result().relation, Relation::Original));
+                        assert!(!matches!(
+                            native
+                                .as_ref()
+                                .expect("successful owner evaluation")
+                                .result()
+                                .relation,
+                            Relation::Original
+                        ));
                         assert_eq!(
                             mapped.source().relation_kind(),
                             report::ResultRelationKind::Superseding
@@ -1074,8 +1204,8 @@ fn foreign_corrected_native_and_tl_reads_remain_refused_before_correction_author
 
 fn with_progress_correction(
     original: &ValidatedTlProjection<'_>,
-    prior: &EvaluatedEvidence,
-    test: impl FnOnce(&ValidatedTlProjection<'_>, EvaluatedEvidence),
+    prior: &Result<EvaluatedEvidence, CallFailure>,
+    test: impl FnOnce(&ValidatedTlProjection<'_>, Result<EvaluatedEvidence, CallFailure>),
 ) {
     projection_support::with_case_watermark(
         "holds(true)",
@@ -1118,15 +1248,50 @@ fn with_progress_correction(
             assert_ne!(corrected.request(), original.request());
             let issued = evaluate_native_with_prior(&corrected, Some(prior));
             assert_ne!(
-                issued.result().input_identity,
-                prior.result().input_identity
+                issued
+                    .as_ref()
+                    .expect("successful correction call")
+                    .result()
+                    .input_identity,
+                prior
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+                    .input_identity
             );
             assert_eq!(
-                issued.result().relation,
-                Relation::Superseding(prior.predecessor().clone())
+                issued
+                    .as_ref()
+                    .expect("successful correction call")
+                    .result()
+                    .relation,
+                Relation::Superseding(
+                    prior
+                        .as_ref()
+                        .expect("successful predecessor call")
+                        .predecessor()
+                        .clone()
+                )
             );
-            assert_eq!(issued.result().lineage, prior.result().lineage + 1);
-            assert!(issued.result().incomplete.is_none());
+            assert_eq!(
+                issued
+                    .as_ref()
+                    .expect("successful correction call")
+                    .result()
+                    .lineage,
+                prior
+                    .as_ref()
+                    .expect("successful owner evaluation")
+                    .result()
+                    .lineage
+                    + 1
+            );
+            assert!(issued
+                .as_ref()
+                .expect("successful correction call")
+                .result()
+                .incomplete
+                .is_none());
             test(&corrected, issued);
         },
     );
@@ -1252,7 +1417,7 @@ fn reachable_row_pairs_return_the_first_decision_and_both_causes() {
         });
         let foreign = foreign.expect("genuine result for another request");
         let pair = |projection: &ValidatedTlProjection<'_>,
-                    native: Option<&EvaluatedEvidence>,
+                    native: Option<&Result<EvaluatedEvidence, CallFailure>>,
                     mapped: Option<&quire_mltl::contract_ir::ValidatedMappedResult>,
                     decision: TlJoinDecision,
                     causes: &[TlJoinCause],
@@ -1301,7 +1466,12 @@ fn reachable_row_pairs_return_the_first_decision_and_both_causes() {
         )
         .expect("limited projection");
         let incomplete = evaluate_native(&limited_projection);
-        assert!(incomplete.result().incomplete.is_some());
+        assert!(incomplete
+            .as_ref()
+            .expect("successful owner evaluation")
+            .result()
+            .incomplete
+            .is_some());
         pair(
             &limited_projection,
             Some(&incomplete),
@@ -1429,5 +1599,91 @@ fn a_native_correction_against_a_foreign_original_tl_result_is_refused_and_confl
             assert!(joined.owner_refusals().native().is_none());
             assert!(joined.owner_refusals().mapped().is_none());
         });
+    });
+}
+
+#[trace("IT-022-SC-12", "IT-022-SC-15", "FR-350-AC-5", "FR-350-AC-6")]
+#[test]
+fn actual_native_call_refusal_is_retained_distinct_from_absence_without_evaluation() {
+    with_case("holds(true)", false, |case| {
+        let projection = case.project(TlLimits::default()).unwrap();
+        let mapped = evaluate_mapped(&projection);
+        let bare = BarePackage::new(case.package);
+        let owner = EvidencePackage::from_package(&bare, &mut native_budget()).unwrap();
+        let mut request = case.native.request.clone();
+        request.binding.clock_name = "another-clock".into();
+        let mut meter = Meter::new(scalar_limits());
+        let outcome =
+            owner.evaluate_temporal_evidence(&case.native.occurrence.node, &request, &mut meter);
+        let original = outcome
+            .as_ref()
+            .expect_err("the actual owner refuses a different clock binding");
+        assert!(matches!(original, CallFailure::Admission(_)));
+        assert_eq!(meter.consumed(quire_exact::LimitKind::WorkUnits), 0);
+        let joined = join_tl(
+            &projection,
+            Some(&outcome),
+            Some(&mapped),
+            None,
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(joined.decision(), TlJoinDecision::Refused);
+        assert_eq!(joined.value(), None);
+        assert!(!joined.native_admitted());
+        assert!(joined.native().is_none());
+        assert!(std::ptr::eq(joined.native_outcome().unwrap(), &outcome));
+        assert!(std::ptr::eq(
+            joined.native_call_failure().unwrap(),
+            original
+        ));
+        assert_eq!(joined.causes().first(), Some(&TlJoinCause::ResultRefused));
+        let record: Value = serde_json::from_slice(joined.bytes()).unwrap();
+        assert_eq!(record["native"]["failure"], "admission");
+        let reread = read_tl_join(
+            joined.bytes(),
+            ExpectedTlJoin {
+                projection: &projection,
+                native: Some(&outcome),
+                mapped: Some(&mapped),
+                previous: None,
+            },
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(reread.bytes(), joined.bytes());
+        assert_eq!(reread.native_call_failure(), Some(original));
+        assert_eq!(meter.consumed(quire_exact::LimitKind::WorkUnits), 0);
+        let absent = join_tl(
+            &projection,
+            None,
+            Some(&mapped),
+            None,
+            TlLimits::default(),
+            &mut native_budget(),
+        )
+        .unwrap();
+        assert_eq!(absent.decision(), TlJoinDecision::Unavailable);
+        assert_ne!(absent.bytes(), joined.bytes());
+        request.binding.clock_name = "third-clock".into();
+        let different =
+            owner.evaluate_temporal_evidence(&case.native.occurrence.node, &request, &mut meter);
+        assert!(different.is_err());
+        assert!(matches!(
+            read_tl_join(
+                joined.bytes(),
+                ExpectedTlJoin {
+                    projection: &projection,
+                    native: Some(&different),
+                    mapped: Some(&mapped),
+                    previous: None,
+                },
+                TlLimits::default(),
+                &mut native_budget()
+            ),
+            Err(TlJoinError::ExpectedMismatch)
+        ));
     });
 }

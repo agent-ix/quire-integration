@@ -962,24 +962,56 @@ fn valuation_rows_progress_views_and_captures_change_their_members() {
 fn instance_bound_atoms_require_the_selected_triggers_actual_map() {
     fixture::with_source(
         &fixture::declarations("capture saved: Boolean = true; holds(saved)"),
-        "Due", &[b"true"], |case| {
+        "Due",
+        &[b"true"],
+        |case| {
             let selected = case.native.request.trigger.as_ref().unwrap();
             let original = &case.native.request.positions[0].instance_valuations[selected];
-            assert!(!original.is_empty(), "the captured predicate is instance bound");
+            assert!(
+                !original.is_empty(),
+                "the captured predicate is instance bound"
+            );
             for other_instance in [false, true] {
                 let mut request = case.native.request.clone();
-                let entries = request.positions[0].instance_valuations.remove(selected).unwrap();
+                let entries = request.positions[0]
+                    .instance_valuations
+                    .remove(selected)
+                    .unwrap();
                 if other_instance {
-                    let other = qsl_eval::temporal::evidence::SemanticTriggerIdentity::new(b"another-origin".as_slice()).unwrap();
-                    request.positions[0].instance_valuations.insert(other, entries);
+                    let other = qsl_eval::temporal::evidence::SemanticTriggerIdentity::new(
+                        b"another-origin".as_slice(),
+                    )
+                    .unwrap();
+                    request.positions[0]
+                        .instance_valuations
+                        .insert(other, entries);
                 } else {
                     request.positions[0].valuations = entries;
                 }
-                let error = project_tl(case.package, case.subject, case.classification, case.surrounding,
-                    NativeProjectionInput { request: &request, ..case.native }, case.selection, TlLimits::default())
-                    .expect_err("a shared or foreign instance value cannot satisfy this capture-bound atom");
-                assert!(matches!(error, TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })));
+                let error = project_tl(
+                    case.package,
+                    case.subject,
+                    case.classification,
+                    case.surrounding,
+                    NativeProjectionInput {
+                        request: &request,
+                        ..case.native
+                    },
+                    case.selection,
+                    TlLimits::default(),
+                )
+                .expect_err(
+                    "a shared or foreign instance value cannot satisfy this capture-bound atom",
+                );
+                assert!(matches!(
+                    error,
+                    TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
+                ));
             }
-            assert!(case.project(TlLimits::default()).is_ok(), "the original selected map still projects");
-        });
+            assert!(
+                case.project(TlLimits::default()).is_ok(),
+                "the original selected map still projects"
+            );
+        },
+    );
 }

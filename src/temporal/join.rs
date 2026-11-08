@@ -14,7 +14,7 @@ use qsl_eval::temporal::{
 };
 use qsl_package::BarePackage;
 use qsl_package::NativeJoinBudget;
-use quire_eval::CallFailure;
+use quire_eval::{CallAdmissionFailure, CallAdmissionLocus, CallFailure};
 use quire_mltl::{
     contract_ir::{MappedOutcome, MappingSelection, NonValueKind, ValidatedMappedResult},
     report::{AssessmentExecution, ResultRelationKind, SettlementBasis, TemporalTruth},
@@ -187,7 +187,9 @@ impl TlJoinError {
     pub const fn code(&self) -> TlJoinCode {
         match self {
             Self::ExpectedMismatch => TlJoinCode::ExpectedMismatch,
-            Self::LimitReached { .. } | Self::NativePackage(PackageMismatch::Exhausted(_)) => TlJoinCode::LimitReached,
+            Self::LimitReached { .. } | Self::NativePackage(PackageMismatch::Exhausted(_)) => {
+                TlJoinCode::LimitReached
+            }
             Self::NativeEvidence(_) | Self::NativePackage(_) => TlJoinCode::NativeEvidence,
             Self::Encoding(_) => TlJoinCode::Encoding,
         }
@@ -226,7 +228,7 @@ impl TlJoinOwnerRefusals {
 /// Constructor-private result retaining the complete projection and actual sources.
 pub struct ValidatedTlJoin<'a> {
     projection: &'a ValidatedTlProjection<'a>,
-    native: Option<&'a EvaluatedEvidence>,
+    native: Option<&'a Result<EvaluatedEvidence, CallFailure>>,
     native_admitted: bool,
     mapped: Option<ValidatedMappedResult>,
     previous: Option<&'a ValidatedTlJoin<'a>>,
@@ -257,7 +259,15 @@ impl<'a> ValidatedTlJoin<'a> {
     }
     /// Original native owner result; no bridge mirror replaces it.
     pub fn native(&self) -> Option<&'a EvaluatedEvidence> {
+        self.native.and_then(|outcome| outcome.as_ref().ok())
+    }
+    /// Original whole owner call outcome, preserving failure separately from absence.
+    pub fn native_outcome(&self) -> Option<&'a Result<EvaluatedEvidence, CallFailure>> {
         self.native
+    }
+    /// Original owner call failure, never promoted to validated result authority.
+    pub fn native_call_failure(&self) -> Option<&'a CallFailure> {
+        self.native.and_then(|outcome| outcome.as_ref().err())
     }
     /// Whether the genuine issued result matched this input and supplied predecessor.
     pub fn native_admitted(&self) -> bool {
@@ -302,8 +312,8 @@ impl<'a> ValidatedTlJoin<'a> {
 pub struct ExpectedTlJoin<'a> {
     /// Complete admitted projection and correspondence.
     pub projection: &'a ValidatedTlProjection<'a>,
-    /// Actual native result or genuine absence.
-    pub native: Option<&'a EvaluatedEvidence>,
+    /// Original whole native call outcome, or genuine absence.
+    pub native: Option<&'a Result<EvaluatedEvidence, CallFailure>>,
     /// Actual TL mapped result or genuine absence.
     pub mapped: Option<&'a ValidatedMappedResult>,
     /// Exact previous admitted join or genuine absence.
@@ -342,6 +352,15 @@ impl Budget {
         }
         Ok(())
     }
+    /// Visit original native diagnostic members before copying them into the record.
+    fn diagnostic_work(&mut self, count: usize) -> Result<(), TlJoinError> {
+        let count = u64::try_from(count).unwrap_or(u64::MAX);
+        if self.usage.work.saturating_add(count) > self.limits.max_work {
+            return Err(limit(TlProjectionLimit::Work, self.limits.max_work));
+        }
+        self.usage.work += count;
+        Ok(())
+    }
     fn bytes(&mut self, length: usize) -> Result<(), TlJoinError> {
         let value = u64::try_from(length).unwrap_or(u64::MAX);
         if value > self.limits.max_bytes {
@@ -360,11 +379,11 @@ fn limit(counter: TlProjectionLimit, setting: u64) -> TlJoinError {
     }
 }
 
-/// Owner-read both supplied results and decide by the FR-350 table.
-/// Neither this operation nor either reader it invokes executes a temporal evaluator.
+/// Bind the original native call outcome, owner-read the TL result and apply the join table.
+/// This operation never executes a temporal evaluator.
 pub fn join_tl<'a>(
     projection: &'a ValidatedTlProjection<'a>,
-    native: Option<&'a EvaluatedEvidence>,
+    native: Option<&'a Result<EvaluatedEvidence, CallFailure>>,
     mapped: Option<&ValidatedMappedResult>,
     previous: Option<&'a ValidatedTlJoin<'a>>,
     limits: TlLimits,
@@ -408,6 +427,7 @@ pub fn read_tl_join<'a>(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum NativeState {
     Refused,
+    Failed,
     Lineage,
     Unavailable,
     Incomplete,
@@ -529,8 +549,11 @@ fn premises_equal(
         ExecutionDisposition::Completed => AssessmentExecution::Completed,
         ExecutionDisposition::Failed => AssessmentExecution::Failed,
     };
-    let native_support: BTreeSet<&str> = native.support.iter()
-        .map(|support| support.observation.identity.as_str()).collect();
+    let native_support: BTreeSet<&str> = native
+        .support
+        .iter()
+        .map(|support| support.observation.identity.as_str())
+        .collect();
     let tl_support: BTreeSet<&str> = source
         .decision_support()
         .iter()
@@ -548,16 +571,127 @@ fn premises_equal(
         && native_support == tl_support
 }
 
+/// Encode the current evidence call's original diagnostic members without parsing
+/// display text. Other call families retain their typed failure as an operation error.
+fn native_outcome_record(
+    outcome: &Result<EvaluatedEvidence, CallFailure>,
+    budget: &mut Budget,
+) -> Result<Value, TlJoinError> {
+    match outcome {
+        Ok(issued) => {
+            let identity = issued.result().result_identity.as_bytes();
+            budget.bytes(identity.len())?;
+            Ok(Value::String(hex(identity)))
+        }
+        Err(failure @ CallFailure::Admission(admission)) => {
+            let (kind, diagnostic) = match admission.as_ref() {
+                CallAdmissionFailure::Refused(record) => ("refused", record),
+                CallAdmissionFailure::Incomplete(record) => ("incomplete", record),
+            };
+            // Temporal evidence admission names a request member and has no kernel
+            // construction cause. Never erase a different family's extra provenance.
+            let CallAdmissionLocus::Member { name, index } = &diagnostic.locus else {
+                return Err(TlJoinError::NativeEvidence(failure.clone()));
+            };
+            if diagnostic.record.kernel.is_some() {
+                return Err(TlJoinError::NativeEvidence(failure.clone()));
+            }
+            budget.diagnostic_work(
+                diagnostic
+                    .record
+                    .fields
+                    .len()
+                    .saturating_add(diagnostic.record.path.len())
+                    .saturating_add(1),
+            )?;
+            let size = diagnostic
+                .record
+                .fields
+                .iter()
+                .fold(name.len(), |sum, (key, value)| {
+                    sum.saturating_add(key.len()).saturating_add(value.len())
+                });
+            let size = diagnostic
+                .record
+                .path
+                .iter()
+                .fold(size, |sum, step| match step {
+                    quire_semantic_value::admission::PathStep::Field(name) => {
+                        sum.saturating_add(name.len())
+                    }
+                    quire_semantic_value::admission::PathStep::OptionValue
+                    | quire_semantic_value::admission::PathStep::Index(_) => sum,
+                });
+            budget.bytes(size)?;
+            let path = diagnostic
+                .record
+                .path
+                .iter()
+                .map(|step| match step {
+                    quire_semantic_value::admission::PathStep::Field(name) => {
+                        json!({"field": name})
+                    }
+                    quire_semantic_value::admission::PathStep::OptionValue => {
+                        json!({"option": true})
+                    }
+                    quire_semantic_value::admission::PathStep::Index(index) => {
+                        json!({"index": index.to_string()})
+                    }
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({"failure": "admission", "kind": kind,
+                "code": diagnostic.record.catalog.code(), "cause": diagnostic.record.catalog.cause(),
+                "prefix": diagnostic.record.catalog.prefix(), "fields": diagnostic.record.fields,
+                "member": name, "index": index.map(|value| value.to_string()), "path": path,
+            }))
+        }
+        Err(failure @ CallFailure::Fault(fault)) => {
+            if fault.kernel_cause().is_some() {
+                return Err(TlJoinError::NativeEvidence(failure.clone()));
+            }
+            budget.diagnostic_work(fault.named().len().saturating_add(1))?;
+            let size = fault.named().iter().fold(
+                fault.stage().len().saturating_add(fault.invariant().len()),
+                |sum, (name, value)| sum.saturating_add(name.len()).saturating_add(value.len()),
+            );
+            budget.bytes(size)?;
+            Ok(json!({"failure": "fault", "stage": fault.stage(),
+                "invariant": fault.invariant(), "named": fault.named()}))
+        }
+        Err(
+            failure @ (CallFailure::Input(_)
+            | CallFailure::Body(_)
+            | CallFailure::Cancelled(_)
+            | CallFailure::Storage { .. }
+            | CallFailure::Supplied(_)
+            | CallFailure::UnsupportedHelper(_)),
+        ) => Err(TlJoinError::NativeEvidence(failure.clone())),
+    }
+}
+
 fn build<'a>(
     projection: &'a ValidatedTlProjection<'a>,
-    native: Option<&'a EvaluatedEvidence>,
+    native: Option<&'a Result<EvaluatedEvidence, CallFailure>>,
     mapped: Option<&ValidatedMappedResult>,
     previous: Option<&'a ValidatedTlJoin<'a>>,
     mut budget: Budget,
     native_budget: &mut NativeJoinBudget,
 ) -> Result<ValidatedTlJoin<'a>, TlJoinError> {
-    if let Some(issued) = native {
-        budget.bytes(issued.result().result_identity.as_bytes().len())?;
+    let native_record = native
+        .map(|outcome| native_outcome_record(outcome, &mut budget))
+        .transpose()?;
+    if let Some(record) = &native_record {
+        let bytes = quire_canonical::to_vec(
+            record,
+            quire_canonical::Limits::new(budget.limits.max_bytes),
+        )
+        .map_err(|error| match error {
+            quire_canonical::Error::Limit(_) => {
+                limit(TlProjectionLimit::Bytes, budget.limits.max_bytes)
+            }
+            error => TlJoinError::Encoding(error),
+        })?;
+        budget.bytes(bytes.len())?;
     }
     if let Some(result) = mapped {
         budget.bytes(result.bytes().len())?;
@@ -576,7 +710,24 @@ fn build<'a>(
         .and_then(ValidatedTlJoin::native);
     let mut native_side = NativeState::Unavailable;
     let mut read_native = None;
-    if let Some(issued) = native {
+    if let Some(Err(failure)) = native {
+        native_side = match failure {
+            CallFailure::Admission(admission) => match admission.as_ref() {
+                CallAdmissionFailure::Refused(_) => NativeState::Refused,
+                CallAdmissionFailure::Incomplete(_) => NativeState::Incomplete,
+            },
+            CallFailure::Fault(_) => NativeState::Failed,
+            CallFailure::Input(_)
+            | CallFailure::Body(_)
+            | CallFailure::Cancelled(_)
+            | CallFailure::Storage { .. }
+            | CallFailure::Supplied(_)
+            | CallFailure::UnsupportedHelper(_) => {
+                return Err(TlJoinError::NativeEvidence(failure.clone()))
+            }
+        };
+    }
+    if let Some(Ok(issued)) = native {
         let result = issued.result();
         let source = projection.source();
         let selected = &result.subject;
@@ -670,7 +821,7 @@ fn build<'a>(
 
     // Lineage conflict L.
     let lineage_conflict = match (native, mapped) {
-        (Some(report), Some(result)) => {
+        (Some(Ok(report)), Some(result)) => {
             let native_correction = !matches!(report.result().relation, Relation::Original);
             let tl_correction = result.source().relation_kind() != ResultRelationKind::Original;
             (native_correction != tl_correction)
@@ -720,7 +871,9 @@ fn build<'a>(
             TlJoinCause::ResultRefused,
         ),
         (
-            input.request.execution == ExecutionDisposition::Failed || tl_side == TlState::Failed,
+            input.request.execution == ExecutionDisposition::Failed
+                || native_side == NativeState::Failed
+                || tl_side == TlState::Failed,
             TlJoinDecision::Failed,
             TlJoinCause::ResultFailed,
         ),
@@ -770,15 +923,19 @@ fn build<'a>(
     };
     budget.charge(TlProjectionLimit::Causes, causes.len())?;
 
+    let previous_native_record = previous
+        .and_then(|join| join.native)
+        .map(|outcome| native_outcome_record(outcome, &mut budget))
+        .transpose()?;
     let record = json!({
         "version": VERSION,
         "correspondence": hex(projection.bytes()),
-        "native": native.map(|issued| hex(issued.result().result_identity.as_bytes())),
+        "native": native_record,
         "nativeAdmitted": read_native.is_some(),
         "mapped": mapped.map(|result| hex(result.bytes())),
         "tlResult": mapped.map(|result| hex(result.source().bytes())),
         "previous": previous.map(|join| json!({
-            "native": join.native.map(|issued| hex(issued.result().result_identity.as_bytes())),
+            "native": previous_native_record,
             "tlResult": join.mapped.as_ref().map(|result| hex(result.source().bytes())),
         })),
         "decision": decision.as_str(),

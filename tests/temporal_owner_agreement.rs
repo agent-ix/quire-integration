@@ -58,9 +58,18 @@ fn two_distinct_valuation_rows_reach_both_owner_results_and_the_strict_join() {
             assert!(trace.document().closed);
             let native = evaluate_native(&read);
             let mapped = evaluate_mapped(&read);
-            assert!(native.result().incomplete.is_none());
+            assert!(native
+                .as_ref()
+                .expect("successful native evaluation")
+                .result()
+                .incomplete
+                .is_none());
             assert_eq!(
-                native.result().truth,
+                native
+                    .as_ref()
+                    .expect("successful native evaluation")
+                    .result()
+                    .truth,
                 Some(if expected { Truth::True } else { Truth::False })
             );
             assert_eq!(
@@ -127,8 +136,22 @@ fn equal_true_results_from_another_formula_do_not_authorize_the_join() {
                 .expect("foreign projection");
             let foreign_native = evaluate_native(&foreign);
             let foreign_mapped = evaluate_mapped(&foreign);
-            assert_eq!(native.result().truth, Some(Truth::True));
-            assert_eq!(foreign_native.result().truth, Some(Truth::True));
+            assert_eq!(
+                native
+                    .as_ref()
+                    .expect("successful native evaluation")
+                    .result()
+                    .truth,
+                Some(Truth::True)
+            );
+            assert_eq!(
+                foreign_native
+                    .as_ref()
+                    .expect("successful native evaluation")
+                    .result()
+                    .truth,
+                Some(Truth::True)
+            );
             assert_eq!(mapped.source().truth(), TemporalTruth::Satisfied);
             assert_eq!(foreign_mapped.source().truth(), TemporalTruth::Satisfied);
             assert_eq!(mapped.outcome(), MappedOutcome::Value { value: true });

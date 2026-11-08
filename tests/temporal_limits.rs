@@ -370,9 +370,21 @@ fn join_limits_admit_at_the_computed_count_and_refuse_one_below() {
             &mut native_budget(),
         )
         .expect("unconstrained join");
-        let support = len(native.result().support.len() + mapped.source().decision_support().len());
+        let support = len(native
+            .as_ref()
+            .expect("successful native evaluation")
+            .result()
+            .support
+            .len()
+            + mapped.source().decision_support().len());
         let bytes = [
-            native.result().result_identity.as_bytes().len(),
+            native
+                .as_ref()
+                .expect("successful native evaluation")
+                .result()
+                .result_identity
+                .as_bytes()
+                .len(),
             mapped.bytes().len(),
             mapped.source().bytes().len(),
             reference.bytes().len(),

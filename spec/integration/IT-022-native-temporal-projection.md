@@ -42,9 +42,10 @@ Qualify the complete `quire.native-temporal-correspondence/v1` bridge of
 Contract IR FR-350 in this repository: bridge-definition admission, projection,
 correspondence strict reading, result joining, join strict reading,
 corrections and all seven bridge limits. FR-350 is the normative contract for
-inputs, construction order, record members and encoding, join rows, error
-codes and limits; this IT composes it with the genuine owner APIs and does not
-restate it. Every scenario below is required for FR-350 qualification.
+construction order, join rows, error codes and bridge limits. The native inputs
+and retained result authority below follow the current QSL FR-526 successor;
+the successor section identifies the retired FR-350 surfaces requiring owner
+synchronization. Every scenario below remains required for qualification.
 
 ## Target Integration
 
@@ -83,15 +84,24 @@ no successor request form. Each position's `EvidenceRef.authority_identity` and
 
 `TlProjectionSelection` borrows the bridge definition, actual observation
 revision, clock and independent QObs views, with original TL owner limits.
-`join_tl` and its reader take only a genuine `EvaluatedEvidence` native authority,
-the mapped TL result, the prior admitted join, `TlLimits` and the caller's
+`join_tl` and its reader take `Option<&Result<EvaluatedEvidence, CallFailure>>`,
+the original whole native call outcome: `Some(Ok(...))` is genuine result
+authority, `Some(Err(...))` retains the exact typed call failure, and `None` is
+genuine absence. They also take the mapped TL result, prior admitted join,
+`TlLimits` and the caller's
 `NativeJoinBudget` for owner package projection. Native correction authority is
 the evaluator-written ledger; FR-523's lineage limit replaces the retired
 predecessor-byte work and storage limits.
 The join record's `native` member carries the hexadecimal native result identity;
 its `previous.native` carries the prior issued result identity. These references
 name immutable owner-issued full values held by the admitted join, rather than
-copied native report documents. Strict join reading requires the exact expected
+copied native report documents. For a native evidence admission failure, the
+record retains its typed refusal/incomplete class, catalog pair, named fields,
+member/index and input path; a native invariant fault retains its stage,
+invariant and named fields. Diagnostic member visits charge the existing bridge work ceiling before
+copying, and original member bytes and canonical encoding are bounded by the
+existing bridge byte limit. The join borrows the complete original typed failure, and cannot turn
+it into validated result authority. Strict join reading requires the exact expected
 issued carrier and reconstructs the complete canonical record. TL source and
 mapped documents retain their complete original owner bytes.
 
@@ -336,7 +346,9 @@ decision input. Each is exercised by the scenarios named.
   (IT-022-SC-02, IT-022-SC-10).
 - `ValidatedTlJoin::owner_refusals()` returns the typed native source/input/predecessor mismatch and the typed TL mapped-result re-read refusal that put
   a side into the `refused` or `lineage` state (IT-022-SC-12, IT-022-SC-13).
-- `ValidatedTlJoin::native()` returns the original borrowed opaque owner-issued
+- `ValidatedTlJoin::native_outcome()` retains the whole original call outcome;
+  `native_call_failure()` borrows an original typed error separately from
+  absent input. `ValidatedTlJoin::native()` returns the original borrowed opaque owner-issued
   carrier; its `result()` retains the full owner result and ledger. The join
   never accepts the public read-data result as authority (IT-022-SC-13, SC-15).
 - `TlProjectionError` variants other than the eleven FR-350 codes' primary

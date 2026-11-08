@@ -8,6 +8,7 @@
 use qsl_eval::temporal::evidence::{EvaluatedEvidence, EvidencePackage};
 use qsl_package::BarePackage;
 use qsl_package::NativeJoinBudget;
+use quire_eval::CallFailure;
 use quire_exact::{Meter, ScalarLimits};
 use quire_integration::temporal::ValidatedTlProjection;
 use quire_mltl::{
@@ -41,14 +42,16 @@ pub(crate) fn scalar_limits() -> ScalarLimits {
 }
 
 /// Evaluation is explicit fixture preparation, never hidden inside join or read.
-pub(crate) fn evaluate_native(projection: &ValidatedTlProjection<'_>) -> EvaluatedEvidence {
+pub(crate) fn evaluate_native(
+    projection: &ValidatedTlProjection<'_>,
+) -> Result<EvaluatedEvidence, CallFailure> {
     evaluate_native_with_prior(projection, None)
 }
 
 pub(crate) fn evaluate_native_with_prior(
     projection: &ValidatedTlProjection<'_>,
-    prior: Option<&EvaluatedEvidence>,
-) -> EvaluatedEvidence {
+    prior: Option<&Result<EvaluatedEvidence, CallFailure>>,
+) -> Result<EvaluatedEvidence, CallFailure> {
     let input = projection.native();
     let bare = BarePackage::new(projection.package());
     let package = EvidencePackage::from_package(&bare, &mut native_budget())
@@ -56,17 +59,21 @@ pub(crate) fn evaluate_native_with_prior(
     if let Some(prior) = prior {
         assert_eq!(
             input.request.ledger.as_ref(),
-            Some(&prior.result().ledger),
+            Some(
+                &prior
+                    .as_ref()
+                    .expect("successful predecessor call")
+                    .result()
+                    .ledger
+            ),
             "correction fixture must supply the exact predecessor ledger in its request"
         );
     }
-    package
-        .evaluate_temporal_evidence(
-            &input.occurrence.node,
-            input.request,
-            &mut Meter::new(scalar_limits()),
-        )
-        .expect("explicit native fixture evaluation")
+    package.evaluate_temporal_evidence(
+        &input.occurrence.node,
+        input.request,
+        &mut Meter::new(scalar_limits()),
+    )
 }
 
 /// Both evaluator invocations remain outside the bridge under test.

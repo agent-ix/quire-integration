@@ -148,7 +148,13 @@ fn native_request_maps_have_one_value_per_position_and_atom() {
 #[test]
 fn absent_cell_establishes_no_false_value_or_partial_projection() {
     with_case("holds(true)", false, |case| {
-        for supplied in [None, Some(Valuation::Missing)] {
+        for supplied in [
+            None,
+            Some(Valuation::Missing),
+            Some(Valuation::Undefined(
+                qsl_eval::temporal::UndefinedCause::Kernel(quire_exact::Undefined::DivisionByZero),
+            )),
+        ] {
             let mut request = case.native.request.clone();
             request.positions[0].valuations.clear();
             if let Some(value) = supplied {
