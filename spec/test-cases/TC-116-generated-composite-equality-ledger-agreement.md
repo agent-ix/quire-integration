@@ -12,8 +12,8 @@ relationships:
 
 ## Description
 
-Execute the FR-018 composite equality oracle for tuple, record, nested record
-and bounded sequence operands against independent QSL authority on the same
+Execute the FR-018 composite equality oracle for tuple, record, nested record,
+bounded sequence and nullary union operands against independent QSL authority on the same
 original source and the same typed arguments. Compare the typed outcome, every
 ordered admitted charge request and every counter, using quire-exact's
 production scoped charge capture on both sides.
@@ -21,8 +21,9 @@ production scoped charge capture on both sides.
 ## Test Procedure
 
 1. Author one original complete-profile source declaring a Boolean tuple, a
-   Boolean record, a record nesting that record with an `Int[0,9]` field, and a
-   `Sequence<Int[0,9]>[0,4]`. For each shape author an Equal function and a
+   Boolean record, a record nesting that record with an `Int[0,9]` field, a
+   `Sequence<Int[0,9]>[0,4]`, a nullary union `Choice { First, Second }` and an
+   Integer-payload union `PayloadChoice`. For each shape author an Equal function and a
    NotEqual function comparing two parameters, and closed constructors for
    distinct values of that shape.
 2. Check and emit the source, strictly admit the package, select each equality
@@ -52,11 +53,13 @@ production scoped charge capture on both sides.
 ## Expected Results
 
 `generated_oracle_fr018_operation_ledger::composite_equality_ledgers_match_the_generated_oracle`
-passes 120 observations: ten input pairs under both operators, each pair
+passes 144 observations: twelve input pairs under both operators, each pair
 contributing its reported inputs and five allowance observations. Generated and
 independent observations are identical in outcome, admitted per-charge
 requests, denied points and counters, and the QSL call ledger agrees at the
 ample allowance.
 `generated_oracle_fr018_operation_ledger::changed_operand_descriptor_refuses_without_disturbing_a_sibling`
 passes the typed refusal control, which gives no execution credit.
-Union operands are not part of this test case.
+The Integer-payload union `PayloadChoice` is refused by CG with the typed
+`CompositeContextMismatch`; the test asserts that refusal for both operators and
+credits no payload-union execution.
