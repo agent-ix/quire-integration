@@ -64,9 +64,9 @@ fn two_distinct_valuation_rows_reach_both_owner_results_and_the_strict_join() {
             assert_eq!(
                 mapped.source().truth(),
                 if expected {
-                    TemporalTruth::True
+                    TemporalTruth::Satisfied
                 } else {
-                    TemporalTruth::False
+                    TemporalTruth::Violated
                 }
             );
             assert_eq!(mapped.outcome(), MappedOutcome::Value { value: expected });
@@ -127,8 +127,8 @@ fn equal_true_results_from_another_formula_do_not_authorize_the_join() {
             let foreign_mapped = evaluate_mapped(&foreign);
             assert_eq!(native.truth(), Some(Truth::True));
             assert_eq!(foreign_native.truth(), Some(Truth::True));
-            assert_eq!(mapped.source().truth(), TemporalTruth::True);
-            assert_eq!(foreign_mapped.source().truth(), TemporalTruth::True);
+            assert_eq!(mapped.source().truth(), TemporalTruth::Satisfied);
+            assert_eq!(foreign_mapped.source().truth(), TemporalTruth::Satisfied);
             assert_eq!(mapped.outcome(), MappedOutcome::Value { value: true });
             assert_eq!(
                 foreign_mapped.outcome(),
