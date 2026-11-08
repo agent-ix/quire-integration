@@ -47,6 +47,8 @@ const SOURCE: &str = concat!(
     "language \"ix:native\" edition \"1-draft\";\n",
     "profile v = \"quire.value.complete/v1\";\n",
     "tuple Pair(Boolean, Boolean);\n",
+    "union Choice { First, Second }\n",
+    "union PayloadChoice { First(Integer), Second(Integer) }\n",
     "record Flag { flag: Boolean; }\n",
     "record Outer { inner: Flag; level: Int[0,9]; }\n",
     "function pairEq using v(left: Pair, right: Pair): Boolean pure { left = right }\n",
@@ -57,6 +59,15 @@ const SOURCE: &str = concat!(
     "function outerNe using v(left: Outer, right: Outer): Boolean pure { left != right }\n",
     "function seqEq using v(left: Sequence<Int[0,9]>[0,4], right: Sequence<Int[0,9]>[0,4]): Boolean pure { left = right }\n",
     "function seqNe using v(left: Sequence<Int[0,9]>[0,4], right: Sequence<Int[0,9]>[0,4]): Boolean pure { left != right }\n",
+    "function choiceEq using v(left: Choice, right: Choice): Boolean pure { left = right }\n",
+    "function choiceNe using v(left: Choice, right: Choice): Boolean pure { left != right }\n",
+    "function payloadChoiceEq using v(left: PayloadChoice, right: PayloadChoice): Boolean pure { left = right }\n",
+    "function payloadChoiceNe using v(left: PayloadChoice, right: PayloadChoice): Boolean pure { left != right }\n",
+    "function makeChoiceA using v(): Choice pure { Choice::First }\n",
+    "function makeChoiceB using v(): Choice pure { Choice::Second }\n",
+    "function makePayloadChoiceA using v(): PayloadChoice pure { PayloadChoice::First(1) }\n",
+    "function makePayloadChoiceB using v(): PayloadChoice pure { PayloadChoice::First(2) }\n",
+    "function makePayloadChoiceC using v(): PayloadChoice pure { PayloadChoice::Second(1) }\n",
     "function makePairA using v(): Pair pure { Pair(true,false) }\n",
     "function makePairB using v(): Pair pure { Pair(false,true) }\n",
     "function makeFlagA using v(): Flag pure { Flag { flag: true } }\n",
@@ -70,11 +81,20 @@ const SOURCE: &str = concat!(
 );
 
 /// Shape, constructor names (the first is compared with itself and with each other).
-const SHAPES: [(&str, &[&str]); 4] = [
+const SHAPES: [(&str, &[&str]); 6] = [
     ("pair", &["makePairA", "makePairB"]),
     ("flag", &["makeFlagA", "makeFlagB"]),
     ("outer", &["makeOuterA", "makeOuterB", "makeOuterC"]),
     ("seq", &["makeSeqA", "makeSeqB", "makeSeqC"]),
+    ("choice", &["makeChoiceA", "makeChoiceB"]),
+    (
+        "payloadChoice",
+        &[
+            "makePayloadChoiceA",
+            "makePayloadChoiceB",
+            "makePayloadChoiceC",
+        ],
+    ),
 ];
 
 /// Work allowances: ample, exhausted before the first charge, and exhausted
@@ -159,7 +179,7 @@ fn composite_equality_ledgers_match_the_generated_oracle() {
                     panic!("original parameter reference");
                 };
                 let selected = package
-                    .graph()
+                    .resolved_graph()
                     .nodes
                     .iter()
                     .filter(|node| &node.node_id == target)
@@ -230,7 +250,7 @@ let quire_contract_model::CheckedPackageV2ReadResult::Admitted(package)=quire_co
 let handle=acquired.handle();
 let owner=qsl_replay::LibraryName::new(package.name().to_owned()).unwrap();
 let construct=|name:&str| -> Value {{
-    let declarations=package.graph().nodes.iter().filter(|node|node.declaration.as_ref().is_some_and(|decl|decl.qualified_name.iter().map(AsRef::as_ref).eq([name]))).collect::<Vec<_>>();
+    let declarations=package.resolved_graph().nodes.iter().filter(|node|node.declaration.as_ref().is_some_and(|decl|decl.qualified_name.iter().map(AsRef::as_ref).eq([name]))).collect::<Vec<_>>();
     let [declaration]=declarations.as_slice() else {{panic!("original constructor declaration");}};
     let key=acquired.context().wire_graph().key(&declaration.node_id).expect("constructor key");
     let selected=handle.lookup_callable(&owner,&key).expect("constructor selection");
@@ -244,8 +264,10 @@ let construct=|name:&str| -> Value {{
         ample = limits(1024),
     );
 
+    let mut refused = 0;
     for (index, name) in names.iter().enumerate() {
         let shape_index = index / 2;
+        let shape = SHAPES[shape_index].0;
         let (_, constructors) = SHAPES[shape_index];
         let equal_operator = index % 2 == 0;
         let claims = output
@@ -258,7 +280,20 @@ let construct=|name:&str| -> Value {{
             panic!("one claim for {name}");
         };
         let ClaimDisposition::Generated(generated) = &claim.result else {
-            eprintln!("SURVEY {name}: {:?}", claim.result);
+            // The one typed owner refusal that is allowed: a payload-carrying union
+            // operand. It is asserted, so any other refusal fails the test.
+            assert!(
+                shape == "payloadChoice"
+                    && matches!(
+                        &claim.result,
+                        ClaimDisposition::Refused {
+                            refusal: CompositeEqualityRefusal::CompositeContextMismatch { .. }
+                        }
+                    ),
+                "{name} unexpected disposition: {:?}",
+                claim.result
+            );
+            refused += 1;
             continue;
         };
         // Each input with itself, then the first with every other.
@@ -371,9 +406,13 @@ println!("IT019_OBSERVATION {{}}",oracle_observation::ledger_snapshot(&actual,&a
     }
     driver.push_str("}\n");
     assert_eq!(
+        refused, 2,
+        "payloadChoice Equal and NotEqual are typed owner refusals"
+    );
+    assert_eq!(
         expected.len(),
-        120,
-        "ten input pairs, each with its inputs and five allowances, under both operators"
+        144,
+        "twelve credited input pairs (payload-carrying unions excluded), each with its inputs and five allowances, under both operators"
     );
     assert_eq!(
         generated_oracle::execute_with(
@@ -403,7 +442,7 @@ fn changed_operand_descriptor_refuses_without_disturbing_a_sibling() {
                     panic!("original parameter reference");
                 };
                 let node = package
-                    .graph()
+                    .resolved_graph()
                     .nodes
                     .iter()
                     .find(|node| &node.node_id == target)
