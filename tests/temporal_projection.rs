@@ -199,10 +199,10 @@ fn independent_native_premises_refuse_without_owner_outputs() {
             case.selection,
             TlLimits::default(),
         )
-        .expect_err("anchor mismatch");
+        .expect_err("request anchor names no admitted observation");
         assert!(matches!(
             error,
-            TlProjectionError::NativePremise(TlProjectionPremise::Anchor)
+            TlProjectionError::Incomplete(TlMissingPremise::Anchor)
         ));
         request = case.native.request.clone();
         request.decision_closure = Some(ProgressClosure::Open);

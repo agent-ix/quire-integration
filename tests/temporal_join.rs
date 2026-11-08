@@ -1005,8 +1005,8 @@ fn native_lineage_limit_is_the_owner_counter_and_preserves_prior_authority() {
                     if ceiling == 0 {
                         assert!(issued.result().incomplete.is_some());
                         assert_eq!(issued.result().truth, None);
-                        assert_eq!(issued.result().usage.instances, 0);
-                        assert_eq!(issued.result().usage.positions, 0);
+                        assert_eq!(issued.result().usage.get(qsl_eval::temporal::evidence::EvidenceCounter::Instances), 0);
+                        assert_eq!(issued.result().usage.get(qsl_eval::temporal::evidence::EvidenceCounter::Positions), 0);
                         assert_eq!(
                             issued.result().ledger,
                             prior

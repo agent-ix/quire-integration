@@ -36,7 +36,6 @@ use quire_integration::temporal::{
 use quire_mltl::request::ObservationInputs;
 use quire_observation::authority::{self as a, bundle, Limits, OpenClosed};
 use quire_semantic_value::checking::CheckingLimits;
-use std::collections::BTreeMap;
 use tl_mltl::wire::OwnerLimits;
 
 /// Parse and check original source without bypassing native temporal admission.
