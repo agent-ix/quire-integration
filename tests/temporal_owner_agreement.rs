@@ -108,7 +108,7 @@ fn two_distinct_valuation_rows_reach_both_owner_results_and_the_strict_join() {
             assert_eq!(reread.bytes(), joined.bytes());
             assert!(std::ptr::eq(
                 reread.native().expect("native retained"),
-                &native
+                native.as_ref().expect("successful native evaluation")
             ));
             assert_eq!(
                 reread.mapped().expect("mapped retained").bytes(),
