@@ -560,9 +560,10 @@ fn check_captures<'a>(
         let mut values = Vec::with_capacity(captures.len());
         for capture in captures {
             match capture {
-                CaptureFact::Value { anchor, value } if anchor == anchor => {
-                    values.push(value.as_bytes())
-                }
+                CaptureFact::Value {
+                    anchor: capture_anchor,
+                    value,
+                } if capture_anchor == anchor => values.push(value.as_bytes()),
                 CaptureFact::Value { .. } | CaptureFact::WrongType => {
                     return Err(Error::NativePremise(Premise::Capture))
                 }
