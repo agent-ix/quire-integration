@@ -1,5 +1,8 @@
 # quire-integration
 
+[![Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?logo=discord&logoColor=white)](https://discord.gg/k8DVhuYBR2)
+[![Quire](https://img.shields.io/badge/Quire-Specification%20Language-1F6FEB)](https://github.com/agent-ix/quire-spec-language)
+
 quire-integration is the cross-repository integration test crate for the Quire
 toolchain. It checks that the stages, each in its own repository, agree on the
 bytes they pass to each other.
