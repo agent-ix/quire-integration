@@ -5,6 +5,7 @@ mod support;
 
 use ix_trace_rs::trace;
 use qsl_eval::temporal::ProgressClosure;
+use qsl_eval::temporal::Valuation;
 use qsl_package::checked_views::{mapping_support, temporal_subject, Closure};
 use quire_integration::temporal::{
     project_tl, MappingBindingRefusal, NativeProjectionInput, TlInput, TlLimits, TlMissingPremise,
@@ -12,7 +13,6 @@ use quire_integration::temporal::{
 };
 use quire_mltl::request::TemporalLane;
 use quire_observation::authority::OpenClosed;
-use quire_spec_language::temporal::{self as native, ValuationEvidence, ValuationInstance};
 use tl_mltl::wire::OwnerReadErrorCode;
 use tl_syntax::PropositionId;
 
@@ -114,75 +114,33 @@ fn local_subject_cannot_use_an_independently_admitted_equal_classification() {
 
 #[trace("IT-022-SC-03", "FR-350-AC-6", "FR-350-AC-9")]
 #[test]
-fn agreeing_duplicate_cells_project_and_disagreeing_cells_are_incomplete() {
+fn native_request_maps_have_one_value_per_position_and_atom() {
     with_case("holds(true)", false, |case| {
-        let mut rows = case.native.valuations.rows().to_vec();
-        rows.push(rows[0].clone());
-        let trace = trace_for(&case);
-        let evidence = ValuationEvidence::admit(
-            case.subject,
-            &trace,
-            case.native.instance,
-            &case.native.observation.revision,
-            rows,
-        )
-        .expect("owner retains agreeing duplicates");
-        assert_eq!(evidence.rows().len(), 2);
+        let mut request = case.native.request.clone();
         assert_eq!(
-            evidence.value_of(case.native.occurrence, 0, &evidence.rows()[0].operand),
-            Ok(true)
+            request.positions[0].valuations.insert(0, Valuation::False),
+            Some(Valuation::True)
         );
         let projected = project_tl(
             case.package,
             case.subject,
             case.classification,
-            Closure::Complete,
+            case.surrounding,
             NativeProjectionInput {
-                valuations: &evidence,
+                request: &request,
                 ..case.native
             },
             case.selection,
             TlLimits::default(),
         )
-        .expect("agreeing duplicates project their value");
+        .expect("the current owner request has one explicit false value");
         let TlInput::Future(trace) = projected.input() else {
-            panic!("actual future trace")
+            panic!("future trace")
         };
-        assert_eq!(trace.document().instants, vec![vec![PropositionId(0)]]);
-        // Both rows stay in the record: one value, two row objects.
-        let record: serde_json::Value =
-            serde_json::from_slice(projected.bytes()).expect("canonical record");
-        assert_eq!(record["valuations"].as_array().map(Vec::len), Some(2));
-        // Opposite values for one cell are incomplete, never false.
-        let mut rows = case.native.valuations.rows().to_vec();
-        let mut opposite = rows[0].clone();
-        opposite.value = !opposite.value;
-        rows.push(opposite);
-        let conflicting = ValuationEvidence::admit(
-            case.subject,
-            &trace_for(&case),
-            case.native.instance,
-            &case.native.observation.revision,
-            rows,
-        )
-        .expect("owner retains disagreeing rows");
-        let error = project_tl(
-            case.package,
-            case.subject,
-            case.classification,
-            Closure::Complete,
-            NativeProjectionInput {
-                valuations: &conflicting,
-                ..case.native
-            },
-            case.selection,
-            TlLimits::default(),
-        )
-        .expect_err("disagreeing rows are incomplete");
-        assert!(matches!(
-            error,
-            TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
-        ));
+        assert_eq!(trace.document().instants, vec![Vec::<PropositionId>::new()]);
+        let record: serde_json::Value = serde_json::from_slice(projected.bytes()).unwrap();
+        assert_eq!(record["valuations"].as_array().map(Vec::len), Some(1));
+        assert_eq!(record["valuations"][0]["value"], false);
     });
 }
 
@@ -190,31 +148,30 @@ fn agreeing_duplicate_cells_project_and_disagreeing_cells_are_incomplete() {
 #[test]
 fn absent_cell_establishes_no_false_value_or_partial_projection() {
     with_case("holds(true)", false, |case| {
-        let evidence = ValuationEvidence::admit(
-            case.subject,
-            &native_trace(EVENT, case.native.instance.anchor),
-            case.native.instance,
-            &case.native.observation.revision,
-            Vec::new(),
-        )
-        .expect("empty native relation is admitted");
-        let error = project_tl(
-            case.package,
-            case.subject,
-            case.classification,
-            Closure::Complete,
-            NativeProjectionInput {
-                valuations: &evidence,
-                ..case.native
-            },
-            case.selection,
-            TlLimits::default(),
-        )
-        .expect_err("missing value refuses projection");
-        assert!(matches!(
-            error,
-            TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
-        ));
+        for supplied in [None, Some(Valuation::Missing)] {
+            let mut request = case.native.request.clone();
+            request.positions[0].valuations.clear();
+            if let Some(value) = supplied {
+                request.positions[0].valuations.insert(0, value);
+            }
+            let error = project_tl(
+                case.package,
+                case.subject,
+                case.classification,
+                case.surrounding,
+                NativeProjectionInput {
+                    request: &request,
+                    ..case.native
+                },
+                case.selection,
+                TlLimits::default(),
+            )
+            .expect_err("no agreed Boolean value");
+            assert!(matches!(
+                error,
+                TlProjectionError::Incomplete(TlMissingPremise::Valuation { position: 0, .. })
+            ));
+        }
     });
 }
 
@@ -279,15 +236,15 @@ fn independent_native_premises_refuse_without_owner_outputs() {
             error,
             TlProjectionError::NativePremise(TlProjectionPremise::SurroundingClosure)
         ));
-        let mut observation = case.native.observation.clone();
-        observation.revision = "2".into();
+        let mut request = case.native.request.clone();
+        request.positions[0].observation.authority_revision = "2".into();
         let error = project_tl(
             case.package,
             case.subject,
             case.classification,
             Closure::Complete,
             NativeProjectionInput {
-                observation: &observation,
+                request: &request,
                 ..case.native
             },
             case.selection,
@@ -397,56 +354,49 @@ fn supplied_occurrence_and_native_request_must_select_the_same_authored_occurren
 
 #[trace("IT-022-SC-03", "FR-350-AC-6", "FR-350-AC-9")]
 #[test]
-fn a_relation_admitted_for_another_capture_instance_or_revision_is_not_reused() {
+fn native_request_unknown_atoms_and_foreign_observation_revisions_are_refused() {
     with_case("holds(true)", false, |case| {
-        let trace = trace_for(&case);
-        for revision_mismatch in [false, true] {
-            let instance = ValuationInstance {
-                anchor: case.native.instance.anchor,
-                capture_instance: if revision_mismatch {
-                    CAPTURE_INSTANCE
-                } else {
-                    "capture-environment:foreign"
-                },
-            };
-            let revision = if revision_mismatch {
-                "foreign-revision"
-            } else {
-                &case.native.observation.revision
-            };
-            let mut rows = case.native.valuations.rows().to_vec();
-            for row in &mut rows {
-                row.capture_instance = instance.capture_instance.into();
-                row.revision = revision.into();
+        let mut request = case.native.request.clone();
+        request.positions[0].valuations.insert(99, Valuation::True);
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &request,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect_err("unknown atom");
+        assert!(matches!(
+            error,
+            TlProjectionError::Valuation {
+                position: 0,
+                atom: 99
             }
-            let evidence = ValuationEvidence::admit(case.subject, &trace, instance, revision, rows)
-                .expect("relation admits against its actual supplied native facts");
-            let error = project_tl(
-                case.package,
-                case.subject,
-                case.classification,
-                Closure::Complete,
-                NativeProjectionInput {
-                    valuations: &evidence,
-                    ..case.native
-                },
-                case.selection,
-                TlLimits::default(),
-            )
-            .expect_err("foreign relation fact refuses");
-            let TlProjectionError::Valuation { row, cause } = error else {
-                panic!("typed valuation refusal: {error:?}")
-            };
-            assert_eq!(row, 0);
-            assert_eq!(
-                cause,
-                if revision_mismatch {
-                    native::ValuationCause::RevisionMismatch
-                } else {
-                    native::ValuationCause::CaptureInstanceMismatch
-                }
-            );
-        }
+        ));
+        let mut request = case.native.request.clone();
+        request.positions[0].observation.authority_revision = "foreign-revision".into();
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &request,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect_err("foreign observation revision");
+        assert!(matches!(
+            error,
+            TlProjectionError::NativePremise(TlProjectionPremise::ObservationRevision)
+        ));
     });
 }
 
@@ -710,7 +660,7 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
             (
                 "anchor unequal to the instance",
                 |r| r.anchor = Some("another-anchor".into()),
-                Box::new(premise(TlProjectionPremise::Anchor)),
+                Box::new(missing(TlMissingPremise::Anchor)),
             ),
             (
                 "unadmitted trigger",
@@ -795,25 +745,6 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
             .unwrap_or_else(|| panic!("{name}: must refuse"));
             assert!(check(&error), "{name}: {error:?}");
         }
-        // The instance fields are separate inputs.
-        let empty_instance = ValuationInstance {
-            capture_instance: "",
-            ..case.native.instance
-        };
-        let error = project_tl(
-            case.package,
-            case.subject,
-            case.classification,
-            case.surrounding,
-            NativeProjectionInput {
-                instance: empty_instance,
-                ..case.native
-            },
-            case.selection,
-            TlLimits::default(),
-        )
-        .expect_err("empty capture instance");
-        assert!(premise(TlProjectionPremise::Anchor)(&error), "{error:?}");
         // A control outside the subject's requirements.
         let mut request = case.native.request.clone();
         request.control = Some(case.native.occurrence.node.clone());
@@ -831,33 +762,9 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
         )
         .expect_err("foreign control");
         assert!(premise(TlProjectionPremise::Control)(&error), "{error:?}");
-        // An observation reference of another bundle.
-        let mut observation = case.native.observation.clone();
-        observation.reference = "another-bundle".into();
-        let error = project_tl(
-            case.package,
-            case.subject,
-            case.classification,
-            case.surrounding,
-            NativeProjectionInput {
-                observation: &observation,
-                ..case.native
-            },
-            case.selection,
-            TlLimits::default(),
-        )
-        .expect_err("foreign observation");
-        assert!(
-            premise(TlProjectionPremise::ObservationRevision)(&error),
-            "{error:?}"
-        );
-        // An anchor equal to no position: both the request and the instance name it.
+        // The original observation reference carries its bundle authority.
         let mut request = case.native.request.clone();
-        request.anchor = Some("no-such-position".into());
-        let instance = ValuationInstance {
-            anchor: "no-such-position",
-            ..case.native.instance
-        };
+        request.positions[0].observation.authority_identity = "another-bundle".into();
         let error = project_tl(
             case.package,
             case.subject,
@@ -865,7 +772,26 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
             case.surrounding,
             NativeProjectionInput {
                 request: &request,
-                instance,
+                ..case.native
+            },
+            case.selection,
+            TlLimits::default(),
+        )
+        .expect_err("foreign observation bundle");
+        assert!(
+            premise(TlProjectionPremise::ObservationRevision)(&error),
+            "{error:?}"
+        );
+        // An anchor equal to no position: both the request and the instance name it.
+        let mut request = case.native.request.clone();
+        request.anchor = Some("no-such-position".into());
+        let error = project_tl(
+            case.package,
+            case.subject,
+            case.classification,
+            case.surrounding,
+            NativeProjectionInput {
+                request: &request,
                 ..case.native
             },
             case.selection,
@@ -879,17 +805,12 @@ fn each_request_failure_returns_its_assigned_code_and_premise() {
 /// Rows failing the bridge's owner-order checks name their cause and admitted index.
 #[trace("IT-022-SC-03", "FR-350-AC-6", "FR-350-AC-9")]
 #[test]
-fn request_valuation_maps_do_not_change_the_projection() {
-    use qsl_eval::temporal::Valuation;
+fn request_valuation_maps_change_the_projected_owner_input() {
     with_case("holds(true) and holds(false)", false, |case| {
         let before = case.project(TlLimits::default()).expect("projection");
         let mut request = case.native.request.clone();
-        for (index, value) in [Valuation::Missing, Valuation::True]
-            .into_iter()
-            .enumerate()
-        {
-            request.positions[0].valuations.insert(index as u64, value);
-        }
+        request.positions[0].valuations.insert(0, Valuation::False);
+        request.positions[0].valuations.insert(1, Valuation::True);
         let after = project_tl(
             case.package,
             case.subject,
@@ -902,9 +823,13 @@ fn request_valuation_maps_do_not_change_the_projection() {
             case.selection,
             TlLimits::default(),
         )
-        .expect("request maps are not read");
-        assert_eq!(after.input().bytes(), before.input().bytes());
-        assert_eq!(after.request().bytes(), before.request().bytes());
+        .expect("current request maps supply the values");
+        assert_ne!(after.input().bytes(), before.input().bytes());
+        assert_ne!(after.bytes(), before.bytes());
+        let TlInput::Future(trace) = after.input() else {
+            panic!("future trace")
+        };
+        assert_eq!(trace.document().instants, vec![vec![PropositionId(1)]]);
     });
 }
 
@@ -1103,7 +1028,7 @@ fn an_aggregate_atom_is_reported_as_tl_projection_formula() {
         "@value capture n: Int[0, 9] = e; always[0,5] (sum of n over past[0,2] <= 15)",
         false,
         |case| {
-            let anchor = case.native.instance.anchor.to_owned();
+            let anchor = case.native.request.anchor.as_ref().unwrap().clone();
             let error = run(&case, |r| {
                 r.origins[0].captures = vec![CaptureFact::Value {
                     anchor,

@@ -15,6 +15,8 @@ relationships:
     type: depends_on
   - target: ix://agent-ix/quire-spec-language/FR-516
     type: depends_on
+  - target: ix://agent-ix/quire-spec-language/FR-526
+    type: depends_on
   - target: ix://agent-ix/quire-spec-language/FR-527
     type: depends_on
   - target: ix://agent-ix/quire-observation/FR-004
@@ -47,41 +49,58 @@ restate it. Every scenario below is required for FR-350 qualification.
 ## Target Integration
 
 Original QSL source and model evidence → QSL emitter → strict IR reader →
-checked subject and classification → native `EvidenceRequest`,
-`ValuationEvidence`, occurrence, instance and observation reference →
-IT-021 admitted observation revision and QObs views → IT-020 formula
-constructor → tl-syntax and tl-mltl constructors and readers → quire-mltl
-request derivation and reading → correspondence record.
-Separately, QSL `evaluate_v2` produces the native report and quire-mltl
-evaluation and mapping produce the `ValidatedMappedResult`; `join_tl` admits
-both through their non-evaluating owner readers and writes the join record.
-No bridge operation invokes an evaluator.
+checked subject and classification → original native `EvidenceRequest` and exact
+occurrence → IT-021 admitted observation revision and QObs views → IT-020 formula
+constructor → tl-syntax and tl-mltl constructors and readers → quire-mltl request
+derivation and reading → correspondence record.
+
+Separately, `EvidencePackage::evaluate_temporal_evidence` produces the opaque
+`EvaluatedEvidence` carrier. The join borrows that original carrier, whose
+`result()` exposes the complete owner value immutably. TL evaluation and mapping
+produce the original `ValidatedMappedResult`. No bridge operation invokes an
+evaluator. A copied or modified public `EvidenceResult` is read data and cannot
+be supplied in place of the carrier.
 
 ## Preconditions
 
-Every fixture value is produced by its genuine owner: the checked package by
-the QSL emitter and IR reader, the native report by `evaluate_v2`, TL results
-by quire-mltl `report::evaluate`, `report::read`, `contract_ir::map` and
-`contract_ir::read`, and QObs views by their owner readers. No test constructs
-a substitute owner result, a copied owner schema or a fake identity. The
-integration owns `definitions/native-temporal-correspondence-v1.json` with
-authority `agent-ix/quire-integration`, identity
-`native-temporal-correspondence/v1`, profile
-`quire.native-temporal-correspondence/v1` and version 1, all authored literal
-values.
+Every fixture value is produced by its genuine owner: checked packages by the
+QSL emitter and IR reader, native carriers by temporal evidence evaluation,
+TL results by quire-mltl evaluation and strict readers, and QObs views by their
+owner readers. The integration-owned bridge definition retains authority
+`agent-ix/quire-integration`, identity `native-temporal-correspondence/v1`, profile
+`quire.native-temporal-correspondence/v1` and version 1.
 
 ## Inputs
 
-The operations and their inputs are exactly those of Contract IR FR-350's
-Boundary and interface section: `read_tl_bridge_definition`,
-`project_tl` with `NativeProjectionInput { request, valuations, occurrence,
-instance, observation }` and `TlProjectionSelection { bridge_definition,
-observation, clock, observations, owner_limits, native_report_limits }`,
-`read_tl_projection`, `join_tl` and `read_tl_join` with the caller's
-`NativeJoinBudget`, and `TlLimits`. Valuations come only from the admitted
-`ValuationEvidence` rows; `EvidenceRequest.positions` valuation and aggregate
-maps are not read. A clock is identified by the QObs clock view's clock
-identity and clock revision.
+`NativeProjectionInput` borrows the original request and selected occurrence.
+Boolean values come from `EvidencePosition.valuations`, or from the selected
+trigger's `instance_valuations` for an instance-bound atom. The checked package's
+native atom-index mapping selects the original predicate identity. `Missing`,
+`Undefined` and absent valuations establish no Boolean. The map representation
+admits one value per position, atom and instance; duplicate-preserving rows have
+no successor request form. Each position's `EvidenceRef.authority_identity` and
+`authority_revision` select the actual QObs bundle and revision.
+
+`TlProjectionSelection` borrows the bridge definition, actual observation
+revision, clock and independent QObs views, with original TL owner limits.
+`join_tl` and its reader take only a genuine `EvaluatedEvidence` native authority,
+the mapped TL result, the prior admitted join, `TlLimits` and the caller's
+`NativeJoinBudget` for owner package projection. Native correction authority is
+the evaluator-written ledger; FR-523's lineage limit replaces the retired
+predecessor-byte work and storage limits.
+
+### Successor semantics
+
+QSL FR-526 succeeds the retired native-report and valuation-row route. These
+scenarios retain their IDs while qualifying the successor's atom maps,
+immutable evaluator-issued result authority and flat predecessor ledger.
+Contract IR FR-350's references to `ValuationEvidence`, `Report`, duplicate rows,
+`native_valuations` and predecessor byte limits describe that retired route;
+they cannot be exercised against the current publication. The successor port
+preserves the independent bridge dispositions, original checked source bindings,
+full retained owner result, exact request binding, ordered join rows and genuine
+observation/TL comparison. It does not restore the retired facade or substitute
+an input-identity check for the immutable result authority.
 
 ## Test Procedure
 
@@ -104,8 +123,8 @@ identity and clock revision.
    definition's identity and authority returns native-premise
    `correspondence-reference`. An absent `request.anchor` returns incomplete
    `anchor`; a trigger with no admitted delivery or origin returns incomplete
-   `instance`; an instance anchor unequal to `request.anchor`, and an empty
-   capture instance, return native-premise `anchor`. Use an opaque
+   `instance`; a delivery anchor unequal to `request.anchor` returns native-premise
+   `anchor`. Use an opaque
    `request.anchor` spelled like another position's stamp and require the
    numeric anchor of the position whose observation identity equals it. An
    observation reference of another bundle returns native-premise
@@ -114,18 +133,15 @@ identity and clock revision.
    native-premise `observation`; a position record of another clock identity
    or clock revision returns native-premise `position`; a stamp gap returns
    incomplete `position`; a timestamped range returns native-premise `clock`.
-3. IT-022-SC-03 (FR-350-AC-6, AC-9): From admitted `ValuationEvidence`, project
-   true and explicit false rows and compare them in the TL trace or history.
-   For each `ValuationCause` supply one failing row and require
-   `tl-projection-valuation` with that cause and row index; a row with both a
-   foreign operand and an out-of-range position returns
-   `OperandNotInFormula`, the owner's check order (occurrence, operand,
-   position, anchor, capture instance, revision). Two rows with one
-   `(position, operand)` and the same value project that value, and the
-   record keeps both rows; two such rows with opposite values, and an omitted
-   row, return incomplete `valuation{position, operand}`. Request shared and
-   instance-bound valuation maps, including `Missing`, `Undefined` and
-   aggregate samples, that contradict the rows leave the projection unchanged.
+3. IT-022-SC-03 (FR-350-AC-6, AC-9; QSL FR-526): Project explicit true and
+   false native request-map values and compare the genuine TL trace or history.
+   Replacing one map entry replaces that cell's value and changes the projected
+   input. Missing, undefined and omitted cells return incomplete
+   `valuation{position, operand}`. A key outside the checked formula returns
+   `tl-projection-valuation` with its original request position and atom index.
+   Instance-bound atoms read only the selected trigger's map; an unrelated
+   instance or shared value cannot supply them. Observation authority and
+   revision mismatches refuse before valuation projection.
 4. IT-022-SC-04 (FR-350-AC-1): Project a future-only formula under complete
    and open surrounding closure and require the closed-trace and online-prefix
    requests. Project each bounded past operator of QSpec FR-092 alone under
@@ -198,24 +214,18 @@ identity and clock revision.
     expected join record by FR-350's rules and require byte equality;
     `read_tl_join` with any other expected input returns
     `tl-join-expected-mismatch`.
-13. IT-022-SC-13 (FR-350-AC-5, AC-10): This scenario requires the owner
-    operation quire-mltl
-    `ValidatedTemporalResult::validate_supplied_predecessor` with its public
-    `direct_predecessor_bytes` (quire-mltl FR-001). Advance a real QObs
-    progress watermark from 1 to 2 over one carrier to create genuine native
-    and TL corrections; first show a relation-only change is rejected by the
-    native owner. With `previous` holding both direct predecessors, the
-    correction reaches R7. A one-sided correction, an original with
-    `previous`, a correction without `previous`, a previous join whose native
-    side was not admitted, a native `InvalidPredecessor`, and TL
-    `missing-predecessor`, `unexpected-predecessor` and
-    `predecessor-mismatch` each reach R6 with no Boolean. A different complete
-    predecessor with equal result identity on each side reaches R6 and fails
-    `read_tl_join`. A foreign corrected native report keeps its earlier
-    `BindingMismatch` (R1). A native `PredecessorLimit` at one below its
-    measured charge returns `tl-join-limit-reached` with the owner's resource
-    and attempted charge, and an already charged `NativeJoinBudget` is never
-    reset.
+13. IT-022-SC-13 (FR-350-AC-5, AC-10; QSL FR-526): Create genuine native
+    corrections by changing inputs and supplying the original evaluator-written
+    ledger and direct predecessor identity. A relation-only change is refused
+    by the owner. With both exact issued direct predecessors, correction reaches
+    R7. One-sided correction, original with `previous`, correction without
+    `previous`, a previously unadmitted native side and a different prior issued
+    carrier reach R6 without a Boolean. Original checked subject, occurrence,
+    source map and request mismatch remain R1 before correction comparison.
+    TL direct predecessor validation remains the original owner's operation.
+    Native lineage exact and one-short controls use FR-523's `lineage` limit;
+    there are no predecessor byte-copy limits or receipts. Earlier carriers and
+    their evaluator-written ledgers remain unchanged.
 14. IT-022-SC-14 (FR-350-AC-8): `TlLimits::default()` equals FR-350's seven
     settings and defaults (`temporal.correspondence.max_bytes` 16,777,216,
     `max_nodes` 65,536, `max_positions` 1,048,576, `max_valuations`
@@ -230,10 +240,10 @@ identity and clock revision.
     crossed by one action return only the first in FR-350's table order. An
     owner refusal at a byte ceiling lowered to `max_bytes` is `max_bytes`
     limit-reached with `value: setting + 1` and the owner error.
-15. IT-022-SC-15 (FR-350-AC-6): After each join, the retained native report
-    equals the supplied report and the retained TL source result equals the
+15. IT-022-SC-15 (FR-350-AC-6): After each join, the retained native carrier
+    is the supplied original carrier and the retained TL source result equals the
     supplied one with unchanged owner usage; no bridge operation has a call
-    path to `evaluate_v2`, `quire_mltl::report::evaluate` or
+    path to `evaluate_temporal_evidence`, `quire_mltl::report::evaluate` or
     `quire_mltl::report::read`.
 16. IT-022-SC-16 (FR-350-AC-2, AC-6, AC-9): For each case below, supply one
     input exhibiting only that failure and require exactly the stated code
@@ -252,20 +262,19 @@ identity and clock revision.
     - Correspondence reference (step 4): wrong identity, wrong authority
       identity: NP `correspondence-reference`.
     - Anchor, instance and captures (step 5): absent `request.anchor`: INC
-      `anchor`; `request.anchor` unequal to the instance anchor, empty capture
-      instance: NP `anchor`; trigger evidence not `Admitted`, absent trigger:
+      `anchor`; a delivery anchor unequal to `request.anchor`: NP `anchor`; trigger evidence not `Admitted`, absent trigger:
       INC `instance`; activation contradiction: NP `activation`; retained
       `Missing` fault: INC `activation`; retained `Refused` fault: NP
       `activation`; retained capture count unequal to the declared captures:
       INC `capture`; retained capture with another name, retained capture at
       another anchor: NP `capture`; no matching origin or guarded delivery:
-      INC `instance`; delivery anchor unequal to the instance anchor: NP
+      INC `instance`; delivery anchor unequal to the request anchor: NP
       `anchor`; delivered capture count mismatch, `Missing`, `Null` and
       `Stale` captures: INC `capture`; `WrongType` capture, capture value at
       another anchor: NP `capture`; eviction of a selected capture: INC
       `capture`; eviction of a valuation of the selected instance, eviction
       of an unattributed valuation: INC `complete-input`.
-    - Observation (step 6): observation reference or revision unequal to the
+    - Observation (step 6): position observation authority or revision unequal to the
       bundle's: NP `observation-revision`; two bundle records with one
       observation identity: NP `observation`; no record for a position's
       observation identity: INC `observation`; record of another clock
@@ -292,9 +301,9 @@ identity and clock revision.
       absent or `Incomplete` request completeness, QObs completeness
       `Incomplete`: INC `complete-input`; QObs completeness `Contradicted`: NP
       `completeness`.
-    - Valuations (step 9): each of the six `ValuationCause` values:
-      `tl-projection-valuation` with that cause and row index; disagreeing
-      rows, missing row: INC `valuation{position, operand}`.
+    - Valuations (step 9): unknown native atom key:
+      `tl-projection-valuation` with original request position and atom index;
+      missing, undefined or absent selected cell: INC `valuation{position, operand}`.
     - Construction: timed interval, integer interval without upper bound,
       bound above `u32::MAX`: NP `interval`; non-`holds` atom and formula
       constructor refusal: `tl-projection-formula`; owner producer or reader
@@ -319,13 +328,11 @@ decision input. Each is exercised by the scenarios named.
 - `ValidatedTlProjection::source_positions()` returns, for each TL position in
   ascending stamp order, the index of its entry in `request.positions`
   (IT-022-SC-02, IT-022-SC-10).
-- `ValidatedTlJoin::owner_refusals()` returns the typed native strict-read or
-  predecessor refusal and the typed TL mapped-result re-read refusal that put
+- `ValidatedTlJoin::owner_refusals()` returns the typed native source/input/predecessor mismatch and the typed TL mapped-result re-read refusal that put
   a side into the `refused` or `lineage` state (IT-022-SC-12, IT-022-SC-13).
-- `ValidatedTlJoin::native_encoding_usage()` and `native_predecessor_usage()`
-  return the native owner's own usage receipts for the bounded writer and the
-  full predecessor validation. They are not bridge counters and never enter
-  `TlLimits` accounting (IT-022-SC-13, IT-022-SC-14).
+- `ValidatedTlJoin::native()` returns the original borrowed opaque owner-issued
+  carrier; its `result()` retains the full owner result and ledger. The join
+  never accepts the public read-data result as authority (IT-022-SC-13, SC-15).
 - `TlProjectionError` variants other than the eleven FR-350 codes' primary
   payloads (`PropositionMap`, `SyntaxRead`, `SyntaxEncoding`, `History`,
   `ExactNumber`) carry the typed tl-syntax or tl-mltl constructor or reader

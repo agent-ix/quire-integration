@@ -74,7 +74,7 @@ pub use projection::{
 mod join;
 pub use join::{
     join_tl, read_tl_join, ExpectedTlJoin, TlJoinCause, TlJoinCode, TlJoinDecision, TlJoinError,
-    TlJoinOwnerRefusals, ValidatedTlJoin, VERSION as TL_JOIN_VERSION,
+    TlJoinOwnerRefusals, TlNativeMismatch, ValidatedTlJoin, VERSION as TL_JOIN_VERSION,
 };
 
 mod definition;

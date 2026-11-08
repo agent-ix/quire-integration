@@ -12,7 +12,8 @@ use quire_mltl::{
     contract_ir::{self, MappingSelection, ValidatedMappedResult},
     report::{self, ResultRelationInput, ValidatedTemporalResult},
 };
-use quire_spec_language::temporal::{self as native, CheckedSubject, Report};
+use qsl_eval::temporal::evidence::{EvidencePackage, EvaluatedEvidence};
+use qsl_package::BarePackage;
 use tl_mltl::wire::OwnerLimits;
 
 /// Lowercase hexadecimal spelling of owner bytes, as the records write them.
@@ -40,34 +41,25 @@ pub(crate) fn scalar_limits() -> ScalarLimits {
 }
 
 /// Evaluation is explicit fixture preparation, never hidden inside join or read.
-pub(crate) fn evaluate_native(projection: &ValidatedTlProjection<'_>) -> Report {
+pub(crate) fn evaluate_native(projection: &ValidatedTlProjection<'_>) -> EvaluatedEvidence {
     evaluate_native_with_prior(projection, None)
 }
 
 pub(crate) fn evaluate_native_with_prior(
     projection: &ValidatedTlProjection<'_>,
-    prior: Option<&Report>,
-) -> Report {
+    prior: Option<&EvaluatedEvidence>,
+) -> EvaluatedEvidence {
     let input = projection.native();
-    let subject = CheckedSubject::new(
-        projection.package(),
-        input.occurrence,
-        input.valuations,
-        input.request,
-    )
-    .expect("actual native checked subject");
-    let subject = if let Some(prior) = prior {
-        subject.with_predecessor(prior, projection.selection().native_report_limits)
-    } else {
-        subject
-    };
-    native::evaluate_v2(
-        &subject,
-        input.observation,
-        &mut Meter::new(scalar_limits()),
-        &mut native_budget(),
-    )
-    .expect("explicit native fixture evaluation")
+    let bare = BarePackage::new(projection.package());
+    let package = EvidencePackage::from_package(&bare, &mut native_budget())
+        .expect("actual native package rows and capture projections");
+    if let Some(prior) = prior {
+        assert_eq!(input.request.ledger.as_ref(), Some(&prior.result().ledger),
+            "correction fixture must supply the exact predecessor ledger in its request");
+    }
+    package.evaluate_temporal_evidence(
+        &input.occurrence.node, input.request, &mut Meter::new(scalar_limits()),
+    ).expect("explicit native fixture evaluation")
 }
 
 /// Both evaluator invocations remain outside the bridge under test.

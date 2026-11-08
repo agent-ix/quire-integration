@@ -6,12 +6,17 @@
 use std::collections::BTreeMap;
 
 use qsl_eval::temporal::{
+    evidence::{bound_atom_indices, native_atom_operands},
+    finite_window::Valuation,
+};
+use qsl_eval::temporal::{
     evidence::{
         ActivationInput, AuthenticatedBinding, CaptureFact, ClauseSelection, Evicted, FaultKind,
         ObligationKey, TriggerEvidence, TriggerRecord, TriggerScope,
     },
     ClockCover, ProgressClosure, ProgressCompleteness,
 };
+use qsl_package::checked_views::instance_bound_atoms;
 use qsl_package::checked_views::{
     Activation, Classification, Closure, Support, Target, TemporalSubjectView,
 };
@@ -22,7 +27,6 @@ use quire_observation::authority::{
     bundle::EmbeddedPayloadRef, clock, completeness, observation::AnchorRef, BoundaryRef,
     OpenClosed,
 };
-use quire_spec_language::temporal::ValuationCause;
 
 use super::{
     positions, Budget, NativeProjectionInput, TlMissingPremise as Missing,
@@ -137,17 +141,9 @@ pub(super) fn check<'subject, 'input>(
         .anchor
         .as_deref()
         .ok_or(Error::Incomplete(Missing::Anchor))?;
-    if opaque_anchor != native.instance.anchor || native.instance.capture_instance.is_empty() {
-        return Err(Error::NativePremise(Premise::Anchor));
-    }
     let (captures, trigger_payload) = check_captures(subject, native, budget)?;
 
     // Step 6: observation.
-    if native.observation.reference != bundle.identity().as_str()
-        || native.observation.revision != bundle.revision().to_string()
-    {
-        return Err(Error::NativePremise(Premise::ObservationRevision));
-    }
     let through = match native
         .request
         .completeness
@@ -171,6 +167,11 @@ pub(super) fn check<'subject, 'input>(
         Some(TlProjectionLimit::Positions),
     )?;
     for position in &native.request.positions {
+        if position.observation.authority_identity != bundle.identity().as_str()
+            || position.observation.authority_revision != bundle.revision().to_string()
+        {
+            return Err(Error::NativePremise(Premise::ObservationRevision));
+        }
         let record = records
             .get(position.observation.identity.as_str())
             .ok_or(Error::Incomplete(Missing::Observation))?;
@@ -252,43 +253,70 @@ pub(super) fn check<'subject, 'input>(
         }
     }
 
-    // Step 9: valuations come only from the admitted rows.
-    let rows = native.valuations.rows();
-    budget.charge(rows.len(), Some(TlProjectionLimit::Valuations))?;
-    for (index, row) in rows.iter().enumerate() {
-        let cause = if row.subject != *native.occurrence {
-            Some(ValuationCause::OccurrenceNotDeclared)
-        } else if !subject.predicate_leaves().contains(&row.operand) {
-            Some(ValuationCause::OperandNotInFormula)
-        } else if row.position >= native.request.positions.len() {
-            Some(ValuationCause::PositionNotAdmitted)
-        } else if row.anchor != native.instance.anchor {
-            Some(ValuationCause::AnchorMismatch)
-        } else if row.capture_instance != native.instance.capture_instance {
-            Some(ValuationCause::CaptureInstanceMismatch)
-        } else if row.revision != native.observation.revision {
-            Some(ValuationCause::RevisionMismatch)
-        } else {
-            None
-        };
-        if let Some(cause) = cause {
-            return Err(Error::Valuation { row: index, cause });
+    // Step 9: native atom indices and instance scope come from the checked package.
+    let operands = native_atom_operands(subject);
+    let reads = instance_bound_atoms(subject).map_err(|_| Error::NativePremise(Premise::Source))?;
+    let bound = bound_atom_indices(subject.formula_graph(), &reads)
+        .ok_or(Error::NativePremise(Premise::Source))?;
+    for (position, supplied) in native.request.positions.iter().enumerate() {
+        let count = supplied.valuations.len()
+            + supplied
+                .instance_valuations
+                .values()
+                .map(BTreeMap::len)
+                .sum::<usize>();
+        budget.charge(count, Some(TlProjectionLimit::Valuations))?;
+        for atom in supplied.valuations.keys().chain(
+            supplied
+                .instance_valuations
+                .values()
+                .flat_map(|values| values.keys()),
+        ) {
+            if usize::try_from(*atom)
+                .ok()
+                .is_none_or(|index| index >= operands.len())
+            {
+                return Err(Error::Valuation {
+                    position,
+                    atom: *atom,
+                });
+            }
         }
     }
-    let leaves = subject.predicate_leaves();
-    budget.charge(positions.len().saturating_mul(leaves.len()), None)?;
+    budget.charge(positions.len().saturating_mul(operands.len()), None)?;
     let mut values = BTreeMap::new();
     for &position in &positions {
-        for operand in leaves {
-            let value = native
-                .valuations
-                .value_of(native.occurrence, position, operand)
-                .map_err(|_| {
-                    Error::Incomplete(Missing::Valuation {
+        let supplied = &native.request.positions[position];
+        for (index, operand) in operands.iter().enumerate() {
+            let Some(checked_operand) = operand.as_ref() else {
+                continue;
+            };
+            let operand = subject
+                .predicate_leaves()
+                .iter()
+                .find(|operand| *operand == checked_operand)
+                .ok_or(Error::NativePremise(Premise::Source))?;
+            let atom = u64::try_from(index).map_err(|_| Error::NativePremise(Premise::Source))?;
+            let valuation = if bound.contains(&atom) {
+                native
+                    .request
+                    .trigger
+                    .as_ref()
+                    .and_then(|trigger| supplied.instance_valuations.get(trigger))
+                    .and_then(|entries| entries.get(&atom))
+            } else {
+                supplied.valuations.get(&atom)
+            };
+            let value = match valuation {
+                Some(Valuation::True) => true,
+                Some(Valuation::False) => false,
+                Some(Valuation::Missing | Valuation::Undefined(_)) | None => {
+                    return Err(Error::Incomplete(Missing::Valuation {
                         position,
                         operand: operand.clone(),
-                    })
-                })?;
+                    }));
+                }
+            };
             values.insert((position, operand), value);
         }
     }
@@ -411,6 +439,11 @@ fn check_captures<'a>(
     native: NativeProjectionInput<'a>,
     budget: &mut Budget,
 ) -> Result<Selected<'a>, Error> {
+    let anchor = native
+        .request
+        .anchor
+        .as_deref()
+        .ok_or(Error::Incomplete(Missing::Anchor))?;
     if native.request.trigger_evidence != TriggerEvidence::Admitted {
         return Err(Error::Incomplete(Missing::Instance));
     }
@@ -462,7 +495,7 @@ fn check_captures<'a>(
             },
             deliveries: native.request.deliveries.clone(),
             origins: native.request.origins.clone(),
-            anchor: native.instance.anchor.to_owned(),
+            anchor: anchor.to_owned(),
             evicted: native.request.evicted.clone(),
             ledger: native.request.ledger.clone(),
             execution: native.request.execution,
@@ -485,7 +518,7 @@ fn check_captures<'a>(
         }
         let mut values = Vec::with_capacity(captures.len());
         for (capture, name) in captures.iter().zip(subject.capture_names()) {
-            if capture.name() != name || capture.anchor() != native.instance.anchor {
+            if capture.name() != name || capture.anchor() != anchor {
                 return Err(Error::NativePremise(Premise::Capture));
             }
             values.push(capture.value().as_bytes());
@@ -512,7 +545,7 @@ fn check_captures<'a>(
                     &delivery.identity == selected
                         && (guard.is_none() || delivery.guard == Some(true))
                 }) {
-                    if delivery.anchor != native.instance.anchor {
+                    if delivery.anchor != anchor {
                         return Err(Error::NativePremise(Premise::Anchor));
                     }
                     payload = Some(&delivery.payload);
@@ -527,7 +560,7 @@ fn check_captures<'a>(
         let mut values = Vec::with_capacity(captures.len());
         for capture in captures {
             match capture {
-                CaptureFact::Value { anchor, value } if anchor == native.instance.anchor => {
+                CaptureFact::Value { anchor, value } if anchor == anchor => {
                     values.push(value.as_bytes())
                 }
                 CaptureFact::Value { .. } | CaptureFact::WrongType => {
