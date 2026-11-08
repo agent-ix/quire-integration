@@ -1,6 +1,6 @@
 ---
 id: TC-102
-title: "Execute generated Boolean scalar operations"
+title: "Execute generated Boolean, Integer, Rational, Decimal, IEEE and Text scalar operations"
 type: TC
 relationships:
   - target: ix://agent-ix/quire-integration/IT-019
@@ -8,45 +8,82 @@ relationships:
   - target: ix://agent-ix/quire-contract-codegen/FR-014
     type: references
 ---
-# TC-102: Execute generated Boolean scalar operations
+# TC-102: Execute generated Boolean, Integer, Rational, Decimal, IEEE and Text scalar operations
 
 ## Description
 
 Qualify selected SC-05 ExactScalar operation rows against independently checked
 QSL operation bodies. This operation boundary is distinct from FR-021 whole-call
-sessions. The same original closed checked body supplies CG's emitted claim and
+sessions. The same original checked body supplies CG's emitted claim and
 public QSL checked-body evaluation after an independent source acquisition.
 Neither evaluator is reproduced.
 
 ## Test Procedure
 
 1. Check original QSL source, emit its exact checked-package/v2 bytes and strictly
-   admit them. Select each closed function's original body using the shared
+   admit them. Select each function's original body using the shared
    declaration selector. Derive scalar items and require genuine generated claims
    with original node identities.
 2. Independently reacquire the source through parsing, assembly and checking.
-   Evaluate each corresponding closed operation body with fresh global allowances.
+   Evaluate each corresponding original operation body with fresh global
+   allowances and its checked parameter frame where one is declared.
    Run actual emitted ExactScalar native artifacts using the same operands and
    allowances through the existing generated-artifact helper.
 3. Exercise Boolean Not and full binary truth tables for And, Or, Implies,
    Equality/Boolean Equal and NotEqual: 22 authored cases across six public
-   operation rows. Boolean variants explicitly use `right_may_stop=false`; the
-   `right_may_stop=true` lazy and supplied-stop controls remain Planned.
-   Independently require authored expected truth values rather than merely
-   mutual agreement.
+   operation rows with `right_may_stop=false`. Three further original bodies
+   put an equality application on the right of And, Or and Implies and require
+   `right_may_stop=true`. Their generated right closures fail if invoked on
+   the source's short-circuit path. Independently require authored truth values.
 4. Compare complete typed operation outcomes, ordered losses, ordered admitted
    charges and all LimitKind consumed counters at generous work and work zero/one.
    Require genuine incomplete WorkUnits terminal records under exhausted work;
    never subtract call overhead, precharge or reconstruct an evaluator envelope.
-5. Leave Integer arithmetic/equality/ordering/division/modulo comparison Planned
-   under IR-842. The public `FunctionState.body` is a checked node with slots;
-   `evaluate_closed` supplies no parameter bindings. The public parameterized
-   expression evaluator requires `CheckedExpression`, and the locked API does not
-   expose a conversion from the original function body to that expression.
-   Comparing a different closed literal body would change the admitted occurrence
-   and Integer domains. This is missing integration comparison evidence, not a
-   measured derivation refusal or an upstream API blocker. Other scalar families
-   and unexecuted boundary controls remain Planned; never claim a whole family.
+5. Evaluate eight original parameterized bodies with genuine `Int[-9,9]` slots:
+   Add, Subtract, Multiply, Negate, Less, Greater, Integer Equal and
+   NotEqual. The arithmetic bodies return `Int[-100,100]`. Execute Multiply at
+   both `4 * 2 = 8` and `4 * 7 = 28`; the latter is outside the operand bound
+   but inside the separately declared result bound. Supply the same typed values to
+   native symbols and check independently expected Integer or Boolean results.
+6. Expand each public `TextProfile::ALL` profile over six original
+   `Text[0,16;profile]` parameterized bodies: Equal, NotEqual, Less,
+   LessOrEqual, Greater and GreaterOrEqual. Admit each authored input through
+   the public Text owner before both evaluations, outside their comparison meters.
+   Use canonically equivalent `e\u{301}` and `é` for Equal to distinguish the
+   four normalization profiles from raw UnicodeScalars and BinaryUtf8. Check
+   a second input pair per body at the admitted empty and 16-scalar bounds;
+   these pairs cover equality, inequality and ordering at both endpoints.
+   Require independent Boolean answers, source locations on exhausted work and the
+   complete native/QSL comparison observations.
+7. Evaluate genuine parameterized Rational Add, Subtract, Multiply and Negate
+   bodies with `Rational[-9,9;1,9]` operands and a separately declared
+   `Rational[-200,200;1,200]` result. Use noninteger fractions, including
+   `1/2 + 1/3 = 5/6`, `4/3 - 7/2 = -13/6`, `2/3 * 3/4 = 1/2` and
+   `-(7/3) = -7/3`. Require the actual derived RationalArithmetic claim and
+   complete native/QSL agreement at work 0, 1 and 1024.
+8. Add Integer LessOrEqual and GreaterOrEqual, operand-endpoint cases for every
+   Integer body (`9 + 9`, `-9 - 9`, `-9 * 9`, negating `-9`, equal, reversed
+   and endpoint ordering pairs), and Rational Divide (`Rational[1,9;1,9]`
+   divisor), IntegerDivide (`Int[1,9]` divisor) and the four Rational orderings.
+9. Evaluate Decimal Add, Subtract, Multiply, Negate and the four orderings over
+   `Decimal[-1000,1000;0,2;exact]` operands, literal-divisor Divide bodies
+   (QSL requires a provably nonzero divisor) including an out-of-domain
+   refusal, and `convert<Decimal[-9,9;0,0;mode]>` for every rounding mode over
+   2.5 and -2.5. Require authored coefficients and scales for completed cases
+   and the Decimal loss list in every comparison.
+10. Check IEEE source with the selected IEEE profile admitted. Evaluate Add,
+    Subtract, Multiply and Divide for Float32 and Float64 under all six rounding
+    modes over nine operand pairs, and both width conversions under all six
+    modes over eight operands, at work 1024, 0 and 1. Compare values, IEEE flag
+    losses, exact-mode refusals, charges and counters; require the `1 op 3`
+    bit patterns.
+
+Further Text input boundaries remain Planned under IR-842. The other Planned
+entries keep their own owners, recorded in IT-019: IEEE NumericEqual/TotalOrder/
+BitIdentical comparisons (CG refuses generation with `FormMismatch`) under
+IR-1401, evaluated-right Boolean paths under IR-1402, enum equality (CG
+`BlockedOnUpstream`), and division/modulo behind IR-1391's CG result-bound
+derivation. These selected cases make no whole-family claim.
 
 ## Expected Results
 
@@ -56,9 +93,10 @@ truth values distinguish matching wrong computations. Exhausted
 work preserves the typed stop and all accounting without normalization.
 At work zero, connectives stop at BooleanResultRetain with next charge 1;
 equality stops at EqualityPlanForm with next charge 2. Work one completes every
-connective and still stops equality at EqualityPlanForm. Each stopped body has
-its real location, no losses, no admitted charges and zero consumption in every
-LimitKind counter. All 22 cases execute at work 0, 1 and 1024: 66 complete
-operation observations. Any row
+connective and still stops equality at EqualityPlanForm. Those Boolean stops
+have their real locations, no losses, no admitted charges and zero consumption
+in every LimitKind counter. The 25 Boolean, 35 Integer, 72 Text and 29 Rational cases
+execute at work 0, 1 and 1024 (483 observations); the 39 Decimal cases execute at five
+work allowances (195); the IEEE cohort is 1584 observations. Any row
 that does not genuinely derive is reported separately and receives no agreement
 credit. Full IT-019-SC-05 and family closure remain Planned under IR-842.

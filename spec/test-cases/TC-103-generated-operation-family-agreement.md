@@ -40,12 +40,15 @@ FR-014 operation-oracle or FR-018 equality-oracle agreement credit.
    under the original owner in a fresh FR-485 registry. Register no generated
    factory in that authority registry. Invoke the generated public symbol and
    the independent session with Integer arguments 4 and 3 and identical fresh
+   allowances. Repeat Multiply with Integer arguments 4 and 7; its `Integer`
+   result may exceed the parameters' `Int[0,9]` interval. For every input use
    global allowances at work 0, 1 and 1024. Compare complete typed outcomes and
    call failures, locations, ordered located losses, admitted charges and every
    exposed consumed counter without subtraction, normalization or envelope
    reconstruction.
 4. Independently require successful results 1, 12 and 1 for subtraction,
-   multiplication and relay respectively. Success has no result location or
+   multiplication and relay respectively, and 28 for the second multiplication.
+   Success has no result location or
    located loss. Work 0 stops at FunctionCall with no admitted charge. Work 1
    admits exactly the outer FunctionCall: direct arithmetic stops at
    IntegerArithmeticOperands; relay stops at the callee's FunctionCall. Both
@@ -81,7 +84,7 @@ FR-014 operation-oracle or FR-018 equality-oracle agreement credit.
 
 ## Expected Results
 
-The initial cohort has executed two-sided native agreement. Each selected
+The initial cohort has executed twelve two-sided native agreement envelopes. Each selected
 generated function and independent source session agrees on the complete exposed envelope,
 with the independent required values and stops above. Source authentication and
 argument refusals remain distinct native boundaries and never become values.

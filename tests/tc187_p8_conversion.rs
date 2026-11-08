@@ -143,10 +143,12 @@ fn conversion(
         }
     };
     let mut source_meter = new_meter();
-    let evaluated = qsl_eval::value::evaluate_closed(
+    let evaluated = qsl_eval::value::evaluate_closed_with_frame(
         &package,
         function.body,
         function.slots,
+        Vec::new(),
+        function.formed_units,
         &mut source_meter,
     )
     .expect("actual closed conversion evaluates");
@@ -438,10 +440,12 @@ fn original_quantity_subnodes_preserve_native_normalized_compound_identities() {
                 ..limits()
             };
             let mut source_meter = Meter::new(operation_limits);
-            let evaluation = qsl_eval::value::evaluate_closed(
+            let evaluation = qsl_eval::value::evaluate_closed_with_frame(
                 &package,
                 selected,
                 function.slots,
+                Vec::new(),
+                function.formed_units,
                 &mut source_meter,
             )
             .expect("original selected quantity subtree evaluates");

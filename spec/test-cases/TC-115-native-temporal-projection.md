@@ -44,3 +44,15 @@ Every IT-022 scenario passes. Each FR-350 criterion FR-350-AC-1 to AC-6 and
 AC-8 to AC-11 is asserted by at least one tagged test. Every refusal leaves no
 partial projection or join, each limit admits at its measured count and
 refuses one below it, and no bridge operation invokes an evaluator.
+
+## Unreachable through genuine owners
+
+- R4 (`unsupported`) and any pair containing it: quire-mltl reports
+  `Unsupported` only for formula and lane mismatches (`src/report.rs:735-760`),
+  which a bridge-built request for a Supported subject never yields, and a
+  result for any other request is `refused` (R1) first.
+- A TL correction paired with an original native report over the same
+  projection: the native owner refuses to evaluate an original report against a
+  request that carries a predecessor relation.
+- Multi-stamp bundles and duplicate bundle observation identities: see
+  IT-022, "Checks verified at unit level".

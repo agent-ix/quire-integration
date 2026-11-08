@@ -10,8 +10,8 @@ use qsl_replay::{spine::SpineLimits, MonitorTarget, TimingObligationSettings};
 use qsl_semantics::{library::LibraryName, model::intake::package_input};
 use quire_contract_ir::{
     read_checked_package, AdmittedEqualityReadErrorCode, CheckedPackageDispatchResult,
-    CheckedPackageReadLimits, SelectedExactIdentities, SelectedFactEqualityId, SelectedFactFieldId,
-    SelectedFactIds, SelectedFactRows, SelectedFactsErrorCode,
+    CheckedPackageReadLimits, NativeJoinBudget, SelectedExactIdentities, SelectedFactEqualityId,
+    SelectedFactFieldId, SelectedFactIds, SelectedFactRows, SelectedFactsErrorCode,
 };
 use quire_exact::{Cancel, Integer, Presence, Rational, ValueType};
 
@@ -144,6 +144,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         &package,
         declarations.iter().cloned(),
         fields.iter().cloned(),
+        &mut NativeJoinBudget::new(1_000_000, 1_000_000),
     )
     .expect("IR joins exact original producer identities");
     let mut matching_fields = fields
@@ -220,6 +221,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             },
             rows(),
             1_000_000,
+            &mut NativeJoinBudget::new(1_000_000, 1_000_000),
         )
         .expect("representable explicit model facts join");
     assert_eq!(
@@ -239,7 +241,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         applications,
         facts,
         emission.selected_source_unit_rows(),
-        1_000_000,
+        &mut NativeJoinBudget::new(1_000_000, 1_000_000),
     );
     let equality_ids = [SelectedFactEqualityId {
         application: equality.application.clone(),
@@ -253,6 +255,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
         },
         rows(),
         1_000_000,
+        &mut NativeJoinBudget::new(1_000_000, 1_000_000),
     );
     match decision {
         Ok(decision) => {
@@ -270,7 +273,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
                 native.code,
                 AdmittedEqualityReadErrorCode::UnavailableEqualityWitness
             );
-            assert_eq!(*native.application, equality.application);
+            assert_eq!(native.application.as_deref(), Some(&equality.application));
             assert!(
                 native.witness.is_some(),
                 "the missing witness has a native kind"
@@ -278,7 +281,7 @@ temporal SelectedFacts using timed over (candidate: Selected::ConfigVersion) clo
             assert_eq!(native.attempted_work, 0);
             let refused = joined.expect_err("a missing native witness yields no partial view");
             assert_eq!(refused.code, SelectedFactsErrorCode::Equality);
-            assert_eq!(refused.at, native.at);
+            assert_eq!(Some(&refused.at), native.at.as_ref());
             assert_eq!(refused.occurrence.as_ref(), Some(&equality.occurrence));
             assert!(refused.exact.is_none() && refused.exact_code.is_none());
             let cause = refused.equality.expect("retain the native equality cause");

@@ -133,6 +133,22 @@ fn generated(
             ObjectClosure::default(),
             meter,
         ),
+        "payloadChoiceEqual" => quire_exact_function_oracles::__SYMBOL_10__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
+        "payloadChoiceNotEqual" => quire_exact_function_oracles::__SYMBOL_11__(
+            source,
+            package,
+            package,
+            arguments,
+            ObjectClosure::default(),
+            meter,
+        ),
         _ => panic!("unselected function row"),
     }
 }
@@ -158,7 +174,7 @@ fn required(
             ChargePoint::EqualityPlanForm
         };
         assert!(
-            matches!(&result.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == work && record.consumed == work && record.next_charge == Integer::from(if work == 0 { 1_u64 } else if name.starts_with("pair") { 6_u64 } else if name.starts_with("flag") { 4_u64 } else { 2_u64 }) && record.charge_point == point)
+            matches!(&result.outcome, FamilyOutcome::Evaluated(Outcome::Incomplete(record)) if record.limit_kind == LimitKind::WorkUnits && record.limit == work && record.consumed == work && record.next_charge == Integer::from(if work == 0 { 1_u64 } else if name.starts_with("pair") { 6_u64 } else if name.starts_with("flag") || name.starts_with("payloadChoice") { 4_u64 } else { 2_u64 }) && record.charge_point == point)
         );
         let location = result
             .location
@@ -264,6 +280,9 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
                     "pairEqual" | "pairNotEqual" => ("makePairA", "makePairB"),
                     "flagEqual" | "flagNotEqual" => ("makeFlagA", "makeFlagB"),
                     "choiceEqual" | "choiceNotEqual" => ("makeChoiceA", "makeChoiceB"),
+                    "payloadChoiceEqual" | "payloadChoiceNotEqual" => {
+                        ("makePayloadChoiceA", "makePayloadChoiceB")
+                    }
                     _ => panic!("unselected nominal row"),
                 };
                 let construct = |name: &str| {
@@ -295,7 +314,12 @@ fn selected_operations_and_boundaries_match_independent_sessions() {
                 let left = construct(first);
                 let right = construct(second);
                 let equal = source_index % 2 == 0;
-                vec![(left.clone(), left.clone(), equal), (left, right, !equal)]
+                let mut samples = vec![(left.clone(), left.clone(), equal), (left, right, !equal)];
+                if nominal.starts_with("payloadChoice") {
+                    let third = construct("makePayloadChoiceC");
+                    samples.push((samples[0].0.clone(), third, !equal));
+                }
+                samples
             }
         };
         let key = checked_function_key(&package, &declared(&package, name)).unwrap();
