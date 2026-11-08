@@ -884,3 +884,41 @@ Final scoped Clippy covering lib, generated decimal, combined protocol and produ
 | FND | outcome | reason |
 | --- | --- | --- |
 | FND-004 | fixed | One command module per test crate is imported through existing support/generated parents; strict scoped Clippy passes without suppression and final 64-target compilation succeeds. |
+
+## Targeted current-consumer disposition (pass 7)
+
+Frozen clean pushed candidate ce46e430db8c70241e2f29b9277a09db3d3c3e46 reviewed narrowly against abedca631c1531fbebe4fb4e685ede0570670ee7. All 16 changed files are test/support consumers. No production/API/dependency/lock/specification/owner fixture-data/Makefile/CI changes. Current consumer helpers use the owner's resolved graph, preserving original selection identity and strict source/evidence assertions. The initializer adverse case finds its original document-holder index before deleting the same actual wire body. No identity is minted, rekeyed or substituted. Lazy generated Boolean closures accept the actual Meter parameter and retain the panic guard proving short circuit.
+
+Current enum derivation checks all four original body identities and exact Equal/NotEqual EnumComparison operations; this is derivation only and claims no native enum agreement or additional PR87 cell. Current modulus refusal checks KaniFormRefused/OperationNotRendered, both inferred finite operand ranges and their original admitted bound membership, and still requires no scalar execution or generated items. Quantity controls retain exact native cause, namespace and original location: duplicate ms plus unresolved use, newly parsed compound expression's result mismatch, and unit-versus-type missing names. These are current owner-stage oracles, not mock replacements or weakened success assertions. All seven observed defect groups are recorded below and have verified fixed outcomes.
+
+Independently read original failure excerpts and all 19 latest exact logs in /tmp/IR-1400-runtime-fix-receipts.json: every original (target,failed test) has exactly one mapped current test with the named test ok, 1 passed/0 failed. Original failure logs and failed intermediate U30 attempt remain preserved. Eighteen successful controls used prebuild-2; U30 used its final dedicated retry build. Final source then had formatting/import-only housekeeping; no exact controls are claimed rerun after that housekeeping. Final committed scoped Clippy (14 targets), fmt, diff checks pass; final selected compile-only inventory has 13 distinct executables and build-finished success=true. This was a targeted static/evidence disposition, with no reviewer Cargo/runtime, broad review, aggregate, deep or Kani run.
+
+The lead reports prior final-gate carry of lib11, cohort1, decimal1 and producer1 and the remaining binary run with 377 passes/19 failures/4 pre-existing ignores; this disposition verifies the 19 repaired exact receipts and does not claim to have rerun the previously passing gate. Docs and deny are lead gate evidence, not rerun here. Earlier 79 and typed-wire tests retain their original cohort provenance. Lead owns final gate reconciliation and merge.
+
+The stale PR87-owned IT-019 lines 264/268 and TC-102 lines 84/85 were explicitly outside this authorized repair and remain untouched; lead's separate owner handoff retains their prose correction. This review grants no native enum agreement credit and requests no PR87 feature/cell/branch work.
+
+**Latest review status: PASS; all real findings have latest fixed outcomes and no open findings remain.** No new unresolved issue was found in the repaired patch. Historical findings and earlier failed outcomes below remain unchanged. Plan completion: not assessed.
+
+## New findings (disposition pass 7)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-005 | high | Consumer fixtures compare raw graph-held identities with resolved document-held terms/source selections, failing genuine nominal/function/protocol/initializer/model/quantity lookups before their assertions. | tests/support/family_function_selection.rs:8 |
+| FND-006 | high | Generated Boolean short-circuit fixture supplies a zero-argument closure to the current meter-accepting lazy API, so the real generated native driver fails E0593 compilation. | tests/generated_oracle_family_scalar_operations.rs:277 |
+| FND-007 | high | The model-owned enum derivation control still expects BlockedOnUpstream even though current CG returns genuine EnumComparison items, causing its four-arm derivation control to fail. | tests/generated_oracle_enum_equality.rs:24 |
+| FND-008 | high | The modulus backend control expects RequiresBound after current owner inference supplies finite operand domains and returns the typed Kani OperationNotRendered refusal, failing both direct and dispatch controls. | tests/ir669_div07_backend.rs:33 |
+| FND-009 | high | Duplicate-unit namespace control expects one ambiguity although the current owner returns the duplicate declaration plus the unresolved quantity use, failing before original span assertions. | tests/tc187_p8_namespace.rs:133 |
+| FND-010 | high | Compound quantity control expects a grammar refusal although current grammar admits the expression and native checking refuses its declared result type, so its parser assertion fails. | tests/tc187_p9_remaining_quantity.rs:884 |
+| FND-011 | high | The missing-name quantity control expects UnresolvedTypeName for Quantity unit names although the native owner returns UnresolvedUnitName, failing the actual quantity parameter control. | tests/tc187_u30_u31.rs:78 |
+
+## Disposition pass 7 outcomes
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-005 | fixed | Current original-owner assertions inspected; matching actual exact failure-to-pass receipt verified. |
+| FND-006 | fixed | Current original-owner assertions inspected; matching actual exact failure-to-pass receipt verified. |
+| FND-007 | fixed | Current original-owner assertions inspected; matching actual exact failure-to-pass receipt verified. |
+| FND-008 | fixed | Current original-owner assertions inspected; matching actual exact failure-to-pass receipt verified. |
+| FND-009 | fixed | Current original-owner assertions inspected; matching actual exact failure-to-pass receipt verified. |
+| FND-010 | fixed | Current original-owner assertions inspected; matching actual exact failure-to-pass receipt verified. |
+| FND-011 | fixed | Current original-owner assertions inspected; matching actual exact failure-to-pass receipt verified. |
