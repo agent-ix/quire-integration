@@ -1015,3 +1015,61 @@ fn instance_bound_atoms_require_the_selected_triggers_actual_map() {
         },
     );
 }
+
+#[trace("IT-022-SC-13", "IT-022-SC-14", "FR-350-AC-8")]
+#[test]
+fn native_capture_projection_preserves_original_budget_denial_and_prior_work() {
+    fixture::with_source(
+        &fixture::declarations("capture saved: Boolean = true; holds(saved)"),
+        "Due",
+        &[b"true"],
+        |case| {
+            let projection = case.project(TlLimits::default()).unwrap();
+            let issued = Ok(evaluate(&projection));
+            let initializer = &case.subject.captures()[0];
+            let identities = quire_contract_ir::SelectedExactIdentities::empty();
+            let mut baseline = NativeJoinBudget::new(1 << 30, 1 << 30);
+            case.package
+                .project_exact_type(initializer, &identities, &mut baseline)
+                .unwrap();
+            let earlier = baseline.consumed();
+            let bare = BarePackage::new(case.package);
+            let mut owner_budget = NativeJoinBudget::new(1 << 30, 1 << 30);
+            EvidencePackage::from_package(&bare, &mut owner_budget).unwrap();
+            let owner = owner_budget.consumed();
+            assert!(earlier.work > 0 && owner.work > 0);
+            let limit = earlier.work.checked_add(owner.work).unwrap() - 1;
+            let prepare = || {
+                let mut budget = NativeJoinBudget::new(limit, 1 << 30);
+                case.package
+                    .project_exact_type(initializer, &identities, &mut budget)
+                    .unwrap();
+                assert_eq!(budget.consumed(), earlier);
+                budget
+            };
+            let mut expected_budget = prepare();
+            let expected = EvidencePackage::from_package(&bare, &mut expected_budget)
+                .err()
+                .expect("one short refuses the actual owner capture projection");
+            let mut shared = prepare();
+            let error = quire_integration::temporal::join_tl(
+                &projection,
+                Some(&issued),
+                None,
+                None,
+                TlLimits::default(),
+                &mut shared,
+            )
+            .unwrap_err();
+            let quire_integration::temporal::TlJoinError::NativePackage(actual) = error else {
+                panic!("original typed native package budget refusal: {error:?}");
+            };
+            assert_eq!(actual, expected);
+            assert_eq!(shared.consumed(), expected_budget.consumed());
+            assert!(
+                shared.consumed().work >= earlier.work,
+                "the original allowance was not reset"
+            );
+        },
+    );
+}
