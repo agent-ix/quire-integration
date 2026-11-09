@@ -374,8 +374,14 @@ fn node_kind(used: &FormulaNodeUse<'_>, operands: &[NodeId]) -> Result<NodeKind,
             lower,
             upper: Some(upper),
         }) => {
-            let lower = u32::try_from(lower).map_err(|_| invalid())?;
-            let upper = u32::try_from(upper).map_err(|_| invalid())?;
+            let lower = lower
+                .to_u64()
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or_else(invalid)?;
+            let upper = upper
+                .to_u64()
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or_else(invalid)?;
             Interval::new(lower, upper).map_err(|_| invalid())
         }
         None | Some(CheckedOperationInterval::Integer { upper: None, .. }) => Err(invalid()),

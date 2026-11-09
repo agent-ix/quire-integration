@@ -576,7 +576,11 @@ fn check_intervals(
             Some(Interval::Integer {
                 lower,
                 upper: Some(upper),
-            }) => u32::try_from(lower).is_ok() && u32::try_from(upper).is_ok(),
+            }) => [lower, upper].into_iter().all(|bound| {
+                bound
+                    .to_u64()
+                    .is_some_and(|value| u32::try_from(value).is_ok())
+            }),
             Some(Interval::Integer { upper: None, .. } | Interval::Timed { .. }) | None => false,
         };
         if !representable {
