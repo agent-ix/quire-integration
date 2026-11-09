@@ -7,15 +7,21 @@
 //!
 //! Where each TC-200 step is covered (steps 7-12 and the construction cells live beside the
 //! producer pipeline; the rest here):
-//! - Steps 1-4, 6-9: this file.
+//! - Steps 1-4, 6-9: this file. Step 5: this file (`step_5_a_foreign_source_selection_is_refused_at_driver_admission`,
+//!   `step_5_a_starved_initialization_fails_typed_with_no_monitor`) plus the tests named below.
 //! - Step 10 (FR-276-AC-12): `monitor_program.rs::state_bound_violations_fail_at_the_entry_site_commit_nothing_and_terminate`
 //!   over a controlled arena (the real producer never emits an over-bound entry).
-//! - Steps 11-12 (AC-13, AC-14): `monitor_program.rs`: `first_layout_type_allocation_returns_native_membership_then_retries`,
+//! - Steps 11-12 (FR-276-AC-13, AC-14): Partial, and not tagged FR-276-AC-13/14. These
+//!   `monitor_program.rs` tests are tagged TC-098 / IT-018-SC-16 / interface-002-AC-3 and
+//!   exercise nearby denial and stop paths only: `first_layout_type_allocation_returns_native_membership_then_retries`,
 //!   `later_declared_type_walk_denials_keep_native_membership_and_source`,
 //!   `rt_validation_scratch_denial_stays_storage_after_five_layout_walks`,
 //!   `native_type_projection_keeps_allocation_and_capacity_requests_distinct`,
 //!   `deeply_shared_inline_arena_validates_on_a_small_native_stack`,
 //!   `executor_operating_stops_and_budget_replacement_are_typed_and_atomic`.
+//!   NOT asserted anywhere: one-below-`StepBudget` per field with the failure's
+//!   limit/spent/requested; `PathArenaCapacity` mapped to `path_capacity`; separate function
+//!   parameter, result and expression type-validation denials.
 //!
 //! Not covered through the public driver/RT API (so not tagged):
 //! - FR-276-AC-5 (sibling identity retained after a limit or fault): in a clause that and-s a
@@ -52,7 +58,7 @@ use quire_contract_runtime::monitor::{
 use quire_driver::monitor::{prepare_monitor, MonitorPreparationLimits};
 use quire_exact::{Cancel, FieldValue, Integer, Rational, ScalarLimits, Value};
 
-/// Native PlanRoot support (copied from the driver suite so the producer is the real one).
+/// Native PlanRoot support: the real producer's PlanRoot, owned by this crate.
 #[path = "support/monitor_fixture.rs"]
 pub mod monitor_fixture;
 /// Genuine observation-owner progress admission.
@@ -822,6 +828,8 @@ const ONCE: &str = r#"temporal C using timed over (candidate: Selected::ConfigVe
     once[0 ms, 10 ms] holds(candidate.versionNumber = 1)
 }"#;
 
+// Partial: AC-2's sibling-live clause is not covered (see the header); only the overflow
+// result, its capacity and its setting text are asserted.
 #[trace("TC-200", "FR-276-AC-2")]
 #[test]
 fn step_2_once_overflow_is_incomplete_naming_the_producer_capacity() {
@@ -1046,18 +1054,28 @@ fn step_3_each_foreign_binding_component_is_refused_before_settling_anything() {
     );
 }
 
-#[trace("TC-200", "FR-276-AC-8")]
+// FINDING (not tagged FR-276-AC-4): the two arrival orders of two equal-tick events settle
+// different obligations (request first: the acknowledgement answers the request; acknowledgement
+// first: the request fails), and the reference evaluator agrees with the runtime in both. AC-4
+// says equal timestamps without an admitted order never gain causality from arrival order, so
+// this pipeline does not show that property; this test only pins the runtime to the oracle.
 #[test]
-fn step_3_equal_ticks_gain_no_causality_from_ingestion_order() {
+fn step_3_equal_tick_events_in_each_arrival_order_agree_with_the_reference_evaluator() {
     let prepared = sixteen_bit();
     let (req, ack) = (prepared.atom(0), prepared.atom(1));
-    // Both ingestion orders of two events at one tick agree with the reference evaluator.
     for (first, second) in [(req, ack), (ack, req)] {
         let rows = assert_agree(
             &prepared,
-            &[In::Event(7, vec![first]), In::Event(7, vec![second])],
+            &[
+                In::Event(7, vec![first]),
+                In::Event(7, vec![second]),
+                In::Watermark(7 + 3500),
+            ],
         );
-        assert!(rows.iter().any(|step| !step.is_empty()));
+        assert!(
+            rows.iter().any(|step| !step.is_empty()),
+            "something settles"
+        );
     }
 }
 
@@ -1066,7 +1084,7 @@ fn step_3_equal_ticks_gain_no_causality_from_ingestion_order() {
 
 #[trace("TC-200", "FR-276-AC-6")]
 #[test]
-fn step_4_two_monitors_from_one_plan_are_independent_and_keep_the_plan() {
+fn step_4_two_monitors_from_one_plan_have_independent_state() {
     let prepared = prepare(0);
     let program = Rc::clone(&prepared.program);
     // `prepare` consumed the producer root and the driver's preparation objects; only the
@@ -1089,19 +1107,21 @@ fn step_4_two_monitors_from_one_plan_are_independent_and_keep_the_plan() {
     // Both stay bound to the one admitted plan; the monitor offers no way to rebind.
     assert!(Rc::ptr_eq(first.monitor.program(), &program));
     assert!(Rc::ptr_eq(second.monitor.program(), &program));
-    // A later request in the second still sees only its own history.
+    // Progress past the 3 ms deadline settles different obligations in the two monitors: only
+    // the first has the request at tick 0, so only its root `always` is violated.
     let mut second = second;
-    let alone = second.event(0, false, true);
-    assert!(
-        alone.iter().all(|r| r.outcome == "True"),
-        "the second monitor never saw the first's request: {alone:?}"
+    let missed = |node: u64| settled_at_zero(node, "False");
+    assert!(second.event(0, false, false).is_empty());
+    assert_eq!(
+        second.watermark(3500),
+        vec![
+            settled_at_zero(prepared.ids.root, "Pending"),
+            missed(prepared.ids.interval)
+        ]
     );
-    let together = first.event(1, false, true);
-    assert!(
-        together
-            .iter()
-            .any(|r| r.outcome == "True" && r.origin_tick == Integer::zero()),
-        "the first monitor settles its own request at tick 0: {together:?}"
+    assert_eq!(
+        first.watermark(3500),
+        vec![missed(prepared.ids.root), missed(prepared.ids.interval)]
     );
 }
 
@@ -1252,7 +1272,7 @@ fn step_6_reversed_implication_operands_agree_with_the_reference_evaluator() {
     // The root `always` is violated at the acknowledgement event, which holds the eventually
     // but not the request; the request's own `eventually` follows the step-1 boundaries.
     let ids = prepared.ids;
-    let eventually: u64 = 2;
+    let eventually = ids.interval;
     for (ack, request) in [
         (2998, Out::True),
         (3000, Out::Indeterminate),
@@ -1283,8 +1303,10 @@ fn step_6_reversed_implication_operands_agree_with_the_reference_evaluator() {
 #[test]
 fn step_6_open_and_closed_interval_endpoints_agree_with_the_reference_evaluator() {
     use Out::{False, Indeterminate, Pending, True};
+    const R: u64 = 0;
+    const E: u64 = 1;
     // Per case: the settled rows of the acknowledgement event and of the watermark, for the
-    // root (node 0) and the eventually (node 3). A boundary hit is Indeterminate whichever
+    // root (`R`) and the eventually (`E`), mapped to the plan's own ids below. A boundary hit is Indeterminate whichever
     // side is closed (step 1); an open lower endpoint hit by the same tick decides nothing
     // until progress closes it False.
     for (interval, ack, at_ack, at_watermark) in [
@@ -1292,9 +1314,9 @@ fn step_6_open_and_closed_interval_endpoints_agree_with_the_reference_evaluator(
             "[0 ms, 3 ms]",
             3000,
             vec![
-                (0, 0, Indeterminate),
-                (0, 3, Indeterminate),
-                (3000, 3, True),
+                (0, R, Indeterminate),
+                (0, E, Indeterminate),
+                (3000, E, True),
             ],
             vec![],
         ),
@@ -1302,29 +1324,29 @@ fn step_6_open_and_closed_interval_endpoints_agree_with_the_reference_evaluator(
             "[0 ms, 3 ms)",
             3000,
             vec![
-                (0, 0, Indeterminate),
-                (0, 3, Indeterminate),
-                (3000, 3, True),
+                (0, R, Indeterminate),
+                (0, E, Indeterminate),
+                (3000, E, True),
             ],
             vec![],
         ),
         (
             "(0 ms, 3 ms]",
             0,
-            vec![(0, 0, Indeterminate), (0, 3, Indeterminate)],
-            vec![(0, 3, False)],
+            vec![(0, R, Indeterminate), (0, E, Indeterminate)],
+            vec![(0, E, False)],
         ),
         (
             "(0 ms, 3 ms]",
             3000,
-            vec![(0, 0, Indeterminate), (0, 3, Indeterminate)],
-            vec![(3000, 3, False)],
+            vec![(0, R, Indeterminate), (0, E, Indeterminate)],
+            vec![(3000, E, False)],
         ),
         (
             "[0 ms, 3 ms)",
             2998,
-            vec![(0, 3, True), (2998, 3, True)],
-            vec![(0, 0, Pending)],
+            vec![(0, E, True), (2998, E, True)],
+            vec![(0, R, Pending)],
         ),
     ] {
         let clause = format!(
@@ -1341,8 +1363,21 @@ fn step_6_open_and_closed_interval_endpoints_agree_with_the_reference_evaluator(
                 In::Watermark(ack + 3500),
             ],
         );
-        assert_eq!(rows[1], at_ack, "{interval} ack at {ack}");
-        assert_eq!(rows[2], at_watermark, "{interval} ack at {ack} watermark");
+        let ids = prepared.ids;
+        let plan_ids = |expected: Vec<(i128, u64, Out)>| -> Vec<(i128, u64, Out)> {
+            expected
+                .into_iter()
+                .map(|(tick, node, out)| {
+                    (tick, if node == R { ids.root } else { ids.interval }, out)
+                })
+                .collect()
+        };
+        assert_eq!(rows[1], plan_ids(at_ack), "{interval} ack at {ack}");
+        assert_eq!(
+            rows[2],
+            plan_ids(at_watermark),
+            "{interval} ack at {ack} watermark"
+        );
     }
 }
 
