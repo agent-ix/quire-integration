@@ -4,6 +4,22 @@
 //!
 //! The expected outcomes are the TC-200 expected results, not the output of
 //! any other run.
+//!
+//! Not covered through the public driver/RT API (so not tagged):
+//! - FR-276-AC-5 (sibling identity retained after a limit or fault): in a clause that and-s a
+//!   `once[0 ms, 10 ms]` with a longer `eventually`, the producer gives both buffers the same
+//!   capacity and they overflow together, so no live sibling survives an overflow to observe.
+//! - FR-276-AC-6 (partial): independence of two monitors, no verdict from build, one shared
+//!   plan. Not asserted: subject/atom-body/topology retention, and rebinding (RT exposes no
+//!   rebind operation to attempt).
+//! - FR-276-AC-7 (partial): a foreign source selection and a starved build are covered. Not
+//!   covered: altered atom/transition/initializer/interval/buffer/activation/uncertainty/max-gap
+//!   and equal subformula ids under two subjects (`prepare_monitor` takes only the producer
+//!   root, so these cannot be injected; the driver suites own them), and `Unsupported`.
+//! - FR-276-AC-8 (partial): a missing required captures field cannot be offered because the
+//!   typed record constructor refuses it first. Not covered: false activation (an `on origin`
+//!   clause has no guard) and executor-invariant failure with refusal of later input (no
+//!   public injection point).
 
 use std::{collections::BTreeMap, rc::Rc};
 
@@ -12,7 +28,7 @@ use qsl_analyze::monitor_root::{PlanAuthoritySelection, PlanAuthorityValidationC
 use qsl_eval::temporal::{TickBound, TickMonitorReference, TickMonitorSpec, TickOutcome, TickStep};
 use qsl_foundation::SourceIdentity;
 use qsl_replay::MonitorTarget;
-use qsl_semantics::check::{Activation, CheckedFormula};
+use qsl_semantics::check::{Activation, CheckedFormula, FormulaNode};
 use quire_contract_ir::CheckedNodeId;
 use quire_contract_runtime::monitor::{
     build, BuildPlan, Event, InputContext, InputRefusal, Monitor, MonitorFailureCode, Program,
@@ -113,6 +129,15 @@ struct Prepared {
     reference: Reference,
     /// The producer's buffer capacity of each buffered operator.
     capacities: Vec<u64>,
+    /// The formula nodes of the `holds` atoms in source order (the capture field `a<node>`).
+    atoms: Vec<usize>,
+}
+
+impl Prepared {
+    /// The `n`th `holds` atom of the clause in source order.
+    fn atom(&self, n: usize) -> usize {
+        self.atoms[n]
+    }
 }
 
 fn try_prepare(
@@ -178,6 +203,18 @@ fn prepare_fixture(
         interval: plan.intervals().first().map_or(0, |i| i.0.index() as u64),
     };
     let capacities = plan.buffers().iter().map(|(_, c)| *c).collect();
+    let mut holds: Vec<(usize, usize)> = reference
+        .formula
+        .nodes()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| match node {
+            FormulaNode::Holds { span } => Some((span.start, index)),
+            _ => None,
+        })
+        .collect();
+    holds.sort();
+    let atoms = holds.into_iter().map(|(_, index)| index).collect();
     let mut source = root.checked_unit().source().identity().clone();
     let claim = root.plan().subject().clone();
     let (progress, subject) = observation::admitted(Some(vec![observation::row(&root)]));
@@ -207,6 +244,7 @@ fn prepare_fixture(
         ids,
         reference,
         capacities,
+        atoms,
     })
 }
 
@@ -214,9 +252,8 @@ fn prepare_with(clause: &str, units: &str, time_unit: &str, target: &MonitorTarg
     try_prepare(clause, units, time_unit, target, |_| {}).expect("the clause prepares")
 }
 
-fn prepare(uncertainty: u64) -> (Rc<Program>, Subformulas) {
-    let prepared = prepare_with(CLAUSE, MICROSECONDS, "us", &microsecond_target(uncertainty));
-    (prepared.program, prepared.ids)
+fn prepare(uncertainty: u64) -> Prepared {
+    prepare_with(CLAUSE, MICROSECONDS, "us", &microsecond_target(uncertainty))
 }
 
 fn budget() -> StepBudget {
@@ -362,10 +399,13 @@ fn context(program: &Program) -> InputContext<'_> {
 struct Run {
     program: Rc<Program>,
     monitor: Monitor,
+    /// The request and acknowledgement atoms in source order.
+    atoms: Vec<usize>,
 }
 
 impl Run {
-    fn new(program: &Rc<Program>) -> Self {
+    fn new(prepared: &Prepared) -> Self {
+        let program = &prepared.program;
         let monitor = build(BuildPlan {
             program: Rc::clone(program),
             budget: budget(),
@@ -374,6 +414,7 @@ impl Run {
         Self {
             program: Rc::clone(program),
             monitor,
+            atoms: prepared.atoms.clone(),
         }
     }
 
@@ -455,31 +496,14 @@ impl Run {
         Ok(settled(&program, step.results()))
     }
 
-    /// An event at counter reading `tick` observing the requested atoms.
+    /// An event at counter reading `tick` where the clause's first (request) and second
+    /// (acknowledgement) atoms in source order hold as given.
     fn event(&mut self, tick: u64, req: bool, ack: bool) -> Vec<Settled> {
-        let program = Rc::clone(&self.program);
-        let layout = program.layout();
-        let captures = program
-            .types()
-            .record(
-                layout.inputs.key.clone(),
-                vec![
-                    ("a2", FieldValue::Present(Value::Boolean(req))),
-                    ("a4", FieldValue::Present(Value::Boolean(ack))),
-                ],
-            )
-            .expect("captures");
-        let step = self
-            .monitor
-            .event(Event {
-                reading: Reading {
-                    context: context(&program),
-                    value: tick,
-                },
-                inputs: &captures,
-            })
-            .expect("admitted event");
-        settled(&program, step.results())
+        let holding: Vec<usize> = [(self.atoms[0], req), (self.atoms[1], ack)]
+            .into_iter()
+            .filter_map(|(atom, holds)| holds.then_some(atom))
+            .collect();
+        self.event_atoms(tick, &holding).expect("admitted event")
     }
 
     /// An admitted progress assertion covering ticks through `boundary`.
@@ -524,8 +548,9 @@ fn settled_at_zero(subformula: u64, outcome: &str) -> Settled {
 
 /// Request at tick 0, first acknowledgement at `ack` ticks.
 fn after_ack(uncertainty: u64, ack: u64) -> (Vec<Settled>, Subformulas) {
-    let (program, ids) = prepare(uncertainty);
-    let mut run = Run::new(&program);
+    let prepared = prepare(uncertainty);
+    let ids = prepared.ids;
+    let mut run = Run::new(&prepared);
     assert!(
         run.event(0, true, false).is_empty(),
         "the request alone settles nothing"
@@ -586,8 +611,9 @@ fn ack_at_2998_with_two_microseconds_of_uncertainty_is_indeterminate() {
 #[trace("TC-200", "FR-276-AC-1")]
 #[test]
 fn pending_stays_distinct_from_indeterminate_while_the_window_is_open() {
-    let (program, ids) = prepare(0);
-    let mut run = Run::new(&program);
+    let prepared = prepare(0);
+    let ids = prepared.ids;
+    let mut run = Run::new(&prepared);
     run.event(0, true, false);
     let pending = run.watermark(2998);
     assert_eq!(
@@ -689,7 +715,7 @@ enum In {
 /// Drive RT and the QSL reference evaluator through the same inputs, returning the
 /// per-input rows of each.
 fn run_both(prepared: &Prepared, inputs: &[In]) -> (Vec<Vec<Row>>, Vec<Vec<Row>>) {
-    let mut run = Run::new(&prepared.program);
+    let mut run = Run::new(prepared);
     let mut reference = prepared.reference.monitor();
     let atoms: Vec<usize> = run
         .capture_fields()
@@ -746,21 +772,31 @@ impl Run {
     }
 }
 
-const REQ: usize = 2;
-const ACK: usize = 4;
-
 // ---------------------------------------------------------------------------
 // Step 1 against the oracle.
 
 #[trace("TC-200", "FR-276-AC-8")]
 #[test]
 fn step_1_boundary_cases_agree_with_the_reference_evaluator() {
-    for (uncertainty, ack) in [(0, 2998), (0, 3000), (0, 3001), (2, 2998)] {
+    for (uncertainty, ack, expected) in [
+        (0, 2998, vec![Out::True]),
+        (0, 3000, vec![Out::Indeterminate; 2]),
+        (0, 3001, vec![Out::False; 2]),
+        (2, 2998, vec![Out::Indeterminate; 2]),
+    ] {
         let prepared = prepare_with(CLAUSE, MICROSECONDS, "us", &microsecond_target(uncertainty));
-        assert_agree(
+        let (req, ackn) = (prepared.atom(0), prepared.atom(1));
+        let rows = assert_agree(
             &prepared,
-            &[In::Event(0, vec![REQ]), In::Event(ack, vec![ACK])],
+            &[In::Event(0, vec![req]), In::Event(ack, vec![ackn])],
         );
+        // The request's own obligations, with the TC-200 expected outcomes.
+        let own: Vec<Out> = rows[1]
+            .iter()
+            .filter(|(origin, _, _)| *origin == 0)
+            .map(|(_, _, out)| out.clone())
+            .collect();
+        assert_eq!(own, expected, "uncertainty {uncertainty}, ack at {ack}");
     }
 }
 
@@ -778,6 +814,10 @@ fn step_2_once_overflow_is_incomplete_naming_the_producer_capacity() {
     let [capacity] = prepared.capacities[..] else {
         panic!("one buffered operator");
     };
+    // FR-251 sizes the buffer as ceil(rate * R) + 1 for the widened tick window R, at QSL pin
+    // 64cc29bd: 2 events/ms over the 10 ms window and its tick cover gives 23. The RT spec text
+    // that says 21 is stale.
+    assert_eq!(capacity, 23);
     // The producer, not the runtime or this test, supplies the capacity.
     assert_eq!(
         prepared
@@ -814,7 +854,7 @@ fn step_2_once_overflow_is_incomplete_naming_the_producer_capacity() {
     }
     // The complete typed payload of the same RT run: the producer's limit and the event-rate
     // setting of 2 events/ms; no event was refused or dropped on the way.
-    let mut run = Run::new(&prepared.program);
+    let mut run = Run::new(&prepared);
     let mut last = Vec::new();
     for input in &inputs {
         let In::Event(tick, holding) = input else {
@@ -843,36 +883,42 @@ fn sixteen_bit() -> Prepared {
 #[test]
 fn step_3_wrapped_readings_advance_by_the_modular_difference() {
     let prepared = sixteen_bit();
+    let (req, ack, ids) = (prepared.atom(0), prepared.atom(1), prepared.ids);
     let rows = assert_agree(
         &prepared,
-        &[In::Event(65530, vec![REQ]), In::Event(4, vec![ACK])],
+        &[In::Event(65530, vec![req]), In::Event(4, vec![ack])],
     );
-    // 4 - 65530 modulo 2^16 is 10: the second event is at unwrapped tick 10 of the request.
-    assert!(rows[1].iter().any(|(origin, _, _)| *origin == 10));
-    assert!(rows[1]
-        .iter()
-        .all(|(_, _, out)| !matches!(out, Out::Failed { .. })));
+    // 4 - 65530 modulo 2^16 is 10, outside the request's [0 ms, 3 ms]: the request's own
+    // obligations are False, the acknowledgement settles its own at unwrapped tick 10, and no
+    // reading-gap fault is reported.
+    assert_eq!(
+        rows[1],
+        vec![
+            (0, ids.root, Out::False),
+            (0, ids.interval, Out::False),
+            (10, ids.interval, Out::True),
+        ]
+    );
 }
 
 #[trace("TC-200", "FR-276-AC-3")]
 #[test]
 fn step_3_backward_reading_fails_with_the_gap_and_no_temporal_verdict() {
     let prepared = sixteen_bit();
+    let (req, ack, ids) = (prepared.atom(0), prepared.atom(1), prepared.ids);
     let rows = assert_agree(
         &prepared,
-        &[In::Event(65530, vec![REQ]), In::Event(65500, vec![ACK])],
+        &[In::Event(65530, vec![req]), In::Event(65500, vec![ack])],
     );
-    let step = &rows[1];
-    assert!(!step.is_empty());
-    for (_, _, out) in step {
-        assert_eq!(
-            *out,
-            Out::Failed {
-                gap: 65506,
-                max_reading_gap: 100
-            }
-        );
-    }
+    let failed = Out::Failed {
+        gap: 65506,
+        max_reading_gap: 100,
+    };
+    // Exactly the request's open obligations fail; no True or False is emitted.
+    assert_eq!(
+        rows[1],
+        vec![(0, ids.root, failed.clone()), (0, ids.interval, failed)]
+    );
 }
 
 #[trace("TC-200", "FR-276-AC-3")]
@@ -904,7 +950,7 @@ fn step_3_gap_equal_to_the_counter_modulus_is_refused_before_runtime_constructio
 
 /// An input association differing from the plan's in exactly one component.
 fn refused_with(prepared: &Prepared, change: impl FnOnce(&mut Components)) -> InputRefusal {
-    let mut run = Run::new(&prepared.program);
+    let mut run = Run::new(prepared);
     let before = fingerprint(run.monitor.state());
     let layout = prepared.program.layout();
     let mut components = Components {
@@ -981,21 +1027,18 @@ fn step_3_each_foreign_binding_component_is_refused_before_settling_anything() {
     );
 }
 
-#[trace("TC-200", "FR-276-AC-4")]
+#[trace("TC-200", "FR-276-AC-8")]
 #[test]
 fn step_3_equal_ticks_gain_no_causality_from_ingestion_order() {
     let prepared = sixteen_bit();
-    // The same tick in either ingestion order: both agree with the reference evaluator, and in
-    // neither order does the request gain a definite verdict from arrival order. The only
-    // True is the acknowledgement event's own obligation, which its own atom satisfies.
-    for (first, second) in [(REQ, ACK), (ACK, REQ)] {
+    let (req, ack) = (prepared.atom(0), prepared.atom(1));
+    // Both ingestion orders of two events at one tick agree with the reference evaluator.
+    for (first, second) in [(req, ack), (ack, req)] {
         let rows = assert_agree(
             &prepared,
             &[In::Event(7, vec![first]), In::Event(7, vec![second])],
         );
-        let outcomes: Vec<&Out> = rows.iter().flatten().map(|(_, _, out)| out).collect();
-        assert_eq!(outcomes.iter().filter(|out| ***out == Out::True).count(), 1);
-        assert!(outcomes.iter().all(|out| **out != Out::False), "{rows:?}");
+        assert!(rows.iter().any(|step| !step.is_empty()));
     }
 }
 
@@ -1005,11 +1048,12 @@ fn step_3_equal_ticks_gain_no_causality_from_ingestion_order() {
 #[trace("TC-200", "FR-276-AC-6")]
 #[test]
 fn step_4_two_monitors_from_one_plan_are_independent_and_keep_the_plan() {
-    let (program, _) = prepare(0);
+    let prepared = prepare(0);
+    let program = Rc::clone(&prepared.program);
     // `prepare` consumed the producer root and the driver's preparation objects; only the
     // closed plan remains.
-    let mut first = Run::new(&program);
-    let second = Run::new(&program);
+    let mut first = Run::new(&prepared);
+    let second = Run::new(&prepared);
     let initial = fingerprint(second.monitor.state());
     assert_eq!(
         fingerprint(first.monitor.state()),
@@ -1070,7 +1114,7 @@ fn step_5_a_foreign_source_selection_is_refused_at_driver_admission() {
 #[trace("TC-200", "FR-276-AC-7")]
 #[test]
 fn step_5_a_starved_initialization_fails_typed_with_no_monitor() {
-    let (program, _) = prepare(0);
+    let program = prepare(0).program;
     let starved = StepBudget {
         work: 0,
         ..budget()
@@ -1090,11 +1134,27 @@ fn step_5_a_starved_initialization_fails_typed_with_no_monitor() {
 #[trace("TC-200", "FR-276-AC-8")]
 #[test]
 fn step_6_invalid_event_and_progress_inputs_change_nothing() {
-    let (program, _) = prepare(0);
-    let mut run = Run::new(&program);
+    let prepared = prepare(0);
+    let program = Rc::clone(&prepared.program);
+    let mut run = Run::new(&prepared);
     run.event(0, true, false);
     let before = fingerprint(run.monitor.state());
-    // An event whose captures are not the admitted capture value.
+    // An event whose captures record omits a required admitted atom value.
+    let first = run.capture_fields().remove(0);
+    let partial = program.types().record(
+        program.layout().inputs.key.clone(),
+        vec![(first.as_str(), FieldValue::Present(Value::Boolean(true)))],
+    );
+    // The typed record constructor itself refuses the omitted field, so a captures value
+    // lacking an atom cannot be offered to RT at all; the remaining refusal is a value that
+    // is not the admitted captures record.
+    assert!(
+        matches!(
+            &partial,
+            Err(refusal) if format!("{refusal:?}").contains("MissingField")
+        ),
+        "{partial:?}"
+    );
     let wrong = Value::Boolean(true);
     let failure = run
         .monitor
@@ -1145,16 +1205,19 @@ fn step_6_only_admitted_progress_settles_a_deadline_never_a_counter_poll() {
     let rows = assert_agree(
         &prepared,
         &[
-            In::Event(0, vec![REQ]),
+            In::Event(0, vec![prepared.atom(0)]),
             // A poll far past the 3000 us deadline decides nothing.
             In::Poll(3500),
             In::Watermark(3500),
         ],
     );
+    let ids = prepared.ids;
+    assert!(rows[0].is_empty());
     assert!(rows[1].is_empty(), "a poll settles nothing");
-    assert!(
-        rows[2].iter().any(|(_, _, out)| *out == Out::False),
-        "admitted progress settles the missed deadline: {rows:?}"
+    assert_eq!(
+        rows[2],
+        vec![(0, ids.root, Out::False), (0, ids.interval, Out::False)],
+        "admitted progress settles the missed deadline"
     );
 }
 
@@ -1165,27 +1228,85 @@ fn step_6_reversed_implication_operands_agree_with_the_reference_evaluator() {
     always (eventually[0 ms, 3 ms] holds(candidate.versionNumber = 3) implies holds(candidate.versionNumber = 2))
 }"#;
     let prepared = prepare_with(reversed, MICROSECONDS, "us", &microsecond_target(0));
-    for ack in [2998, 3000, 3001] {
-        assert_agree(
+    // In source order the acknowledgement atom comes first and the request atom second.
+    let (ack_atom, req_atom) = (prepared.atom(0), prepared.atom(1));
+    // The root `always` is violated at the acknowledgement event, which holds the eventually
+    // but not the request; the request's own `eventually` follows the step-1 boundaries.
+    let ids = prepared.ids;
+    let eventually: u64 = 2;
+    for (ack, request) in [
+        (2998, Out::True),
+        (3000, Out::Indeterminate),
+        (3001, Out::False),
+    ] {
+        let rows = assert_agree(
             &prepared,
             &[
-                In::Event(0, vec![REQ]),
-                In::Event(ack, vec![ACK]),
+                In::Event(0, vec![req_atom]),
+                In::Event(ack, vec![ack_atom]),
                 In::Watermark(ack + 3500),
             ],
         );
+        assert_eq!(
+            rows[1],
+            vec![
+                (0, ids.root, Out::False),
+                (0, eventually, request),
+                (i128::from(ack), eventually, Out::True),
+            ],
+            "ack at {ack}"
+        );
+        assert!(rows[0].is_empty() && rows[2].is_empty());
     }
 }
 
 #[trace("TC-200", "FR-276-AC-8")]
 #[test]
 fn step_6_open_and_closed_interval_endpoints_agree_with_the_reference_evaluator() {
-    for (interval, ack) in [
-        ("[0 ms, 3 ms]", 3000),
-        ("[0 ms, 3 ms)", 3000),
-        ("(0 ms, 3 ms]", 0),
-        ("(0 ms, 3 ms]", 3000),
-        ("[0 ms, 3 ms)", 2998),
+    use Out::{False, Indeterminate, Pending, True};
+    // Per case: the settled rows of the acknowledgement event and of the watermark, for the
+    // root (node 0) and the eventually (node 3). A boundary hit is Indeterminate whichever
+    // side is closed (step 1); an open lower endpoint hit by the same tick decides nothing
+    // until progress closes it False.
+    for (interval, ack, at_ack, at_watermark) in [
+        (
+            "[0 ms, 3 ms]",
+            3000,
+            vec![
+                (0, 0, Indeterminate),
+                (0, 3, Indeterminate),
+                (3000, 3, True),
+            ],
+            vec![],
+        ),
+        (
+            "[0 ms, 3 ms)",
+            3000,
+            vec![
+                (0, 0, Indeterminate),
+                (0, 3, Indeterminate),
+                (3000, 3, True),
+            ],
+            vec![],
+        ),
+        (
+            "(0 ms, 3 ms]",
+            0,
+            vec![(0, 0, Indeterminate), (0, 3, Indeterminate)],
+            vec![(0, 3, False)],
+        ),
+        (
+            "(0 ms, 3 ms]",
+            3000,
+            vec![(0, 0, Indeterminate), (0, 3, Indeterminate)],
+            vec![(3000, 3, False)],
+        ),
+        (
+            "[0 ms, 3 ms)",
+            2998,
+            vec![(0, 3, True), (2998, 3, True)],
+            vec![(0, 0, Pending)],
+        ),
     ] {
         let clause = format!(
             r#"temporal C using timed over (candidate: Selected::ConfigVersion) clock "model-time" on origin {{
@@ -1193,13 +1314,15 @@ fn step_6_open_and_closed_interval_endpoints_agree_with_the_reference_evaluator(
 }}"#
         );
         let prepared = prepare_with(&clause, MICROSECONDS, "us", &microsecond_target(0));
-        assert_agree(
+        let rows = assert_agree(
             &prepared,
             &[
-                In::Event(0, vec![REQ]),
-                In::Event(ack, vec![ACK]),
+                In::Event(0, vec![prepared.atom(0)]),
+                In::Event(ack, vec![prepared.atom(1)]),
                 In::Watermark(ack + 3500),
             ],
         );
+        assert_eq!(rows[1], at_ack, "{interval} ack at {ack}");
+        assert_eq!(rows[2], at_watermark, "{interval} ack at {ack} watermark");
     }
 }
