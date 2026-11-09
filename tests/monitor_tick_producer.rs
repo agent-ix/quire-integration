@@ -47,13 +47,20 @@
 //!   The bisection over each field takes about 12 s per run. Plus the
 //!   TC-098 / IT-018 / interface-002 tests in `monitor_program.rs` for allocator denials over a
 //!   controlled arena.
-//! - Binder identity (two narrow claims, neither a binder-semantics test):
+//! - Binder identity (narrow claims, not a binder-semantics test):
 //!   `authored_binders_are_not_lowered_into_the_program` (atom bodies with `let`s leave the
 //!   Program identical to a baseline: they are not lowered) and
 //!   `producer_generated_equal_keyed_locals_live_in_distinct_slots_with_distinct_body_paths`
 //!   (producer-generated equal-keyed `Local` reads carry distinct body paths, each led by the
 //!   driver's `usize::MAX` binder-scope marker, which this test names as a coupling to the
-//!   driver's constant). Slot resolution of those reads is not asserted.
+//!   driver's constant). Slot resolution is asserted by
+//!   `every_local_read_resolves_to_the_slot_of_its_innermost_enclosing_binder`: it walks every
+//!   function body keeping the binders in scope (let, fold, map, filter), and each `Local` read
+//!   must name the slot of the innermost enclosing binder with the read's IR name, in the read's
+//!   own function, and its IR level must equal the parameter count plus that binder's depth.
+//!   The expectation comes from the Program's own binder declarations and nesting plus the names
+//!   and levels in the IR keys of the binders and reads; it is not re-derived from the checked
+//!   package.
 //!
 //! Planned (the exact missing API):
 //! - AC-4, "equal timestamps without an admitted order": the producer always supplies an admitted
@@ -1771,8 +1778,8 @@ fn producer_generated_equal_keyed_locals_live_in_distinct_slots_with_distinct_bo
         );
         // Coupled to the driver's private `BINDER_SCOPED` marker (quire-driver
         // src/monitor/lowering/program.rs), the value `usize::MAX` that leads the body path of
-        // an expression reading binder slots. Not asserted: that each read resolves to the slot
-        // of the binder that declared it (only that the reads are told apart).
+        // an expression reading binder slots. That each read resolves to the slot of its own
+        // binder is asserted separately, below.
         assert!(reads
             .iter()
             .all(|(_, path)| path.first() == Some(&usize::MAX)));
@@ -2174,4 +2181,213 @@ fn step_11_each_step_budget_field_one_below_its_use_reports_the_exact_stop() {
         // at tick 0). A field that stops being drawn on, or a new one that starts, fails here.
         assert_eq!(exercised, EXERCISED, "build={during_build}");
     }
+}
+
+fn top_level(key: &impl std::fmt::Debug) -> Vec<String> {
+    let text = format!("{key:?}");
+    let start = text.find('[').expect("a key list") + 1;
+    let (mut depth, mut quoted, mut current, mut out) = (0_i32, false, String::new(), Vec::new());
+    for c in text[start..].chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                current.push(c);
+            }
+            '(' | '[' if !quoted => {
+                depth += 1;
+                current.push(c);
+            }
+            ')' | ']' if !quoted => {
+                if depth == 0 {
+                    break;
+                }
+                depth -= 1;
+                current.push(c);
+            }
+            ',' if !quoted && depth == 0 => out.push(std::mem::take(&mut current)),
+            _ => current.push(c),
+        }
+    }
+    out
+}
+
+/// The name a binder or read declares in its IR key (read from the key's own segments).
+fn key_names(key: &impl std::fmt::Debug) -> Vec<String> {
+    top_level(key)
+        .into_iter()
+        .map(|segment| segment.trim_matches('"').to_owned())
+        .collect()
+}
+
+/// Every operand of an operation with the binders (name, slot) it brings into scope for that
+/// operand. Binder names come from the IR keys of the binding expressions: a `let` key is
+/// `["expression","let",<name>,..]`, a map/filter key `["expression","collection",<seq>,<item>,..]`
+/// and a fold key `["expression","collection",<seq>,<acc>,<item>,..]`.
+fn operands(
+    expression: &quire_contract_runtime::monitor::Expression,
+) -> Vec<(
+    quire_contract_runtime::monitor::ExpressionId,
+    Vec<(String, usize)>,
+)> {
+    use quire_contract_runtime::monitor::Operation as Op;
+    let names = key_names(&expression.key);
+    let plain = |ids: &[quire_contract_runtime::monitor::ExpressionId]| {
+        ids.iter().map(|id| (*id, Vec::new())).collect::<Vec<_>>()
+    };
+    match &expression.operation {
+        Op::Literal(_) | Op::Argument { .. } | Op::Local(_) => Vec::new(),
+        Op::Let {
+            binding,
+            value,
+            body,
+        } => vec![
+            (*value, Vec::new()),
+            (*body, vec![(names[2].clone(), binding.position)]),
+        ],
+        Op::SequenceFold {
+            sequence,
+            initial,
+            accumulator,
+            item,
+            body,
+        } => vec![
+            (*sequence, Vec::new()),
+            (*initial, Vec::new()),
+            (
+                *body,
+                vec![
+                    (names[3].clone(), accumulator.position),
+                    (names[4].clone(), item.position),
+                ],
+            ),
+        ],
+        Op::SequenceMap {
+            sequence,
+            item,
+            body,
+        } => vec![
+            (*sequence, Vec::new()),
+            (*body, vec![(names[3].clone(), item.position)]),
+        ],
+        Op::SequenceFilter {
+            sequence,
+            item,
+            predicate,
+        } => vec![
+            (*sequence, Vec::new()),
+            (*predicate, vec![(names[3].clone(), item.position)]),
+        ],
+        Op::Call { arguments, .. } => plain(arguments),
+        Op::Record { fields } => fields.iter().map(|(_, id)| (*id, Vec::new())).collect(),
+        Op::Tuple { positions } | Op::Union { positions, .. } => plain(positions),
+        Op::Sequence { elements } => plain(elements),
+        Op::SequenceSize { value }
+        | Op::SequenceFlatten { value }
+        | Op::UnionIs { value, .. }
+        | Op::UnionPayload { value, .. }
+        | Op::TupleElement { value, .. }
+        | Op::RecordField { value, .. }
+        | Op::IntegerNegate { value }
+        | Op::BooleanNot { value } => plain(&[*value]),
+        Op::Equality { left, right, .. }
+        | Op::IntegerAdd { left, right }
+        | Op::IntegerSubtract { left, right }
+        | Op::IntegerMultiply { left, right }
+        | Op::IntegerOrder { left, right, .. }
+        | Op::BooleanAnd { left, right }
+        | Op::BooleanOr { left, right } => plain(&[*left, *right]),
+        Op::If {
+            condition,
+            when_true,
+            when_false,
+        } => plain(&[*condition, *when_true, *when_false]),
+    }
+}
+
+#[test]
+fn every_local_read_resolves_to_the_slot_of_its_innermost_enclosing_binder() {
+    use quire_contract_runtime::monitor::{ExpressionId, FunctionId, Operation};
+    let prepared = prepare(0);
+    let program = &prepared.program;
+    // Walk every function body keeping the binders in scope. The expectation comes from the
+    // Program's own binder declarations and nesting, matched to each read by the name its IR
+    // key carries (the IR key of a read is name, level and type; the driver's slot assignment
+    // is what is under test). This checks the Program against itself plus those IR key
+    // names; it does not re-derive scoping from the checked package.
+    let mut visited = std::collections::BTreeSet::new();
+    let mut resolved = 0_usize;
+    // (function, name) -> distinct slots that name resolved to.
+    let mut slots: BTreeMap<(usize, String), std::collections::BTreeSet<usize>> = BTreeMap::new();
+    let mut function = 0;
+    while let Some(owner) = program.function(FunctionId(function)) {
+        let mut stack = vec![(owner.body, Vec::<(String, usize)>::new())];
+        while let Some((id, scope)) = stack.pop() {
+            visited.insert(id.0);
+            let expression = program.expression(id).expect("a retained expression");
+            if let Operation::Local(local) = &expression.operation {
+                let names = key_names(&expression.key);
+                let (name, level) = (&names[4], names[7].parse::<usize>().expect("a level"));
+                let (_, slot) = scope
+                    .iter()
+                    .rev()
+                    .find(|(declared, _)| declared == name)
+                    .unwrap_or_else(|| {
+                        panic!("read of {name} (expression {}) has no binder", id.0)
+                    });
+                assert_eq!(local.function, FunctionId(function), "read {} owner", id.0);
+                assert_eq!(
+                    local.position, *slot,
+                    "read {} of {name} (level {level}) resolves to slot {} but its binder declared {slot}",
+                    id.0, local.position
+                );
+                // The IR level of the read is the depth of that binder: parameters, then one
+                // per enclosing binder.
+                let index = scope
+                    .iter()
+                    .rposition(|(declared, _)| declared == name)
+                    .unwrap();
+                assert_eq!(
+                    level,
+                    owner.parameters.len() + index,
+                    "read {} of {name}: IR level against binder depth",
+                    id.0
+                );
+                slots
+                    .entry((function, name.clone()))
+                    .or_default()
+                    .insert(*slot);
+                resolved += 1;
+            }
+            for (child, introduced) in operands(expression) {
+                let mut inner = scope.clone();
+                inner.extend(introduced);
+                stack.push((child, inner));
+            }
+        }
+        function += 1;
+    }
+    // Non-vacuity: every Local in the arena was reached through a function body and checked,
+    // and some name is declared by more than one binder of one function (distinct slots).
+    let total = (0..)
+        .map_while(|id| program.expression(ExpressionId(id)))
+        .filter(|e| matches!(e.operation, Operation::Local(_)))
+        .count();
+    let reached = visited
+        .iter()
+        .filter(|id| {
+            matches!(
+                program.expression(ExpressionId(**id)).unwrap().operation,
+                Operation::Local(_)
+            )
+        })
+        .count();
+    assert!(
+        total > 20 && reached == total,
+        "{reached} of {total} reads reached"
+    );
+    assert!(resolved >= total);
+    assert!(
+        slots.values().any(|set| set.len() > 1),
+        "some name is bound to different slots in one function"
+    );
 }
