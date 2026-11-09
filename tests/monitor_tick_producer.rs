@@ -60,7 +60,8 @@
 //!   own function, and its IR level must equal the parameter count plus that binder's depth.
 //!   The expectation comes from the Program's own binder declarations and nesting plus the names
 //!   and levels in the IR keys of the binders and reads; it is not re-derived from the checked
-//!   package.
+//!   package, and it does not execute the Program: it is Program self-consistency plus the
+//!   IR-key level anchor.
 //!
 //! Planned (the exact missing API):
 //! - AC-4, "equal timestamps without an admitted order": the producer always supplies an admitted
@@ -2219,6 +2220,27 @@ fn key_names(key: &impl std::fmt::Debug) -> Vec<String> {
         .collect()
 }
 
+const LET: &str = r#"["expression","let",<name>,..]"#;
+const MAP_FILTER: &str = r#"["expression","collection",<seq>,<item>,..]"#;
+const FOLD: &str = r#"["expression","collection",<seq>,<acc>,<item>,..]"#;
+const READ: &str = r#"["value","parameter","name",<type>,<name>,"level",<type>,<level>,..]"#;
+
+/// The `index`th segment of a binder or read key, or a failure naming the expected layout.
+///
+/// The layouts are the IR key shapes of the producer's generated closure, as observed in this
+/// Program (not defined in this crate): let `["expression","let",<name>,..]`; map/filter
+/// `["expression","collection",<seq>,<item>,..]`; fold
+/// `["expression","collection",<seq>,<acc>,<item>,..]`; read
+/// `["value","parameter","name",<text type>,<name>,"level",<int type>,<level>,..]`.
+fn segment(names: &[String], index: usize, layout: &str) -> String {
+    names
+        .get(index)
+        .unwrap_or_else(|| {
+            panic!("key segment {index} missing; expected layout {layout}: {names:?}")
+        })
+        .clone()
+}
+
 /// Every operand of an operation with the binders (name, slot) it brings into scope for that
 /// operand. Binder names come from the IR keys of the binding expressions: a `let` key is
 /// `["expression","let",<name>,..]`, a map/filter key `["expression","collection",<seq>,<item>,..]`
@@ -2242,7 +2264,7 @@ fn operands(
             body,
         } => vec![
             (*value, Vec::new()),
-            (*body, vec![(names[2].clone(), binding.position)]),
+            (*body, vec![(segment(&names, 2, LET), binding.position)]),
         ],
         Op::SequenceFold {
             sequence,
@@ -2256,8 +2278,8 @@ fn operands(
             (
                 *body,
                 vec![
-                    (names[3].clone(), accumulator.position),
-                    (names[4].clone(), item.position),
+                    (segment(&names, 3, FOLD), accumulator.position),
+                    (segment(&names, 4, FOLD), item.position),
                 ],
             ),
         ],
@@ -2267,7 +2289,7 @@ fn operands(
             body,
         } => vec![
             (*sequence, Vec::new()),
-            (*body, vec![(names[3].clone(), item.position)]),
+            (*body, vec![(segment(&names, 3, MAP_FILTER), item.position)]),
         ],
         Op::SequenceFilter {
             sequence,
@@ -2275,7 +2297,10 @@ fn operands(
             predicate,
         } => vec![
             (*sequence, Vec::new()),
-            (*predicate, vec![(names[3].clone(), item.position)]),
+            (
+                *predicate,
+                vec![(segment(&names, 3, MAP_FILTER), item.position)],
+            ),
         ],
         Op::Call { arguments, .. } => plain(arguments),
         Op::Record { fields } => fields.iter().map(|(_, id)| (*id, Vec::new())).collect(),
@@ -2326,7 +2351,10 @@ fn every_local_read_resolves_to_the_slot_of_its_innermost_enclosing_binder() {
             let expression = program.expression(id).expect("a retained expression");
             if let Operation::Local(local) = &expression.operation {
                 let names = key_names(&expression.key);
-                let (name, level) = (&names[4], names[7].parse::<usize>().expect("a level"));
+                let name = &segment(&names, 4, READ);
+                let level = segment(&names, 7, READ)
+                    .parse::<usize>()
+                    .expect("the read key's level segment is an integer");
                 let (_, slot) = scope
                     .iter()
                     .rev()
@@ -2385,7 +2413,7 @@ fn every_local_read_resolves_to_the_slot_of_its_innermost_enclosing_binder() {
         total > 20 && reached == total,
         "{reached} of {total} reads reached"
     );
-    assert!(resolved >= total);
+    assert!(resolved >= reached);
     assert!(
         slots.values().any(|set| set.len() > 1),
         "some name is bound to different slots in one function"
