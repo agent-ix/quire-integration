@@ -1054,13 +1054,14 @@ fn step_3_each_foreign_binding_component_is_refused_before_settling_anything() {
     );
 }
 
-// FINDING (not tagged FR-276-AC-4): the two arrival orders of two equal-tick events settle
-// different obligations (request first: the acknowledgement answers the request; acknowledgement
-// first: the request fails), and the reference evaluator agrees with the runtime in both. AC-4
-// says equal timestamps without an admitted order never gain causality from arrival order, so
-// this pipeline does not show that property; this test only pins the runtime to the oracle.
+// An admitted order is in play (the producer's model-step order, carried in the program layout
+// and required by the runtime), so this does NOT exercise FR-276-AC-4's "equal timestamps
+// without an admitted order" clause. That clause is not covered: the fixture cannot omit the
+// order and the runtime refuses any other order. The different outcomes of the two arrival
+// orders are therefore expected, not a defect. No FR tag is claimed.
 #[test]
-fn step_3_equal_tick_events_in_each_arrival_order_agree_with_the_reference_evaluator() {
+fn step_3_equal_tick_events_in_both_arrival_orders_under_the_admitted_order_agree_with_the_reference(
+) {
     let prepared = sixteen_bit();
     let (req, ack) = (prepared.atom(0), prepared.atom(1));
     for (first, second) in [(req, ack), (ack, req)] {
