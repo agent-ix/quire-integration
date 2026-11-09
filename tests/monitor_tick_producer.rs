@@ -11,12 +11,19 @@
 //!
 //! Covered in this file, through QSL source -> producer -> `prepare_monitor` -> RT:
 //! - Steps 1-3, 6-9: the `step_1_` .. `step_9_` tests (AC-1, AC-3, AC-8 .. AC-11).
-//! - Step 2 / AC-2 and AC-5: `step_2_once_overflow_...` (22-slot overflow, `Incomplete`, capacity
-//!   and setting text) and `step_2_a_shorter_window_buffer_overflows_while_its_sibling_stays_live`
-//!   (a 2 ms and a 10 ms `once` get capacities 6 and 22; the 2 ms obligation is `Incomplete(6)`
-//!   from event 6 while the 10 ms sibling keeps its identity and its own `False` rows until it
-//!   overflows at event 22). A fault (not a limit) on one obligation leaves the others alone in
-//!   `step_7_a_gap_fault_drops_only_the_open_instance_and_rebases_the_next_delta`.
+//! - Step 2 / AC-2: `step_2_once_overflow_...` (22-slot overflow, `Incomplete`, capacity and
+//!   setting text), `step_2_a_shorter_window_buffer_overflows_while_its_sibling_stays_live` (a
+//!   2 ms and a 10 ms `once` get capacities 6 and 22; the 2 ms obligation is `Incomplete(6)` from
+//!   event 6 while the 10 ms sibling keeps its identity and its own `False` rows until it
+//!   overflows at event 22; both limit/setting texts asserted) and
+//!   `step_2_an_instance_beyond_the_activation_capacity_names_the_activation_limit` (nine
+//!   `on each` activations against `max_activations: 8`: the 9th yields `Incomplete(8)` naming
+//!   `activation` / `monitor.max_activations`). AC-2 is Covered.
+//! - Step 5 / AC-5: `step_5_the_step_api_carries_five_distinct_outcome_kinds_...` asserts, in
+//!   one place and against the oracle, that definite (True/False), Indeterminate, Pending,
+//!   Incomplete and Failed all occur and each row carries a known obligation id. The fault test
+//!   `step_7_..._rebases_the_next_delta` is tagged AC-9 only and is not cited for AC-5.
+//!   AC-5 is Covered for the five kinds; "a stop that consumed nothing" is step 8 (AC-13).
 //! - Step 4 / AC-6 (partial): independence of two monitors from one plan, and retention of the
 //!   layout, the four entries, the declared State/Inputs/Scope types, one capture per atom and
 //!   the buffer capacities after the producer root is dropped
@@ -32,11 +39,21 @@
 //! - Step 10 / AC-12: `monitor_program.rs::state_bound_violations_fail_at_the_entry_site_commit_nothing_and_terminate`
 //!   over a controlled arena (the real producer never emits an over-bound entry).
 //! - Step 11 / AC-13 (partial): `step_11_each_step_budget_field_one_below_its_use_reports_the_exact_stop`
-//!   (build and a real event; every field the program draws on, the others unused), plus the
+//!   (build and a real event). The exact set of fields drawn on is asserted per phase
+//!   (`EXERCISED`: work, stack_frames, scratch_elements, scratch_bytes, integer_bits,
+//!   value_occurrences, work_units, result_units); skipped as never drawn on by this clause:
+//!   decimal_digits, scale_expansion, text_input_bytes, text_scalars, normalized_scalars,
+//!   unit_edges. The event phase samples only the first event (tick 0), not every event kind.
+//!   The bisection over each field takes about 12 s per run. Plus the
 //!   TC-098 / IT-018 / interface-002 tests in `monitor_program.rs` for allocator denials over a
 //!   controlled arena.
-//! - Binder identity: `binders_authored_in_atom_bodies_never_reach_the_runtime_program` and
-//!   `the_generated_program_reads_equal_keyed_variables_from_different_slots`.
+//! - Binder identity (two narrow claims, neither a binder-semantics test):
+//!   `authored_binders_are_not_lowered_into_the_program` (atom bodies with `let`s leave the
+//!   Program identical to a baseline: they are not lowered) and
+//!   `producer_generated_equal_keyed_locals_live_in_distinct_slots_with_distinct_body_paths`
+//!   (producer-generated equal-keyed `Local` reads carry distinct body paths, each led by the
+//!   driver's `usize::MAX` binder-scope marker, which this test names as a coupling to the
+//!   driver's constant). Slot resolution of those reads is not asserted.
 //!
 //! Planned (the exact missing API):
 //! - AC-4, "equal timestamps without an admitted order": the producer always supplies an admitted
@@ -88,6 +105,10 @@ pub mod observation;
 const CLAUSE: &str = r#"temporal C using timed over (candidate: Selected::ConfigVersion) clock "model-time" on origin {
     always (holds(candidate.versionNumber = 2) implies eventually[0 ms, 3 ms] holds(candidate.versionNumber = 3))
 }"#;
+
+/// The capture field of an `on each ... when (..)` clause's activation guard; every other
+/// capture field is `a<formula node index>`.
+const GUARD_CAPTURE: &str = "guard";
 
 const LIMITS: MonitorPreparationLimits = MonitorPreparationLimits {
     work: 100_000_000,
@@ -480,10 +501,10 @@ impl Run {
             .capture_fields()
             .into_iter()
             .map(|name| {
-                let holds = match name[1..].parse::<usize>() {
-                    Ok(node) => holding.contains(&node),
-                    // The activation guard of an `on each ... when (..)` clause.
-                    Err(_) => true,
+                let holds = if name == GUARD_CAPTURE {
+                    true
+                } else {
+                    holding.contains(&name[1..].parse::<usize>().expect("a<node index>"))
                 };
                 (name, FieldValue::Present(Value::Boolean(holds)))
             })
@@ -521,9 +542,10 @@ impl Run {
             .capture_fields()
             .into_iter()
             .map(|name| {
-                let holds = match name[1..].parse::<usize>() {
-                    Ok(node) => holding.contains(&node),
-                    Err(_) => guard,
+                let holds = if name == GUARD_CAPTURE {
+                    guard
+                } else {
+                    holding.contains(&name[1..].parse::<usize>().expect("a<node index>"))
                 };
                 (name, FieldValue::Present(Value::Boolean(holds)))
             })
@@ -736,7 +758,10 @@ fn reference_rows(results: Vec<qsl_eval::temporal::TickResult>) -> Vec<Row> {
                 TickOutcome::False => Out::False,
                 TickOutcome::Pending => Out::Pending,
                 TickOutcome::Indeterminate => Out::Indeterminate,
-                TickOutcome::Incomplete { capacity } => Out::Incomplete(capacity),
+                // The two limits differ in the payload names RT reports (asserted on the
+                // typed result where it matters); both carry the capacity reached.
+                TickOutcome::Incomplete { capacity }
+                | TickOutcome::ActivationLimit { capacity } => Out::Incomplete(capacity),
                 TickOutcome::Failed {
                     gap,
                     max_reading_gap,
@@ -774,7 +799,8 @@ fn run_both(prepared: &Prepared, inputs: &[In]) -> (Vec<Vec<Row>>, Vec<Vec<Row>>
     let atoms: Vec<usize> = run
         .capture_fields()
         .iter()
-        .filter_map(|name| name[1..].parse().ok())
+        .filter(|name| *name != GUARD_CAPTURE)
+        .map(|name| name[1..].parse().expect("a<node index>"))
         .collect();
     let mut runtime = Vec::new();
     let mut oracle = Vec::new();
@@ -1548,6 +1574,94 @@ fn step_9_event_position_counts_ingested_events_through_the_producer_plan() {
 }
 
 // ---------------------------------------------------------------------------
+// AC-5: five distinct outcome kinds, each carrying its obligation's identity.
+
+fn kind(out: &Out) -> &'static str {
+    match out {
+        Out::True | Out::False => "definite",
+        Out::Pending => "pending",
+        Out::Indeterminate => "indeterminate",
+        Out::Incomplete(_) => "incomplete",
+        Out::Failed { .. } => "failed",
+        Out::Other(_) => "other",
+    }
+}
+
+#[trace("TC-200", "FR-276-AC-5")]
+#[test]
+fn step_5_the_step_api_carries_five_distinct_outcome_kinds_with_obligation_identities() {
+    let mut seen: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut note = |prepared: &Prepared, rows: &[Vec<Row>]| {
+        for (_, id, out) in rows.iter().flatten() {
+            assert!(
+                *id == prepared.ids.root
+                    || *id == prepared.ids.interval
+                    || prepared.reference.capacities.contains_key(&(*id as usize)),
+                "outcome for an unknown obligation {id}"
+            );
+            *seen.entry(kind(out)).or_default() += 1;
+        }
+    };
+    // Definite and indeterminate: the 3 ms obligation at acknowledgements 2998 and 3000.
+    for ack in [2998, 3000] {
+        let prepared = prepare(0);
+        let rows = assert_agree(
+            &prepared,
+            &[
+                In::Event(0, vec![prepared.atom(0)]),
+                In::Event(ack, vec![prepared.atom(1)]),
+            ],
+        );
+        note(&prepared, &rows);
+    }
+    // Pending: a half-open window whose acknowledgement came in time, until progress closes
+    // the root.
+    let half_open = r#"temporal C using timed over (candidate: Selected::ConfigVersion) clock "model-time" on origin {
+    always (holds(candidate.versionNumber = 2) implies eventually[0 ms, 3 ms) holds(candidate.versionNumber = 3))
+}"#;
+    let prepared = prepare_with(half_open, MICROSECONDS, "us", &microsecond_target(0));
+    let rows = assert_agree(
+        &prepared,
+        &[
+            In::Event(0, vec![prepared.atom(0)]),
+            In::Event(2998, vec![prepared.atom(1)]),
+            In::Watermark(2998 + 3500),
+        ],
+    );
+    note(&prepared, &rows);
+    // Incomplete: a buffer past its capacity.
+    let target = MonitorTarget {
+        max_event_rate: Some(Rational::new(Integer::from(2_u64), Integer::from(1000_u64)).unwrap()),
+        ..microsecond_target(0)
+    };
+    let prepared = prepare_with(ONCE, MICROSECONDS, "us", &target);
+    let inputs: Vec<In> = (0..=22).map(|i| In::Event(i * 100, Vec::new())).collect();
+    let rows = assert_agree(&prepared, &inputs);
+    note(&prepared, &rows);
+    // Failed: a reading that goes backward on the 16-bit counter.
+    let prepared = sixteen_bit();
+    let rows = assert_agree(
+        &prepared,
+        &[
+            In::Event(65530, vec![prepared.atom(0)]),
+            In::Event(65500, vec![prepared.atom(1)]),
+        ],
+    );
+    note(&prepared, &rows);
+    assert_eq!(
+        seen.keys().copied().collect::<Vec<_>>(),
+        [
+            "definite",
+            "failed",
+            "incomplete",
+            "indeterminate",
+            "pending"
+        ],
+        "{seen:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Binder identity: do equal-keyed IR variables reach the runtime, and what do they do there?
 
 /// Every lowered expression of a Program, as a comparable record.
@@ -1597,10 +1711,11 @@ fn binder_prepared(atom: &str) -> Prepared {
 }
 
 #[test]
-fn binders_authored_in_atom_bodies_never_reach_the_runtime_program() {
-    // The atom bodies are evaluated by the observation owner; the producer's closure that the
-    // driver lowers holds only its own generated entries. So the Program is exactly the one
-    // for a binder-free atom, whatever binders the atom writes.
+fn authored_binders_are_not_lowered_into_the_program() {
+    // The atom bodies are not evaluated here, and the literals in them (18, 23, ...) are dead:
+    // the claim is only that the producer's closure which the driver lowers holds its own
+    // generated entries, so the Program is identical (key, body path, type of every
+    // expression) to the one for a binder-free atom, whatever binders the atom writes.
     let baseline = binder_prepared("holds(candidate.versionNumber = 2)");
     let expected = program_fingerprint(&baseline.program);
     assert!(expected.len() > 100, "a real generated program");
@@ -1611,20 +1726,11 @@ fn binders_authored_in_atom_bodies_never_reach_the_runtime_program() {
             expected,
             "the Program differs for {atom}"
         );
-        // And the verdicts still agree with the QSL reference evaluator.
-        assert_agree(
-            &prepared,
-            &[
-                In::Event(0, vec![prepared.atom(0)]),
-                In::Event(2998, vec![prepared.atom(1)]),
-                In::Watermark(2998 + 3500),
-            ],
-        );
     }
 }
 
 #[test]
-fn the_generated_program_reads_equal_keyed_variables_from_different_slots() {
+fn producer_generated_equal_keyed_locals_live_in_distinct_slots_with_distinct_body_paths() {
     use quire_contract_runtime::monitor::Operation;
     // Group the generated Program's local reads by (IR key, owning function). More than one
     // slot under one key is the IR collision (same name, level and type) that the driver
@@ -1663,6 +1769,10 @@ fn the_generated_program_reads_equal_keyed_variables_from_different_slots() {
             reads.len(),
             "equal-keyed reads are told apart: {reads:?}"
         );
+        // Coupled to the driver's private `BINDER_SCOPED` marker (quire-driver
+        // src/monitor/lowering/program.rs), the value `usize::MAX` that leads the body path of
+        // an expression reading binder slots. Not asserted: that each read resolves to the slot
+        // of the binder that declared it (only that the reads are told apart).
         assert!(reads
             .iter()
             .all(|(_, path)| path.first() == Some(&usize::MAX)));
@@ -1671,6 +1781,46 @@ fn the_generated_program_reads_equal_keyed_variables_from_different_slots() {
         !collided.is_empty(),
         "the generated entries bind the same variable more than once"
     );
+}
+
+const EACH_EVENT: &str = r#"temporal C using timed over (candidate: Selected::ConfigVersion) clock "model-time" on each (w: Selected::ConfigVersion) {
+    eventually holds(candidate.versionNumber = 3)
+}"#;
+
+#[trace("TC-200", "FR-276-AC-2")]
+#[test]
+fn step_2_an_instance_beyond_the_activation_capacity_names_the_activation_limit() {
+    // `on each` starts an unbounded `eventually` at every event; the target allows 8 live
+    // instances and none is satisfied, so the 9th event's instance is the first beyond it.
+    let prepared = prepare_with(EACH_EVENT, MICROSECONDS, "us", &microsecond_target(0));
+    assert_eq!(prepared.reference.activation_capacity, 8);
+    let inputs: Vec<In> = (0..9).map(|i| In::Event(i * 1000, Vec::new())).collect();
+    let rows = assert_agree(&prepared, &inputs);
+    assert!(
+        rows[..8].iter().all(Vec::is_empty),
+        "eight instances start quietly"
+    );
+    assert_eq!(
+        rows[8],
+        vec![(8000, prepared.ids.root, Out::Incomplete(8))],
+        "the 9th instance is not started and yields the limit"
+    );
+    // The complete typed result of the same RT run: limit `activation`, setting
+    // `monitor.max_activations`, the capacity as the amount.
+    let mut run = Run::new(&prepared);
+    let mut last = Vec::new();
+    for input in &inputs {
+        let In::Event(tick, holding) = input else {
+            unreachable!()
+        };
+        last = run.event_atoms(*tick, holding).expect("admitted event");
+    }
+    let [limited] = &last[..] else {
+        panic!("one settled obligation: {last:?}");
+    };
+    assert_eq!(limited.outcome, "Incomplete");
+    assert_eq!(limited.texts, ["activation", "monitor.max_activations"]);
+    assert_eq!(limited.payload, [Integer::from(8_u64)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1698,8 +1848,8 @@ fn step_2_a_shorter_window_buffer_overflows_while_its_sibling_stays_live() {
         .iter()
         .map(|(id, capacity)| (*capacity, *id as u64))
         .collect();
-    let (small, large) = (by_capacity[&6], by_capacity[&22]);
     assert_eq!(by_capacity.len(), 2, "two buffers of different capacity");
+    let (small, large) = (by_capacity[&6], by_capacity[&22]);
     // Neither atom ever holds, 100 us apart: every window keeps filling.
     let inputs: Vec<In> = (0..30).map(|i| In::Event(i * 100, Vec::new())).collect();
     let rows = assert_agree(&prepared, &inputs);
@@ -1731,6 +1881,25 @@ fn step_2_a_shorter_window_buffer_overflows_while_its_sibling_stays_live() {
             },
             "10 ms buffer at event {index}"
         );
+    }
+    // The complete typed results of the same RT run at the last event: each buffer names its
+    // own capacity with the same limit and setting.
+    let mut run = Run::new(&prepared);
+    let mut last = Vec::new();
+    for input in &inputs {
+        let In::Event(tick, holding) = input else {
+            unreachable!()
+        };
+        last = run.event_atoms(*tick, holding).expect("admitted event");
+    }
+    for (id, capacity) in [(small, 6_u64), (large, 22)] {
+        let limited = last
+            .iter()
+            .find(|settled| settled.subformula == Integer::from(id))
+            .expect("both buffers settle at the last event");
+        assert_eq!(limited.outcome, "Incomplete");
+        assert_eq!(limited.texts, ["event_buffer", "monitor.max_event_rate"]);
+        assert_eq!(limited.payload, [Integer::from(capacity)]);
     }
 }
 
@@ -1772,6 +1941,7 @@ fn step_6_a_false_activation_guard_starts_no_root_instance() {
     );
 }
 
+#[trace("TC-200", "FR-276-AC-6")]
 #[test]
 fn step_4_the_admitted_program_retains_its_layout_entries_and_declared_types() {
     // `prepare` has dropped the producer root and every driver object; only the Program stays.
@@ -1936,6 +2106,18 @@ fn stop_under(
     )
 }
 
+/// The fields both phases draw on; the others of `budget_fields` are never drawn on by this clause.
+const EXERCISED: &[&str] = &[
+    "work",
+    "stack_frames",
+    "scratch_elements",
+    "scratch_bytes",
+    "integer_bits",
+    "value_occurrences",
+    "work_units",
+    "result_units",
+];
+
 #[trace("TC-200", "FR-276-AC-13")]
 #[test]
 fn step_11_each_step_budget_field_one_below_its_use_reports_the_exact_stop() {
@@ -1988,9 +2170,8 @@ fn step_11_each_step_budget_field_one_below_its_use_reports_the_exact_stop() {
             }
             exercised.push(name);
         }
-        assert!(
-            exercised.contains(&"work") && exercised.contains(&"stack_frames"),
-            "build={during_build}: exercised {exercised:?}"
-        );
+        // Exactly these fields are drawn on (the event phase samples only the first event,
+        // at tick 0). A field that stops being drawn on, or a new one that starts, fails here.
+        assert_eq!(exercised, EXERCISED, "build={during_build}");
     }
 }
