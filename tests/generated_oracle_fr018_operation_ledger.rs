@@ -48,7 +48,9 @@ const SOURCE: &str = concat!(
     "profile v = \"quire.value.complete/v1\";\n",
     "tuple Pair(Boolean, Boolean);\n",
     "union Choice { First, Second }\n",
-    "union PayloadChoice { First(Integer), Second(Integer) }\n",
+    "union PayloadChoice { Left(Int[0,9]), Right(Int[0,9]) }\n",
+    "record Tree { kids: Sequence<Tree>[0,3]; }\n",
+    "record Node { id: Int[0,9]; next: Node?; }\n",
     "record Flag { flag: Boolean; }\n",
     "record Outer { inner: Flag; level: Int[0,9]; }\n",
     "function pairEq using v(left: Pair, right: Pair): Boolean pure { left = right }\n",
@@ -63,11 +65,24 @@ const SOURCE: &str = concat!(
     "function choiceNe using v(left: Choice, right: Choice): Boolean pure { left != right }\n",
     "function payloadChoiceEq using v(left: PayloadChoice, right: PayloadChoice): Boolean pure { left = right }\n",
     "function payloadChoiceNe using v(left: PayloadChoice, right: PayloadChoice): Boolean pure { left != right }\n",
+    "function nodeEq using v(left: Node, right: Node): Boolean pure { left = right }\n",
+    "function nodeNe using v(left: Node, right: Node): Boolean pure { left != right }\n",
+    "function makeNodeA using v(): Node pure { Node { id: 1 } }\n",
+    "function makeNodeB using v(): Node pure { Node { id: 1, next: Node { id: 2 } } }\n",
+    "function makeNodeC using v(): Node pure { Node { id: 1, next: Node { id: 3 } } }\n",
+    "function convEq using v(left: Int[-5,5], right: Int[-5,5]): Boolean pure { convert<Integer>(left) = convert<Integer>(right) }\n",
+    "function convNe using v(left: Int[-5,5], right: Int[-5,5]): Boolean pure { convert<Integer>(left) != convert<Integer>(right) }\n",
+    "function makeSmallA using v(): Int[-5,5] pure { -2 }\n",
+    "function makeSmallB using v(): Int[-5,5] pure { 3 }\n",
+    "function treeEq using v(left: Tree, right: Tree): Boolean pure { left = right }\n",
+    "function treeNe using v(left: Tree, right: Tree): Boolean pure { left != right }\n",
+    "function makeTreeA using v(): Tree pure { Tree { kids: sequence[] } }\n",
+    "function makeTreeB using v(): Tree pure { Tree { kids: sequence[Tree { kids: sequence[] }] } }\n",
     "function makeChoiceA using v(): Choice pure { Choice::First }\n",
     "function makeChoiceB using v(): Choice pure { Choice::Second }\n",
-    "function makePayloadChoiceA using v(): PayloadChoice pure { PayloadChoice::First(1) }\n",
-    "function makePayloadChoiceB using v(): PayloadChoice pure { PayloadChoice::First(2) }\n",
-    "function makePayloadChoiceC using v(): PayloadChoice pure { PayloadChoice::Second(1) }\n",
+    "function makePayloadChoiceA using v(): PayloadChoice pure { PayloadChoice::Left(1) }\n",
+    "function makePayloadChoiceB using v(): PayloadChoice pure { PayloadChoice::Left(2) }\n",
+    "function makePayloadChoiceC using v(): PayloadChoice pure { PayloadChoice::Right(1) }\n",
     "function makePairA using v(): Pair pure { Pair(true,false) }\n",
     "function makePairB using v(): Pair pure { Pair(false,true) }\n",
     "function makeFlagA using v(): Flag pure { Flag { flag: true } }\n",
@@ -81,7 +96,7 @@ const SOURCE: &str = concat!(
 );
 
 /// Shape, constructor names (the first is compared with itself and with each other).
-const SHAPES: [(&str, &[&str]); 6] = [
+const SHAPES: [(&str, &[&str]); 9] = [
     ("pair", &["makePairA", "makePairB"]),
     ("flag", &["makeFlagA", "makeFlagB"]),
     ("outer", &["makeOuterA", "makeOuterB", "makeOuterC"]),
@@ -95,6 +110,9 @@ const SHAPES: [(&str, &[&str]); 6] = [
             "makePayloadChoiceC",
         ],
     ),
+    ("node", &["makeNodeA", "makeNodeB", "makeNodeC"]),
+    ("tree", &["makeTreeA", "makeTreeB"]),
+    ("conv", &["makeSmallA", "makeSmallB"]),
 ];
 
 /// Work allowances: ample, exhausted before the first charge, and exhausted
@@ -174,10 +192,7 @@ fn composite_equality_ledgers_match_the_generated_oracle() {
             let Some(CheckedTerm::Application { arguments, .. }) = package.term(&node_id) else {
                 panic!("original equality application");
             };
-            let operand = |index: usize| {
-                let CheckedTerm::Reference { target } = &arguments[index] else {
-                    panic!("original parameter reference");
-                };
+            let find = |target: &CheckedNodeId| {
                 let selected = package
                     .resolved_graph()
                     .nodes
@@ -185,15 +200,47 @@ fn composite_equality_ledgers_match_the_generated_oracle() {
                     .filter(|node| &node.node_id == target)
                     .collect::<Vec<_>>();
                 let [node] = selected.as_slice() else {
-                    panic!("one original parameter");
+                    panic!("one original node");
                 };
-                EqualityOperandDescriptor::typed(node.semantic_type.clone())
+                (*node).clone()
             };
+            // A plain parameter reference is a typed operand; a reference to a
+            // `convert<T>` application is a converted operand whose source type
+            // is its argument parameter's type and whose target is its own.
+            let operand = |index: usize| {
+                let CheckedTerm::Reference { target } = &arguments[index] else {
+                    panic!("original operand reference");
+                };
+                let node = find(target);
+                match package.term(&node.node_id) {
+                    Some(CheckedTerm::Application {
+                        arguments: inner, ..
+                    }) => {
+                        let CheckedTerm::Reference { target: inner } = &inner[0] else {
+                            panic!("convert operand reference");
+                        };
+                        EqualityOperandDescriptor::converted(
+                            find(inner).semantic_type.clone(),
+                            node.semantic_type.clone(),
+                        )
+                    }
+                    _ => EqualityOperandDescriptor::typed(node.semantic_type.clone()),
+                }
+            };
+            let (left, right) = (operand(0), operand(1));
+            assert_eq!(
+                (
+                    left.conversion_target.is_some(),
+                    right.conversion_target.is_some()
+                ),
+                (shape == "conv", shape == "conv"),
+                "{shape}: only the convert<T> shape carries converted operands"
+            );
             items.push(CompositeEqualityItem {
                 node_id: node_id.clone(),
                 operator,
-                left: operand(0),
-                right: operand(1),
+                left,
+                right,
             });
             nodes.push(node_id);
             names.push(name);
@@ -264,10 +311,8 @@ let construct=|name:&str| -> Value {{
         ample = limits(1024),
     );
 
-    let mut refused = 0;
     for (index, name) in names.iter().enumerate() {
         let shape_index = index / 2;
-        let shape = SHAPES[shape_index].0;
         let (_, constructors) = SHAPES[shape_index];
         let equal_operator = index % 2 == 0;
         let claims = output
@@ -280,21 +325,7 @@ let construct=|name:&str| -> Value {{
             panic!("one claim for {name}");
         };
         let ClaimDisposition::Generated(generated) = &claim.result else {
-            // The one typed owner refusal that is allowed: a payload-carrying union
-            // operand. It is asserted, so any other refusal fails the test.
-            assert!(
-                shape == "payloadChoice"
-                    && matches!(
-                        &claim.result,
-                        ClaimDisposition::Refused {
-                            refusal: CompositeEqualityRefusal::CompositeContextMismatch { .. }
-                        }
-                    ),
-                "{name} unexpected disposition: {:?}",
-                claim.result
-            );
-            refused += 1;
-            continue;
+            panic!("{name} must generate: {:?}", claim.result);
         };
         // Each input with itself, then the first with every other.
         let mut pairs = vec![(0, 0)];
@@ -406,13 +437,9 @@ println!("IT019_OBSERVATION {{}}",oracle_observation::ledger_snapshot(&actual,&a
     }
     driver.push_str("}\n");
     assert_eq!(
-        refused, 2,
-        "payloadChoice Equal and NotEqual are typed owner refusals"
-    );
-    assert_eq!(
         expected.len(),
-        144,
-        "twelve credited input pairs (payload-carrying unions excluded), each with its inputs and five allowances, under both operators"
+        264,
+        "twenty-two input pairs, each with its inputs and five allowances, under both operators"
     );
     assert_eq!(
         generated_oracle::execute_with(

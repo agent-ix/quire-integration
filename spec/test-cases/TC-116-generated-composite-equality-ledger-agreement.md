@@ -22,13 +22,17 @@ production scoped charge capture on both sides.
 
 1. Author one original complete-profile source declaring a Boolean tuple, a
    Boolean record, a record nesting that record with an `Int[0,9]` field, a
-   `Sequence<Int[0,9]>[0,4]`, a nullary union `Choice { First, Second }` and an
-   Integer-payload union `PayloadChoice`. For each shape author an Equal function and a
+   `Sequence<Int[0,9]>[0,4]`, a nullary union `Choice { First, Second }`, a bounded-payload union
+   `PayloadChoice { Left(Int[0,9]), Right(Int[0,9]) }`, a recursive record
+   `Node { id: Int[0,9]; next: Node?; }`, a recursive `Tree { kids:
+   Sequence<Tree>[0,3]; }` and a comparison of two `convert<Integer>` operands
+   over `Int[-5,5]` parameters. For each shape author an Equal function and a
    NotEqual function comparing two parameters, and closed constructors for
    distinct values of that shape.
 2. Check and emit the source, strictly admit the package, select each equality
    body, derive each operand descriptor from its genuine referenced parameter
-   node, lower the occurrences, authenticate the contract and invoke public
+   node (a converted descriptor from the `convert<T>` application node and its
+   argument parameter), lower the occurrences, authenticate the contract and invoke public
    composite equality generation with the admitted context.
 3. Obtain every argument by running an original constructor through the checked
    package on the host and through the public checked closure in the native
@@ -53,13 +57,13 @@ production scoped charge capture on both sides.
 ## Expected Results
 
 `generated_oracle_fr018_operation_ledger::composite_equality_ledgers_match_the_generated_oracle`
-passes 144 observations: twelve input pairs under both operators, each pair
-contributing its reported inputs and five allowance observations. Generated and
+passes for twenty-two input pairs (2 tuple, 2 record, 3 nested record, 3 sequence,
+2 Choice, 3 PayloadChoice, 3 Node, 2 Tree, 2 convert), each under both operators
+with five allowance observations per pair and operator. Generated and
 independent observations are identical in outcome, admitted per-charge
 requests, denied points and counters, and the QSL call ledger agrees at the
 ample allowance.
 `generated_oracle_fr018_operation_ledger::changed_operand_descriptor_refuses_without_disturbing_a_sibling`
 passes the typed refusal control, which gives no execution credit.
-The Integer-payload union `PayloadChoice` is refused by CG with the typed
-`CompositeContextMismatch`; the test asserts that refusal for both operators and
-credits no payload-union execution.
+An unbounded `Integer` payload union and the all-optional `List` record are
+not part of this test case; see IT-019 for their Planned rows and owners.
