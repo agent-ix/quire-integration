@@ -1,6 +1,6 @@
 # Contributor guidance
 
-Read this file, `README.md`, `CONTENT_RIGHTS.md`, and the
+Read this file, `README.md`, and the
 owning issues before editing. This repository holds the cross-repository integration tests for Quire.
 
 ## Hash / digest / pin antipattern: present, slated for removal
@@ -33,7 +33,7 @@ version they ran.
 - Keep `publish = false`; use local tests only and do not add or dispatch hosted
   workflows without an explicit owner decision.
 - Do not copy source material, fixtures, or schemas whose distribution rights are
-  unresolved. Follow `CONTENT_RIGHTS.md` before the first commit and every import.
+  unresolved, before the first commit and on every import.
 - Run `make fmt-check`, `make lint`, `make test`, `make build`, `make deny`, and
   `make audit-unsafe` before requesting review. The unsafe audit uses the
   Cargo Clippy lint through `make lint`.
