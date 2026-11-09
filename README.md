@@ -95,5 +95,4 @@ make ci           # all of the gates
 
 Contributions need a signed Contributor License Agreement; see
 [CONTRIBUTING.md](CONTRIBUTING.md) and [CLA.md](CLA.md). Original content is
-licensed under `AGPL-3.0-or-later`; see [LICENSE](LICENSE) and
-[CONTENT_RIGHTS.md](CONTENT_RIGHTS.md).
+licensed under `AGPL-3.0-or-later`; see [LICENSE](LICENSE).
