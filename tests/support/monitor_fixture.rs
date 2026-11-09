@@ -9,8 +9,12 @@ use qsl_package::Emission;
 use qsl_replay::{spine::SpineLimits, MonitorTarget, TimingObligationSettings};
 use qsl_semantics::{library::LibraryName, model::intake::package_input};
 use quire_contract_ir::{
-    read_checked_package, CheckedNodeId, CheckedPackageDispatchResult, CheckedPackageReadLimits,
-    CheckedPackageV2,
+    read_checked_package, CheckedNodeId, CheckedOccurrenceRole, CheckedPackageDispatchResult,
+    CheckedPackageReadLimits, CheckedPackageV2, CheckedRational, CheckedSelectionRole, CheckedTerm,
+    NativeJoinBudget, SelectedFactRows,
+};
+use quire_driver::monitor::{
+    MonitorPreparationLimits, MonitorPreparationRequest, MonitorSelection,
 };
 use quire_exact::{Cancel, Integer, Rational};
 
@@ -194,6 +198,109 @@ temporal SelectedMonitor using timed over (candidate: Selected::ConfigVersion) c
         root,
         buffers,
     })
+}
+
+/// Construct independent inputs using the caller-selected original Claim ordinal.
+pub fn with_request(
+    fixture: &Fixture,
+    ordinal: u64,
+    test: impl FnOnce(MonitorPreparationRequest<'_>),
+) {
+    let package = fixture.package.as_ref();
+    let plan = package.monitor_plans().next().unwrap();
+    assert_eq!(package.monitor_plans().len(), 1);
+    let source = package
+        .source_map()
+        .iter()
+        .find(|row| {
+            row.node_id == *plan.clause()
+                && row.role == CheckedOccurrenceRole::Claim
+                && row.ordinal == ordinal
+        })
+        .unwrap();
+    let CheckedTerm::Application { arguments, .. } = package.term(plan.clause()).unwrap() else {
+        panic!("clause application");
+    };
+    let CheckedTerm::Reference { target: subject } = &arguments[0] else {
+        panic!("original over parameter");
+    };
+    let profile = package
+        .lock()
+        .profile_selections
+        .iter()
+        .find(|profile| {
+            profile.role == CheckedSelectionRole::TemporalProfile
+                && profile.definition.identity.ends_with("temporal.timed/v1")
+        })
+        .unwrap();
+    let clock = package
+        .temporal_bindings()
+        .unwrap_or_default()
+        .iter()
+        .find(|row| row.declaration == *plan.clause() && row.occurrence == source.ordinal);
+    let tick = fixture
+        .emission()
+        .selected_source_unit_rows()
+        .iter()
+        .find(|row| {
+            row.qualified_declaration
+                .last()
+                .is_some_and(|name| name.as_ref() == "ms")
+        })
+        .unwrap();
+    // Producer witness materialization has its own finite owner allowance;
+    // its charges precede the independent driver preparation request.
+    let mut equality_budget = NativeJoinBudget::new(100_000_000, 8 * 1024 * 1024)
+        .with_read_storage_limit(8 * 1024 * 1024);
+    let equality = fixture
+        .emission()
+        .equality_witness(package, &mut equality_budget)
+        .expect("native equality witness materialization within the fixture allowance");
+    let rate = CheckedRational {
+        numerator: "2".into(),
+        denominator: "1".into(),
+    };
+    let uncertainty = CheckedRational {
+        numerator: "0".into(),
+        denominator: "1".into(),
+    };
+    let request = MonitorPreparationRequest {
+        package,
+        selection: MonitorSelection::new(package, plan.node_id()),
+        package_lock: package.lock(),
+        root_key: plan.structural_key(),
+        entry_keys: [
+            plan.init().structural_key(),
+            plan.on_event().structural_key(),
+            plan.on_watermark().structural_key(),
+            plan.on_gap().structural_key(),
+        ],
+        clause: plan.clause(),
+        subject,
+        occurrence: source,
+        profile,
+        clock_binding: clock,
+        counter: fixture.counter,
+        tick_unit: &tick.structural_node,
+        counter_width_bits: 16,
+        max_reading_gap: 100,
+        max_event_rate: &rate,
+        uncertainty: &uncertainty,
+        buffers: &fixture.buffers,
+        activation_capacity: "8",
+        witnesses: SelectedFactRows {
+            declarations: fixture.emission().selected_exact_declaration_rows(),
+            fields: fixture.emission().selected_exact_field_rows(),
+            source_units: fixture.emission().selected_source_unit_rows(),
+            equality_applications: equality.applications(),
+            equality_facts: equality.facts(),
+        },
+        limits: MonitorPreparationLimits {
+            work: 100_000_000,
+            storage: 8 * 1024 * 1024,
+        },
+    };
+    test(request);
 }
 
 /// Explicit native read allowances shared by fixture construction and controls.

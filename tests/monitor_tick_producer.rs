@@ -5,6 +5,18 @@
 //! The expected outcomes are the TC-200 expected results, not the output of
 //! any other run.
 //!
+//! Where each TC-200 step is covered (steps 7-12 and the construction cells live beside the
+//! producer pipeline; the rest here):
+//! - Steps 1-4, 6-9: this file.
+//! - Step 10 (FR-276-AC-12): `monitor_program.rs::state_bound_violations_fail_at_the_entry_site_commit_nothing_and_terminate`
+//!   over a controlled arena (the real producer never emits an over-bound entry).
+//! - Steps 11-12 (AC-13, AC-14): `monitor_program.rs`: `first_layout_type_allocation_returns_native_membership_then_retries`,
+//!   `later_declared_type_walk_denials_keep_native_membership_and_source`,
+//!   `rt_validation_scratch_denial_stays_storage_after_five_layout_walks`,
+//!   `native_type_projection_keeps_allocation_and_capacity_requests_distinct`,
+//!   `deeply_shared_inline_arena_validates_on_a_small_native_stack`,
+//!   `executor_operating_stops_and_budget_replacement_are_typed_and_atomic`.
+//!
 //! Not covered through the public driver/RT API (so not tagged):
 //! - FR-276-AC-5 (sibling identity retained after a limit or fault): in a clause that and-s a
 //!   `once[0 ms, 10 ms]` with a longer `eventually`, the producer gives both buffers the same
@@ -12,14 +24,17 @@
 //! - FR-276-AC-6 (partial): independence of two monitors, no verdict from build, one shared
 //!   plan. Not asserted: subject/atom-body/topology retention, and rebinding (RT exposes no
 //!   rebind operation to attempt).
-//! - FR-276-AC-7 (partial): a foreign source selection and a starved build are covered. Not
-//!   covered: altered atom/transition/initializer/interval/buffer/activation/uncertainty/max-gap
-//!   and equal subformula ids under two subjects (`prepare_monitor` takes only the producer
-//!   root, so these cannot be injected; the driver suites own them), and `Unsupported`.
+//! - FR-276-AC-7 (partial): a foreign source selection and a starved build are covered here;
+//!   target-premise refusals are `monitor_refusal.rs::every_target_premise_names_its_actual_admitted_value`
+//!   and `monitor_closure.rs::a_tick_unit_of_another_dimension_is_a_target_mismatch`;
+//!   `Unsupported` is `monitor_lowering.rs::excluded_source_forms_stop_at_original_operation_without_partial_tuple`
+//!   (driver). Not covered: altered atom/transition/initializer/interval/buffer/activation
+//!   bindings and equal subformula ids under two subjects (`prepare_monitor` takes only the
+//!   producer root, so they cannot be injected).
 //! - FR-276-AC-8 (partial): a missing required captures field cannot be offered because the
 //!   typed record constructor refuses it first. Not covered: false activation (an `on origin`
-//!   clause has no guard) and executor-invariant failure with refusal of later input (no
-//!   public injection point).
+//!   clause has no guard) and a producer-plan executor-invariant failure (no public injection
+//!   point; the controlled-arena equivalent is the AC-12 test above).
 
 use std::{collections::BTreeMap, rc::Rc};
 
@@ -810,14 +825,18 @@ const ONCE: &str = r#"temporal C using timed over (candidate: Selected::ConfigVe
 #[trace("TC-200", "FR-276-AC-2")]
 #[test]
 fn step_2_once_overflow_is_incomplete_naming_the_producer_capacity() {
-    let prepared = prepare_with(ONCE, "", "ms", &millisecond_target(100));
+    // 2 events per millisecond is 2/1000 events per microsecond tick of the 1 MHz counter.
+    let target = MonitorTarget {
+        max_event_rate: Some(Rational::new(Integer::from(2_u64), Integer::from(1000_u64)).unwrap()),
+        ..microsecond_target(0)
+    };
+    let prepared = prepare_with(ONCE, MICROSECONDS, "us", &target);
     let [capacity] = prepared.capacities[..] else {
         panic!("one buffered operator");
     };
-    // FR-251 sizes the buffer as ceil(rate * R) + 1 for the widened tick window R, at QSL pin
-    // 64cc29bd: 2 events/ms over the 10 ms window and its tick cover gives 23. The RT spec text
-    // that says 21 is stale.
-    assert_eq!(capacity, 23);
+    // TC-200 step 2 / FR-276-AC-2: on the 1 MHz counter the producer's buffer is 22 slots
+    // (10 ms upper bound plus one tick of cover at 2 events/ms).
+    assert_eq!(capacity, 22);
     // The producer, not the runtime or this test, supplies the capacity.
     assert_eq!(
         prepared
@@ -828,10 +847,10 @@ fn step_2_once_overflow_is_incomplete_naming_the_producer_capacity() {
             .collect::<Vec<_>>(),
         [capacity]
     );
-    // `capacity` events inside one 10 ms window, then one more: the extra event exceeds the
-    // fixed buffer. `p` never holds, so each result depends on the retained history.
+    // `capacity` events inside one 10 ms window (100 us apart), then one more: the extra
+    // event exceeds the fixed buffer. `p` never holds, so each result depends on the history.
     let inputs: Vec<In> = (0..=capacity)
-        .map(|i| In::Event(i / 3, Vec::new()))
+        .map(|i| In::Event(i * 100, Vec::new()))
         .collect();
     let rows = assert_agree(&prepared, &inputs);
     let last = usize::try_from(capacity).unwrap();
@@ -1325,4 +1344,127 @@ fn step_6_open_and_closed_interval_endpoints_agree_with_the_reference_evaluator(
         assert_eq!(rows[1], at_ack, "{interval} ack at {ack}");
         assert_eq!(rows[2], at_watermark, "{interval} ack at {ack} watermark");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Steps 7-9: counter fault handling, step budgets and event position.
+
+impl Run {
+    /// The named Integer field of the monitor's State.
+    fn state_integer(&self, name: &str) -> Integer {
+        let Value::Integer(value) = field(&self.program, self.monitor.state(), name) else {
+            panic!("integer State field {name}");
+        };
+        value.clone()
+    }
+}
+
+#[trace("TC-200", "FR-276-AC-9")]
+#[test]
+fn step_7_a_gap_fault_drops_only_the_open_instance_and_rebases_the_next_delta() {
+    let prepared = sixteen_bit();
+    let (req, ack, ids) = (prepared.atom(0), prepared.atom(1), prepared.ids);
+    let inputs = [
+        // The first reading, whatever its value, is delta 0; its own instance is decided.
+        In::Event(65520, vec![ack]),
+        // The instance that stays open across the fault.
+        In::Event(65530, vec![req]),
+        // 65500 is 65506 behind 65530: the gap fault.
+        In::Event(65500, vec![]),
+        // Differenced from 65500 (delta 10), not from 65530; a third instance starts and decides.
+        In::Event(65510, vec![ack]),
+    ];
+    let rows = assert_agree(&prepared, &inputs);
+    let failed = Out::Failed {
+        gap: 65506,
+        max_reading_gap: 100,
+    };
+    assert_eq!(
+        rows[0],
+        vec![(0, ids.interval, Out::True)],
+        "decided before"
+    );
+    assert!(rows[1].is_empty(), "the request is open");
+    assert_eq!(
+        rows[2],
+        vec![(0, ids.root, failed.clone()), (10, ids.interval, failed)],
+        "the open `always` and the open request fail; the decided instance is untouched"
+    );
+    let mut run = Run::new(&prepared);
+    let mut nows = Vec::new();
+    for input in &inputs {
+        let In::Event(tick, holding) = input else {
+            unreachable!()
+        };
+        run.event_atoms(*tick, holding).expect("admitted event");
+        nows.push(run.state_integer("now"));
+    }
+    assert_eq!(nows[0], Integer::zero(), "first reading leaves init's time");
+    assert_eq!(nows[1], Integer::from(10_u64));
+    assert_eq!(
+        nows[3].to_u64().unwrap() - nows[2].to_u64().unwrap(),
+        10,
+        "65510 is differenced from 65500"
+    );
+    assert_eq!(rows[3].len(), 1);
+    assert_eq!(
+        rows[3][0].2,
+        Out::True,
+        "the instance started after the fault settles"
+    );
+}
+
+#[trace("TC-200", "FR-276-AC-10")]
+#[test]
+fn step_8_a_starved_step_budget_stops_unconsumed_and_the_same_event_then_runs() {
+    let prepared = sixteen_bit();
+    let ack = prepared.atom(1);
+    // The independent expectation: a fresh monitor's outcome for the same event.
+    let expected = {
+        let mut fresh = Run::new(&prepared);
+        fresh.event_atoms(65530, &[ack]).expect("admitted")
+    };
+    assert!(!expected.is_empty());
+    let mut run = Run::new(&prepared);
+    let before = fingerprint(run.monitor.state());
+    run.monitor
+        .set_step_budget(StepBudget {
+            work: 1,
+            ..budget()
+        })
+        .expect("budget replacement");
+    let stop = run
+        .event_atoms(65530, &[ack])
+        .expect_err("one on_event does not fit in one unit of work");
+    assert_eq!(stop.code, MonitorFailureCode::Resource);
+    assert!(stop.resource.is_some() && stop.invariant.is_none());
+    assert_eq!(fingerprint(run.monitor.state()), before, "state unchanged");
+    assert_eq!(run.monitor.baseline(), None, "the event is unconsumed");
+    // A resource stop is not terminal: raise the budget and offer the same event.
+    run.monitor
+        .set_step_budget(budget())
+        .expect("budget replacement");
+    let actual = run
+        .event_atoms(65530, &[ack])
+        .expect("accepted after a stop");
+    assert_eq!(actual, expected);
+    assert_eq!(run.monitor.baseline(), Some(65530));
+}
+
+#[trace("TC-200", "FR-276-AC-11")]
+#[test]
+fn step_9_event_position_counts_ingested_events_through_the_producer_plan() {
+    let prepared = sixteen_bit();
+    let mut run = Run::new(&prepared);
+    let position = |run: &Run| run.state_integer("event_position");
+    assert_eq!(position(&run), Integer::zero(), "build");
+    run.event_atoms(65530, &[]).expect("baseline event");
+    assert_eq!(position(&run), Integer::from(1_u64));
+    run.watermark(5);
+    run.poll(7).expect("poll");
+    assert_eq!(position(&run), Integer::from(1_u64), "watermark and poll");
+    run.event_atoms(65500, &[]).expect("gap fault");
+    assert_eq!(position(&run), Integer::from(1_u64), "the faulting reading");
+    run.event_atoms(65510, &[]).expect("following event");
+    assert_eq!(position(&run), Integer::from(2_u64));
 }

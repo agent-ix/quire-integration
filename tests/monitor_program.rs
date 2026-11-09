@@ -7994,3 +7994,146 @@ fn result_storage_is_reserved_from_the_scratch_byte_budget_before_the_first_visi
     );
     seq_stop(build_fx(), seq_budget()).expect("the same map completes with byte storage");
 }
+
+// FR-276-AC-12 / TC-200 step 10 over a controlled arena whose identities are QSL-admitted.
+// The real producer never emits an entry that breaks its own bounds, so the oversized State
+// is a literal of the diagnostic Buffered layout (two buffers, both bounded at 22 here).
+fn state_bound_parts(
+    event_buffer: usize,
+    event_activations: usize,
+    init_activations: usize,
+) -> ProgramParts {
+    let mut input = parts_for(FixtureState::Buffered);
+    for buffer in &mut input.layout.buffers {
+        buffer.capacity = Integer::from(22_u64);
+    }
+    input.layout.activation_capacity = Integer::from(2_u64);
+    let activation_type = CollectionType::new(
+        CollectionKind::Sequence,
+        ValueType::Composite(key("activation")),
+        None,
+    );
+    let state = |types: &TypeEnvironment, buffer: usize, activations: usize| {
+        let sequence = |count: usize| {
+            let elements = (0..count)
+                .map(|index| {
+                    types
+                        .record(
+                            key("activation"),
+                            vec![
+                                (
+                                    "subformula",
+                                    FieldValue::Present(Value::Integer(Integer::from(
+                                        index as u64,
+                                    ))),
+                                ),
+                                ("born", FieldValue::Present(Value::Integer(Integer::zero()))),
+                                ("status", FieldValue::Present(Value::Boolean(true))),
+                            ],
+                        )
+                        .unwrap()
+                })
+                .collect();
+            FieldValue::Present(quire_exact::from_admitted(
+                activation_type.clone(),
+                elements,
+            ))
+        };
+        let zero = || FieldValue::Present(Value::Integer(Integer::zero()));
+        types
+            .record(
+                key("state-buffered"),
+                vec![
+                    ("now", zero()),
+                    ("history_start", zero()),
+                    ("buffer_0", sequence(buffer)),
+                    ("buffer_1", sequence(0)),
+                    ("activations", sequence(activations)),
+                    ("event_position", zero()),
+                ],
+            )
+            .unwrap()
+    };
+    let Operation::Literal(Value::Composite(step)) = &input.expressions[1].operation else {
+        panic!("source Step");
+    };
+    let FieldValue::Present(results) = step.slots()[1].clone() else {
+        panic!("source Results");
+    };
+    let initial = state(&input.types, 0, init_activations);
+    input.expressions[0].operation = Operation::Literal(initial);
+    let oversized = state(&input.types, event_buffer, event_activations);
+    let step = input
+        .types
+        .tuple(key("step-buffered"), vec![oversized, results])
+        .unwrap();
+    input.expressions[1].operation = Operation::Literal(step);
+    input
+}
+
+#[test]
+#[trace("TC-200", "FR-276-AC-12")]
+fn state_bound_violations_fail_at_the_entry_site_commit_nothing_and_terminate() {
+    use quire_contract_runtime::monitor::{Event, ExecutionSite, ExecutorInvariantCode, Reading};
+    let offer = |buffer, activations| {
+        let input = state_bound_parts(buffer, activations, 0);
+        let captures = input
+            .types
+            .record(
+                key("inputs"),
+                vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+            )
+            .unwrap();
+        let program = Program::try_new(input).unwrap();
+        let mut monitor = build(BuildPlan {
+            program: Rc::clone(&program),
+            budget: execution_budget(),
+        })
+        .unwrap();
+        let context = dispatch_context(&program);
+        let before = format!("{:?}", monitor.state());
+        let outcome = monitor
+            .event(Event {
+                reading: Reading { context, value: 5 },
+                inputs: &captures,
+            })
+            .map(|_| ());
+        let after = format!("{:?}", monitor.state());
+        let next = monitor
+            .event(Event {
+                reading: Reading { context, value: 6 },
+                inputs: &captures,
+            })
+            .map(|_| ());
+        (outcome, before == after, next)
+    };
+    // A buffer holds its capacity plus one summary cell: 23 elements and 2 activations commit.
+    let (ok, unchanged, next) = offer(23, 2);
+    assert!(ok.is_ok() && !unchanged && next.is_ok());
+    for (buffer, activations) in [(24, 0), (0, 3)] {
+        let (failed, unchanged, next) = offer(buffer, activations);
+        let failure = failed.expect_err("an over-bound State is refused");
+        assert_eq!(failure.code, MonitorFailureCode::Invariant);
+        let invariant = failure.invariant.expect("typed invariant");
+        assert_eq!(invariant.code, ExecutorInvariantCode::StateBound);
+        assert_eq!(invariant.site, ExecutionSite::Function(FunctionId(1)));
+        assert!(unchanged, "nothing is committed");
+        assert_eq!(
+            next.expect_err("terminated").code,
+            MonitorFailureCode::Terminated
+        );
+    }
+    // An init returning 3 activations fails the build at the init site; no monitor.
+    let input = state_bound_parts(0, 0, 3);
+    let program = Program::try_new(input).unwrap();
+    let failure = build(BuildPlan {
+        program,
+        budget: execution_budget(),
+    })
+    .err()
+    .expect("no monitor from an over-bound init");
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
+    let invariant = failure.invariant.expect("typed invariant");
+    assert_eq!(invariant.code, ExecutorInvariantCode::StateBound);
+    assert_eq!(invariant.site, ExecutionSite::Function(FunctionId(0)));
+}
