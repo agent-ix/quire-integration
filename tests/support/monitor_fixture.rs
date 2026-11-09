@@ -79,6 +79,26 @@ pub fn fixture_for(
     time_unit: &str,
     target: &MonitorTarget,
 ) -> Fixture {
+    try_fixture_for(
+        selected,
+        counter,
+        additional_clause,
+        extra_units,
+        time_unit,
+        target,
+    )
+    .expect("actual final PlanRoot producer")
+}
+
+/// As [`fixture_for`], returning the producer's refusal instead of panicking.
+pub fn try_fixture_for(
+    selected: &str,
+    counter: &'static str,
+    additional_clause: &str,
+    extra_units: &str,
+    time_unit: &str,
+    target: &MonitorTarget,
+) -> Result<Fixture, qsl_analyze::monitor_root::PlanRootRefusal> {
     let output = Command::new(env!("CARGO"))
         .args(["metadata", "--locked", "--format-version", "1", "--offline"])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -142,8 +162,7 @@ temporal SelectedMonitor using timed over (candidate: Selected::ConfigVersion) c
             settings: &TimingObligationSettings::default(),
         },
         &Cancel::new(),
-    )
-    .expect("actual final PlanRoot producer");
+    )?;
     let mut evidence = root.emission().evidence().clone();
     evidence
         .insert_domain_package_document(identity, document)
@@ -168,13 +187,13 @@ temporal SelectedMonitor using timed over (candidate: Selected::ConfigVersion) c
             )
         })
         .collect();
-    Fixture {
+    Ok(Fixture {
         package,
         evidence,
         counter,
         root,
         buffers,
-    }
+    })
 }
 
 /// Explicit native read allowances shared by fixture construction and controls.
