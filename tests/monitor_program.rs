@@ -7254,3 +7254,886 @@ fn native_type_projection_keeps_allocation_and_capacity_requests_distinct() {
         }
     }
 }
+
+// ---- interface-010 SequenceMap / SequenceFilter over a controlled arena whose
+// identities are the QSL-admitted keys above (RT's own tests may not use NodeKey fixtures).
+
+const SEQ_HELPER: FunctionId = FunctionId(4);
+
+fn seq_booleans() -> ValueType {
+    ValueType::collection(CollectionType::new(
+        CollectionKind::Sequence,
+        ValueType::Boolean,
+        None,
+    ))
+}
+
+fn seq_integers() -> ValueType {
+    ValueType::collection(CollectionType::new(
+        CollectionKind::Sequence,
+        ValueType::Integer,
+        None,
+    ))
+}
+
+fn seq_budget() -> StepBudget {
+    StepBudget {
+        work: 100_000,
+        scalar: ScalarLimits {
+            integer_bits: 100_000,
+            decimal_digits: 100_000,
+            scale_expansion: 100_000,
+            text_input_bytes: 100_000,
+            text_scalars: 100_000,
+            normalized_scalars: 100_000,
+            unit_edges: 100_000,
+            value_occurrences: 100_000,
+            work_units: 100_000,
+            result_units: 100_000,
+        },
+        stack_frames: 10_000,
+        scratch_elements: 10_000,
+        scratch_bytes: 1_000_000,
+    }
+}
+
+struct SeqFx {
+    parts: ProgramParts,
+    slots: [usize; 5],
+}
+
+impl SeqFx {
+    fn new() -> Self {
+        let mut parts = lexical_base();
+        // Execution-only arena: every function reuses the admitted fixture's literals.
+        parts.layout.max_reading_gap = 100;
+        Self {
+            parts,
+            slots: [0; 5],
+        }
+    }
+
+    fn state_with(parts: &ProgramParts, now: u64) -> Value {
+        state_at(parts, now)
+    }
+
+    fn add(&mut self, value_type: ValueType, operation: Operation) -> ExpressionId {
+        let id = ExpressionId(self.parts.expressions.len());
+        self.parts.expressions.push(Expression {
+            key: key("condition"),
+            body_path: vec![id.0 + 100],
+            value_type,
+            operation,
+        });
+        id
+    }
+
+    fn local(&mut self, function: FunctionId) -> LocalId {
+        let position = self.slots[function.0];
+        self.slots[function.0] += 1;
+        LocalId { function, position }
+    }
+
+    fn int(&mut self, value: i128) -> ExpressionId {
+        self.add(
+            ValueType::Integer,
+            Operation::Literal(Value::Integer(Integer::from(value))),
+        )
+    }
+
+    fn seq(&mut self, values: &[i128]) -> ExpressionId {
+        let elements = values.iter().map(|value| self.int(*value)).collect();
+        self.add(seq_integers(), Operation::Sequence { elements })
+    }
+
+    fn read(&mut self, local: LocalId) -> ExpressionId {
+        self.add(ValueType::Integer, Operation::Local(local))
+    }
+
+    fn binary(
+        &mut self,
+        make: fn(ExpressionId, ExpressionId) -> Operation,
+        l: ExpressionId,
+        r: ExpressionId,
+    ) -> ExpressionId {
+        self.add(ValueType::Integer, make(l, r))
+    }
+
+    fn greater(&mut self, left: ExpressionId, right: ExpressionId) -> ExpressionId {
+        self.add(
+            ValueType::Boolean,
+            Operation::IntegerOrder {
+                operator: OrderingOperator::Greater,
+                left,
+                right,
+            },
+        )
+    }
+
+    /// `item * item + 1`
+    fn square_plus_one(&mut self, item: LocalId) -> ExpressionId {
+        let (a, b) = (self.read(item), self.read(item));
+        let square = self.binary(
+            |left, right| Operation::IntegerMultiply { left, right },
+            a,
+            b,
+        );
+        let one = self.int(1);
+        self.binary(
+            |left, right| Operation::IntegerAdd { left, right },
+            square,
+            one,
+        )
+    }
+
+    fn map(&mut self, sequence: ExpressionId, item: LocalId, body: ExpressionId) -> ExpressionId {
+        self.add(
+            seq_integers(),
+            Operation::SequenceMap {
+                sequence,
+                item,
+                body,
+            },
+        )
+    }
+
+    fn filter(
+        &mut self,
+        sequence: ExpressionId,
+        item: LocalId,
+        predicate: ExpressionId,
+    ) -> ExpressionId {
+        self.add(
+            seq_integers(),
+            Operation::SequenceFilter {
+                sequence,
+                item,
+                predicate,
+            },
+        )
+    }
+
+    fn fold(
+        &mut self,
+        function: FunctionId,
+        sequence: ExpressionId,
+        seed: i128,
+        step: impl FnOnce(&mut Self, LocalId, LocalId) -> ExpressionId,
+    ) -> ExpressionId {
+        let initial = self.int(seed);
+        let accumulator = self.local(function);
+        let item = self.local(function);
+        let body = step(self, accumulator, item);
+        self.add(
+            ValueType::Integer,
+            Operation::SequenceFold {
+                sequence,
+                initial,
+                accumulator,
+                item,
+                body,
+            },
+        )
+    }
+
+    /// Left fold into decimal digits: `acc * 10 + item`.
+    fn digits(&mut self, sequence: ExpressionId) -> ExpressionId {
+        self.fold(FunctionId(0), sequence, 0, |fx, acc, item| {
+            let (acc, item) = (fx.read(acc), fx.read(item));
+            let ten = fx.int(10);
+            let shifted = fx.binary(
+                |l, r| Operation::IntegerMultiply { left: l, right: r },
+                acc,
+                ten,
+            );
+            fx.binary(
+                |l, r| Operation::IntegerAdd { left: l, right: r },
+                shifted,
+                item,
+            )
+        })
+    }
+
+    /// Install a root that yields `now == 99` only when every pair is equal.
+    fn finish(&mut self, pairs: &[(ExpressionId, ExpressionId)]) {
+        let state = self.parts.layout.state.value_type.clone();
+        let good = Self::state_with(&self.parts, 99);
+        let mut root = self.add(state.clone(), Operation::Literal(good));
+        for (left, right) in pairs.iter().rev() {
+            let checked = self
+                .parts
+                .types
+                .check_equality(
+                    EqualityOperator::Equal,
+                    EqualityOperand::typed(ValueType::Integer),
+                    EqualityOperand::typed(ValueType::Integer),
+                    &EnumMemberIndex::default(),
+                )
+                .unwrap();
+            let condition = self.add(
+                ValueType::Boolean,
+                Operation::Equality {
+                    left: *left,
+                    right: *right,
+                    checked: Box::new(checked),
+                },
+            );
+            root = self.add(
+                state.clone(),
+                Operation::If {
+                    condition,
+                    when_true: root,
+                    when_false: ExpressionId(0),
+                },
+            );
+        }
+        self.parts.functions[0].body = root;
+    }
+
+    fn expect(&mut self, actual: ExpressionId, expected: i128) -> (ExpressionId, ExpressionId) {
+        (actual, self.int(expected))
+    }
+}
+
+fn seq_now(monitor: &quire_contract_runtime::monitor::Monitor) -> Integer {
+    let Value::Composite(state) = monitor.state() else {
+        panic!("state");
+    };
+    let FieldValue::Present(Value::Integer(now)) = &state.slots()[0] else {
+        panic!("now");
+    };
+    now.clone()
+}
+
+fn seq_run(fx: SeqFx) -> Integer {
+    seq_now(
+        &build(BuildPlan {
+            program: Program::try_new(fx.parts).unwrap(),
+            budget: seq_budget(),
+        })
+        .unwrap(),
+    )
+}
+
+fn seq_refused(fx: SeqFx) -> ProgramRefusalCode {
+    Program::try_new(fx.parts)
+        .err()
+        .expect("construction must refuse")
+        .code
+}
+
+fn digits_of(values: impl IntoIterator<Item = i128>) -> i128 {
+    values.into_iter().fold(0, |acc, value| acc * 10 + value)
+}
+
+const SAMPLES: [&[i128]; 5] = [&[], &[7], &[3, 1, 3], &[1, 2, 3, 4, 5, 2, 9], &[2, 2, 2]];
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-4")]
+#[test]
+fn map_preserves_order_length_and_duplicates_and_equals_the_equivalent_fold() {
+    for values in SAMPLES {
+        let mut fx = SeqFx::new();
+        let sequence = fx.seq(values);
+        let item = fx.local(FunctionId(0));
+        let body = fx.square_plus_one(item);
+        let mapped = fx.map(sequence, item, body);
+        let via_map = fx.digits(mapped);
+
+        let source = fx.seq(values);
+        let via_fold = fx.fold(FunctionId(0), source, 0, |fx, acc, item| {
+            let acc = fx.read(acc);
+            let ten = fx.int(10);
+            let shifted = fx.binary(
+                |left, right| Operation::IntegerMultiply { left, right },
+                acc,
+                ten,
+            );
+            let (a, b) = (fx.read(item), fx.read(item));
+            let square = fx.binary(
+                |left, right| Operation::IntegerMultiply { left, right },
+                a,
+                b,
+            );
+            let one = fx.int(1);
+            let mapped = fx.binary(
+                |left, right| Operation::IntegerAdd { left, right },
+                square,
+                one,
+            );
+            fx.binary(
+                |left, right| Operation::IntegerAdd { left, right },
+                shifted,
+                mapped,
+            )
+        });
+        let expected = digits_of(values.iter().map(|value| value * value + 1));
+        let literal = fx.expect(via_map, expected);
+        fx.finish(&[literal, (via_map, via_fold)]);
+        assert_eq!(seq_run(fx), Integer::from(99_u64), "map over {values:?}");
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-4")]
+#[test]
+fn filter_keeps_true_occurrences_in_order_and_equals_the_equivalent_fold() {
+    for values in SAMPLES {
+        let mut fx = SeqFx::new();
+        let sequence = fx.seq(values);
+        let item = fx.local(FunctionId(0));
+        let (read, two) = (fx.read(item), fx.int(2));
+        let predicate = fx.greater(read, two);
+        let kept = fx.filter(sequence, item, predicate);
+        let via_filter = fx.digits(kept);
+
+        let source = fx.seq(values);
+        let via_fold = fx.fold(FunctionId(0), source, 0, |fx, acc, item| {
+            let (read, two) = (fx.read(item), fx.int(2));
+            let condition = fx.greater(read, two);
+            let (acc_a, item_a, acc_b) = (fx.read(acc), fx.read(item), fx.read(acc));
+            let ten = fx.int(10);
+            let shifted = fx.binary(
+                |left, right| Operation::IntegerMultiply { left, right },
+                acc_a,
+                ten,
+            );
+            let appended = fx.binary(
+                |left, right| Operation::IntegerAdd { left, right },
+                shifted,
+                item_a,
+            );
+            fx.add(
+                ValueType::Integer,
+                Operation::If {
+                    condition,
+                    when_true: appended,
+                    when_false: acc_b,
+                },
+            )
+        });
+        let expected = digits_of(values.iter().copied().filter(|value| *value > 2));
+        let literal = fx.expect(via_filter, expected);
+        fx.finish(&[literal, (via_filter, via_fold)]);
+        assert_eq!(seq_run(fx), Integer::from(99_u64), "filter over {values:?}");
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-4")]
+#[test]
+fn empty_input_never_runs_the_body_or_predicate() {
+    // The body would be a divide-free but ill-addressed read; an empty input must not reach it.
+    let mut fx = SeqFx::new();
+    let sequence = fx.seq(&[]);
+    let item = fx.local(FunctionId(0));
+    let body = fx.square_plus_one(item);
+    let mapped = fx.map(sequence, item, body);
+    let size = fx.add(
+        ValueType::Integer,
+        Operation::SequenceSize { value: mapped },
+    );
+    let literal = fx.expect(size, 0);
+    fx.finish(&[literal]);
+    assert_eq!(seq_run(fx), Integer::from(99_u64));
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-4")]
+#[test]
+fn nested_item_scopes_capture_and_keep_the_outer_item_after_the_inner_traversal() {
+    // outer = map [1, 2] a -> sum(map [3, 4] b -> a + b) + a ; the right operand is read after
+    // the inner traversal completes, so a lost outer binding changes the digits.
+    let mut fx = SeqFx::new();
+    let outer_source = fx.seq(&[1, 2]);
+    let a = fx.local(FunctionId(0));
+    let inner_source = fx.seq(&[3, 4]);
+    let b = fx.local(FunctionId(0));
+    let (read_a, read_b) = (fx.read(a), fx.read(b));
+    let inner_body = fx.binary(
+        |left, right| Operation::IntegerAdd { left, right },
+        read_a,
+        read_b,
+    );
+    let inner = fx.map(inner_source, b, inner_body);
+    let sum = fx.fold(FunctionId(0), inner, 0, |fx, acc, item| {
+        let (acc, item) = (fx.read(acc), fx.read(item));
+        fx.binary(
+            |left, right| Operation::IntegerAdd { left, right },
+            acc,
+            item,
+        )
+    });
+    let after = fx.read(a);
+    let outer_body = fx.binary(
+        |left, right| Operation::IntegerAdd { left, right },
+        sum,
+        after,
+    );
+    let outer = fx.map(outer_source, a, outer_body);
+    let digits = fx.digits(outer);
+    let expected = digits_of([(1 + 3) + (1 + 4) + 1, (2 + 3) + (2 + 4) + 2]);
+    let literal = fx.expect(digits, expected);
+    fx.finish(&[literal]);
+    assert_eq!(seq_run(fx), Integer::from(99_u64));
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-4")]
+#[test]
+fn recursive_invocation_restores_the_callers_item_binding() {
+    // h(d) = sum(map [1, 2] x -> (if d > 0 then h(d - 1) else 0) + x); x is read after the call.
+    fn helper(fx: &mut SeqFx) {
+        let state_free = fx.parts.layout.state.value_type.clone();
+        let _ = state_free;
+        let source = fx.seq(&[1, 2]);
+        let x = fx.local(SEQ_HELPER);
+        let d = fx.add(
+            ValueType::Integer,
+            Operation::Argument {
+                function: SEQ_HELPER,
+                position: 0,
+            },
+        );
+        let zero = fx.int(0);
+        let condition = fx.greater(d, zero);
+        let d_again = fx.add(
+            ValueType::Integer,
+            Operation::Argument {
+                function: SEQ_HELPER,
+                position: 0,
+            },
+        );
+        let one = fx.int(1);
+        let decremented = fx.binary(
+            |left, right| Operation::IntegerSubtract { left, right },
+            d_again,
+            one,
+        );
+        let call = fx.add(
+            ValueType::Integer,
+            Operation::Call {
+                function: SEQ_HELPER,
+                arguments: vec![decremented],
+            },
+        );
+        let nothing = fx.int(0);
+        let below = fx.add(
+            ValueType::Integer,
+            Operation::If {
+                condition,
+                when_true: call,
+                when_false: nothing,
+            },
+        );
+        let read = fx.read(x);
+        let body = fx.binary(
+            |left, right| Operation::IntegerAdd { left, right },
+            below,
+            read,
+        );
+        let mapped = fx.map(source, x, body);
+        let total = fx.fold(SEQ_HELPER, mapped, 0, |fx, acc, item| {
+            let (acc, item) = (fx.read(acc), fx.read(item));
+            fx.binary(
+                |left, right| Operation::IntegerAdd { left, right },
+                acc,
+                item,
+            )
+        });
+        fx.parts.functions.push(Function {
+            key: key("fold-helper"),
+            parameters: vec![ValueType::Integer],
+            result: ValueType::Integer,
+            body: total,
+        });
+    }
+    for (depth, expected) in [(0, 3), (1, 9), (2, 21)] {
+        let mut fx = SeqFx::new();
+        helper(&mut fx);
+        let argument = fx.int(depth);
+        let call = fx.add(
+            ValueType::Integer,
+            Operation::Call {
+                function: SEQ_HELPER,
+                arguments: vec![argument],
+            },
+        );
+        let literal = fx.expect(call, expected);
+        fx.finish(&[literal]);
+        assert_eq!(seq_run(fx), Integer::from(99_u64), "depth {depth}");
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-5")]
+#[test]
+fn non_sequence_operand_refuses_for_map_and_filter() {
+    for filter in [false, true] {
+        let mut fx = SeqFx::new();
+        let not_a_sequence = fx.int(5);
+        let item = fx.local(FunctionId(0));
+        let operand = fx.read(item);
+        let predicate = fx.greater(operand, not_a_sequence);
+        let node = if filter {
+            fx.filter(not_a_sequence, item, predicate)
+        } else {
+            fx.map(not_a_sequence, item, operand)
+        };
+        let digits = fx.digits(node);
+        let literal = fx.expect(digits, 0);
+        fx.finish(&[literal]);
+        assert_eq!(seq_refused(fx), ProgramRefusalCode::InvalidBinding);
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-5")]
+#[test]
+fn non_boolean_predicate_refuses() {
+    let mut fx = SeqFx::new();
+    let sequence = fx.seq(&[1, 2]);
+    let item = fx.local(FunctionId(0));
+    let integer_predicate = fx.read(item);
+    let kept = fx.filter(sequence, item, integer_predicate);
+    let digits = fx.digits(kept);
+    let literal = fx.expect(digits, 12);
+    fx.finish(&[literal]);
+    assert_eq!(seq_refused(fx), ProgramRefusalCode::TypeMismatch);
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-5")]
+#[test]
+fn mistyped_result_annotations_refuse() {
+    // Map result element type must be the body's type.
+    let mut fx = SeqFx::new();
+    let sequence = fx.seq(&[1, 2]);
+    let item = fx.local(FunctionId(0));
+    let body = fx.read(item);
+    let mapped = fx.add(
+        seq_booleans(),
+        Operation::SequenceMap {
+            sequence,
+            item,
+            body,
+        },
+    );
+    let size = fx.add(
+        ValueType::Integer,
+        Operation::SequenceSize { value: mapped },
+    );
+    let literal = fx.expect(size, 2);
+    fx.finish(&[literal]);
+    assert_eq!(seq_refused(fx), ProgramRefusalCode::TypeMismatch);
+
+    // Filter result element type must be the operand's element type.
+    let mut fx = SeqFx::new();
+    let sequence = fx.seq(&[1, 2]);
+    let item = fx.local(FunctionId(0));
+    let (read, one) = (fx.read(item), fx.int(1));
+    let predicate = fx.greater(read, one);
+    let kept = fx.add(
+        seq_booleans(),
+        Operation::SequenceFilter {
+            sequence,
+            item,
+            predicate,
+        },
+    );
+    let size = fx.add(ValueType::Integer, Operation::SequenceSize { value: kept });
+    let literal = fx.expect(size, 1);
+    fx.finish(&[literal]);
+    assert_eq!(seq_refused(fx), ProgramRefusalCode::TypeMismatch);
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-5")]
+#[test]
+fn duplicate_sparse_and_foreign_item_addresses_refuse() {
+    for case in 0..3 {
+        let mut fx = SeqFx::new();
+        let first_source = fx.seq(&[1, 2]);
+        let first_item = fx.local(FunctionId(0));
+        let first_body = fx.read(first_item);
+        let first = fx.map(first_source, first_item, first_body);
+        let second_source = fx.seq(&[3]);
+        let mut second_item = fx.local(FunctionId(0));
+        let second_body = fx.read(second_item);
+        match case {
+            0 => second_item = first_item,
+            1 => second_item.position = 20,
+            _ => second_item.function = FunctionId(9),
+        }
+        let second = fx.map(second_source, second_item, second_body);
+        let (a, b) = (fx.digits(first), fx.digits(second));
+        fx.finish(&[(a, b)]);
+        assert_eq!(
+            seq_refused(fx),
+            ProgramRefusalCode::InvalidBinding,
+            "case {case}"
+        );
+    }
+}
+
+fn map_program(values: &[i128]) -> SeqFx {
+    let mut fx = SeqFx::new();
+    let sequence = fx.seq(values);
+    let item = fx.local(FunctionId(0));
+    let body = fx.square_plus_one(item);
+    let mapped = fx.map(sequence, item, body);
+    let digits = fx.digits(mapped);
+    let literal = fx.expect(digits, digits_of(values.iter().map(|v| v * v + 1)));
+    fx.finish(&[literal]);
+    fx
+}
+
+fn filter_program(values: &[i128]) -> SeqFx {
+    let mut fx = SeqFx::new();
+    let sequence = fx.seq(values);
+    let item = fx.local(FunctionId(0));
+    let (read, two) = (fx.read(item), fx.int(2));
+    let predicate = fx.greater(read, two);
+    let kept = fx.filter(sequence, item, predicate);
+    let digits = fx.digits(kept);
+    let literal = fx.expect(digits, digits_of(values.iter().copied().filter(|v| *v > 2)));
+    fx.finish(&[literal]);
+    fx
+}
+
+fn fold_program(values: &[i128]) -> SeqFx {
+    let mut fx = SeqFx::new();
+    let sequence = fx.seq(values);
+    let digits = fx.digits(sequence);
+    let literal = fx.expect(digits, digits_of(values.iter().copied()));
+    fx.finish(&[literal]);
+    fx
+}
+
+fn seq_stop(
+    fx: SeqFx,
+    limits: StepBudget,
+) -> Result<(), (MonitorFailureCode, Option<StepResource>)> {
+    build(BuildPlan {
+        program: Program::try_new(fx.parts).unwrap(),
+        budget: limits,
+    })
+    .map(|_| ())
+    .map_err(|failure| (failure.code, failure.resource.map(|stop| stop.resource)))
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-5")]
+#[test]
+fn exhausting_work_stack_or_scratch_stops_map_and_filter_as_it_stops_a_fold() {
+    let values = [3, 1, 4, 1, 5, 9, 2, 6];
+    let tight = [
+        (
+            StepBudget {
+                work: 40,
+                ..seq_budget()
+            },
+            StepResource::Work,
+        ),
+        (
+            StepBudget {
+                stack_frames: 4,
+                ..seq_budget()
+            },
+            StepResource::Stack,
+        ),
+        (
+            StepBudget {
+                scratch_elements: 6,
+                ..seq_budget()
+            },
+            StepResource::ScratchElements,
+        ),
+    ];
+    for (limits, resource) in tight {
+        for (name, make) in [
+            ("fold", fold_program as fn(&[i128]) -> SeqFx),
+            ("map", map_program),
+            ("filter", filter_program),
+        ] {
+            assert_eq!(
+                seq_stop(make(&values), limits),
+                Err((MonitorFailureCode::Resource, Some(resource))),
+                "{name} under {resource:?}"
+            );
+        }
+    }
+    for make in [fold_program, map_program, filter_program] {
+        seq_stop(make(&values), seq_budget())
+            .expect("the same programs complete when the budget allows");
+    }
+}
+
+#[trace("TC-098", "IT-018-SC-12", "interface-010-AC-5")]
+#[test]
+fn result_storage_is_reserved_from_the_scratch_byte_budget_before_the_first_visit() {
+    // A native sequence literal needs no construction storage, so only the map result does.
+    let build_fx = || {
+        let mut fx = SeqFx::new();
+        let native = quire_exact::from_admitted(
+            CollectionType::new(CollectionKind::Sequence, ValueType::Integer, None),
+            vec![Value::Integer(Integer::from(2_u64))],
+        );
+        let sequence = fx.add(seq_integers(), Operation::Literal(native));
+        let item = fx.local(FunctionId(0));
+        let body = fx.read(item);
+        let mapped = fx.map(sequence, item, body);
+        let size = fx.add(
+            ValueType::Integer,
+            Operation::SequenceSize { value: mapped },
+        );
+        let literal = fx.expect(size, 1);
+        fx.finish(&[literal]);
+        fx
+    };
+    let starved = StepBudget {
+        scratch_bytes: 0,
+        ..seq_budget()
+    };
+    assert_eq!(
+        seq_stop(build_fx(), starved),
+        Err((
+            MonitorFailureCode::Resource,
+            Some(StepResource::ScratchBytes)
+        ))
+    );
+    seq_stop(build_fx(), seq_budget()).expect("the same map completes with byte storage");
+}
+
+// FR-276-AC-12 / TC-200 step 10 over a controlled arena whose identities are QSL-admitted.
+// The real producer never emits an entry that breaks its own bounds, so the oversized State
+// is a literal of the diagnostic Buffered layout (two buffers, both bounded at 22 here).
+fn state_bound_parts(
+    event_buffer: usize,
+    event_activations: usize,
+    init_activations: usize,
+) -> ProgramParts {
+    let mut input = parts_for(FixtureState::Buffered);
+    for buffer in &mut input.layout.buffers {
+        buffer.capacity = Integer::from(22_u64);
+    }
+    input.layout.activation_capacity = Integer::from(2_u64);
+    let activation_type = CollectionType::new(
+        CollectionKind::Sequence,
+        ValueType::Composite(key("activation")),
+        None,
+    );
+    let state = |types: &TypeEnvironment, buffer: usize, activations: usize| {
+        let sequence = |count: usize| {
+            let elements = (0..count)
+                .map(|index| {
+                    types
+                        .record(
+                            key("activation"),
+                            vec![
+                                (
+                                    "subformula",
+                                    FieldValue::Present(Value::Integer(Integer::from(
+                                        index as u64,
+                                    ))),
+                                ),
+                                ("born", FieldValue::Present(Value::Integer(Integer::zero()))),
+                                ("status", FieldValue::Present(Value::Boolean(true))),
+                            ],
+                        )
+                        .unwrap()
+                })
+                .collect();
+            FieldValue::Present(quire_exact::from_admitted(
+                activation_type.clone(),
+                elements,
+            ))
+        };
+        let zero = || FieldValue::Present(Value::Integer(Integer::zero()));
+        types
+            .record(
+                key("state-buffered"),
+                vec![
+                    ("now", zero()),
+                    ("history_start", zero()),
+                    ("buffer_0", sequence(buffer)),
+                    ("buffer_1", sequence(0)),
+                    ("activations", sequence(activations)),
+                    ("event_position", zero()),
+                ],
+            )
+            .unwrap()
+    };
+    let Operation::Literal(Value::Composite(step)) = &input.expressions[1].operation else {
+        panic!("source Step");
+    };
+    let FieldValue::Present(results) = step.slots()[1].clone() else {
+        panic!("source Results");
+    };
+    let initial = state(&input.types, 0, init_activations);
+    input.expressions[0].operation = Operation::Literal(initial);
+    let oversized = state(&input.types, event_buffer, event_activations);
+    let step = input
+        .types
+        .tuple(key("step-buffered"), vec![oversized, results])
+        .unwrap();
+    input.expressions[1].operation = Operation::Literal(step);
+    input
+}
+
+#[test]
+#[trace("TC-200", "FR-276-AC-12")]
+fn state_bound_violations_fail_at_the_entry_site_commit_nothing_and_terminate() {
+    use quire_contract_runtime::monitor::{Event, ExecutionSite, ExecutorInvariantCode, Reading};
+    let offer = |buffer, activations| {
+        let input = state_bound_parts(buffer, activations, 0);
+        let captures = input
+            .types
+            .record(
+                key("inputs"),
+                vec![("enabled", FieldValue::Present(Value::Boolean(true)))],
+            )
+            .unwrap();
+        let program = Program::try_new(input).unwrap();
+        let mut monitor = build(BuildPlan {
+            program: Rc::clone(&program),
+            budget: execution_budget(),
+        })
+        .unwrap();
+        let context = dispatch_context(&program);
+        let before = format!("{:?}", monitor.state());
+        let outcome = monitor
+            .event(Event {
+                reading: Reading { context, value: 5 },
+                inputs: &captures,
+            })
+            .map(|_| ());
+        let after = format!("{:?}", monitor.state());
+        let next = monitor
+            .event(Event {
+                reading: Reading { context, value: 6 },
+                inputs: &captures,
+            })
+            .map(|_| ());
+        (outcome, before == after, next)
+    };
+    // A buffer holds its capacity plus one summary cell: 23 elements and 2 activations commit.
+    let (ok, unchanged, next) = offer(23, 2);
+    assert!(ok.is_ok() && !unchanged && next.is_ok());
+    for (buffer, activations) in [(24, 0), (0, 3)] {
+        let (failed, unchanged, next) = offer(buffer, activations);
+        let failure = failed.expect_err("an over-bound State is refused");
+        assert_eq!(failure.code, MonitorFailureCode::Invariant);
+        let invariant = failure.invariant.expect("typed invariant");
+        assert_eq!(invariant.code, ExecutorInvariantCode::StateBound);
+        assert_eq!(invariant.site, ExecutionSite::Function(FunctionId(1)));
+        assert!(unchanged, "nothing is committed");
+        assert_eq!(
+            next.expect_err("terminated").code,
+            MonitorFailureCode::Terminated
+        );
+    }
+    // An init returning 3 activations fails the build at the init site; no monitor.
+    let input = state_bound_parts(0, 0, 3);
+    let program = Program::try_new(input).unwrap();
+    let failure = build(BuildPlan {
+        program,
+        budget: execution_budget(),
+    })
+    .err()
+    .expect("no monitor from an over-bound init");
+    assert_eq!(failure.code, MonitorFailureCode::Invariant);
+    let invariant = failure.invariant.expect("typed invariant");
+    assert_eq!(invariant.code, ExecutorInvariantCode::StateBound);
+    assert_eq!(invariant.site, ExecutionSite::Function(FunctionId(0)));
+}

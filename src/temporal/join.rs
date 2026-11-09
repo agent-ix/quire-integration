@@ -729,7 +729,9 @@ fn native_outcome_record<'a>(
             | CallFailure::Cancelled(_)
             | CallFailure::Storage { .. }
             | CallFailure::Supplied(_)
-            | CallFailure::UnsupportedHelper(_)),
+            | CallFailure::UnsupportedHelper(_)
+            | CallFailure::Unsupported(_)
+            | CallFailure::Limit(_)),
         ) => Err(TlJoinError::NativeEvidence(failure.clone())),
     }
 }
@@ -787,9 +789,9 @@ fn build<'a>(
             | CallFailure::Cancelled(_)
             | CallFailure::Storage { .. }
             | CallFailure::Supplied(_)
-            | CallFailure::UnsupportedHelper(_) => {
-                return Err(TlJoinError::NativeEvidence(failure.clone()))
-            }
+            | CallFailure::UnsupportedHelper(_)
+            | CallFailure::Unsupported(_)
+            | CallFailure::Limit(_) => return Err(TlJoinError::NativeEvidence(failure.clone())),
         };
     }
     if let Some(Ok(issued)) = native {
