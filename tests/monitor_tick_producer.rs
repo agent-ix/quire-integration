@@ -11,6 +11,9 @@
 //!
 //! Covered in this file, through QSL source -> producer -> `prepare_monitor` -> RT:
 //! - Steps 1-3, 6-9: the `step_1_` .. `step_9_` tests (AC-1, AC-3, AC-8 .. AC-11).
+//! - Step 3 / AC-4: `step_3_equal_tick_events_without_an_admitted_order_are_refused`
+//!   offers both arrival orders without the required order; every input is refused before
+//!   state or baseline changes. This exercises missing-order refusal, not an orderless plan.
 //! - Step 2 / AC-2: `step_2_once_overflow_...` (22-slot overflow, `Incomplete`, capacity and
 //!   setting text), `step_2_a_shorter_window_buffer_overflows_while_its_sibling_stays_live` (a
 //!   2 ms and a 10 ms `once` get capacities 6 and 22; the 2 ms obligation is `Incomplete(6)` from
@@ -47,6 +50,9 @@
 //!   The bisection over each field takes about 12 s per run. Plus the
 //!   TC-098 / IT-018 / interface-002 tests in `monitor_program.rs` for allocator denials over a
 //!   controlled arena.
+//!   `step_11_build_allocation_denial_preserves_the_prepared_program_for_retry` additionally
+//!   denies a real runtime build allocation over the genuine prepared program; producer-admitted
+//!   `ProgramParts` construction and its type-check allocation paths remain untested here.
 //! - Binder identity (narrow claims, not a binder-semantics test):
 //!   `authored_binders_are_not_lowered_into_the_program` (atom bodies with `let`s leave the
 //!   Program identical to a baseline: they are not lowered) and
@@ -64,9 +70,6 @@
 //!   IR-key level anchor.
 //!
 //! Planned (the exact missing API):
-//! - AC-4, "equal timestamps without an admitted order": the producer always supplies an admitted
-//!   order and the runtime refuses any other, so a plan without one cannot be built. Needs a
-//!   producer/plan option to omit the order and a runtime that then accepts none.
 //! - AC-6 rebinding and subject/atom-body/topology retention as an object: RT exposes no rebind
 //!   operation to attempt and no accessor for atom bodies.
 //! - AC-7 altered atom, transition, initializer, interval, buffer or activation binding and equal
@@ -95,6 +98,7 @@ use qsl_eval::temporal::{TickBound, TickMonitorReference, TickMonitorSpec, TickO
 use qsl_foundation::SourceIdentity;
 use qsl_replay::MonitorTarget;
 use qsl_semantics::check::{Activation, CheckedFormula, FormulaNode};
+use qsv_failing_allocator::{arm, disarm, FailingAllocator};
 use quire_contract_ir::CheckedNodeId;
 use quire_contract_runtime::monitor::{
     build, BuildPlan, Event, InputContext, InputRefusal, Monitor, MonitorFailureCode, Program,
@@ -102,6 +106,12 @@ use quire_contract_runtime::monitor::{
 };
 use quire_driver::monitor::{prepare_monitor, MonitorPreparationLimits};
 use quire_exact::{Cancel, FieldValue, Integer, Rational, ScalarLimits, Value};
+
+// SAFETY: The shared allocator delegates successful requests to System and denies only one
+// request on the armed test thread. All producer preparation and assertion formatting happens
+// while disarmed; the armed region contains only the runtime's fallible build operation.
+#[global_allocator]
+static ALLOCATOR: FailingAllocator = FailingAllocator;
 
 /// Native PlanRoot support: the real producer's PlanRoot, owned by this crate.
 #[path = "support/monitor_fixture.rs"]
@@ -1128,6 +1138,86 @@ fn step_3_each_foreign_binding_component_is_refused_before_settling_anything() {
         refused_with(&prepared, |c| c.order.push(0)),
         InputRefusal::Order
     );
+}
+
+#[trace("TC-200", "FR-276-AC-4")]
+#[test]
+fn step_3_equal_tick_events_without_an_admitted_order_are_refused() {
+    let prepared = sixteen_bit();
+    let program = Rc::clone(&prepared.program);
+    assert!(!program.layout().admitted_order.is_empty());
+    let (request, acknowledgement) = (prepared.atom(0), prepared.atom(1));
+
+    for order in [[request, acknowledgement], [acknowledgement, request]] {
+        let mut run = Run::new(&prepared);
+        let before = fingerprint(run.monitor.state());
+        let baseline = run.monitor.baseline();
+        for atom in order {
+            let captures = run.captures(&[atom]);
+            let failure = run
+                .monitor
+                .event(Event {
+                    reading: Reading {
+                        context: InputContext {
+                            admitted_order: &[],
+                            ..context(&program)
+                        },
+                        value: 7,
+                    },
+                    inputs: &captures,
+                })
+                .err()
+                .expect("missing order must not acquire causality from arrival order");
+            assert_eq!(failure.code, MonitorFailureCode::Input);
+            assert_eq!(failure.input, Some(InputRefusal::Order));
+            assert!(failure.resource.is_none() && failure.invariant.is_none());
+            assert_eq!(fingerprint(run.monitor.state()), before);
+            assert_eq!(run.monitor.baseline(), baseline);
+        }
+
+        assert!(run.event(7, true, false).is_empty());
+        assert_eq!(run.monitor.baseline(), Some(7));
+        assert_eq!(run.state_integer("event_position"), Integer::from(1_u64));
+        assert_ne!(fingerprint(run.monitor.state()), before);
+    }
+}
+
+/// Runtime allocation-denial subset only: the immutable program was already admitted;
+/// this does not exercise `ProgramParts` construction or owner type-check reservations.
+#[trace("TC-200", "FR-276-AC-13")]
+#[test]
+fn step_11_build_allocation_denial_preserves_the_prepared_program_for_retry() {
+    let prepared = sixteen_bit();
+    let plan = BuildPlan {
+        program: Rc::clone(&prepared.program),
+        budget: budget(),
+    };
+    arm(0);
+    let result = build(plan);
+    let denied = disarm();
+    let failure = match result {
+        Err(failure) => failure,
+        Ok(_) => panic!("denied runtime storage must not publish a monitor"),
+    };
+    assert!(denied.is_some_and(|bytes| bytes > 0));
+    assert_eq!(failure.code, MonitorFailureCode::Resource);
+    let stop = failure.resource.expect("typed runtime storage stop");
+    assert_eq!(stop.resource, StepResource::Storage);
+    assert_eq!(stop.limit, None);
+    assert_eq!(stop.spent, 0);
+    assert!(stop.requested > Integer::zero());
+    assert!(failure.input.is_none() && failure.invariant.is_none());
+    assert!(failure.scalar.is_none() && failure.admission.is_none());
+    assert!(failure.path_capacity.is_none());
+
+    let mut run = Run::new(&prepared);
+    assert!(Rc::ptr_eq(run.monitor.program(), &prepared.program));
+    assert_eq!(run.monitor.baseline(), None);
+    assert_eq!(run.state_integer("event_position"), Integer::zero());
+    run.event_atoms(65530, &[prepared.atom(1)])
+        .expect("allocation-enabled retry consumes a genuine producer event");
+    assert_eq!(run.monitor.baseline(), Some(65530));
+    assert_eq!(run.state_integer("event_position"), Integer::from(1_u64));
 }
 
 // An admitted order is in play (the producer's model-step order, carried in the program layout
